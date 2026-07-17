@@ -27,9 +27,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Games = new ObservableCollection<GameEntry>(GameDatabase.Games);
 
         EngineStatus = _enginePath is null
-            ? $"ttarchext.exe not found — set {EngineLocator.PathEnvVar} or place it in engine/ttarchext/"
-            : !EngineLocator.CanRunEngine
-                ? "Engine found, but it only runs on Windows — browsing and project editing still work"
+            ? $"ttarchext not found — set {EngineLocator.PathEnvVar} or place it in engine/ttarchext/"
+            : !EngineLocator.CanExecute(_enginePath)
+                ? "Found ttarchext.exe, but it needs Windows — build the native engine (make -C engine/ttarchext) to work here"
                 : $"Engine ready: {_enginePath}";
     }
 
@@ -123,7 +123,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             await ListArchiveAsync();
     }
 
-    public bool CanRunEngine => _enginePath is not null && EngineLocator.CanRunEngine;
+    public bool CanRunEngine => _enginePath is not null && EngineLocator.CanExecute(_enginePath);
 
     private bool CanListArchive() => CanRunEngine && SelectedGame is not null && ArchivePath is not null;
 
