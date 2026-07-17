@@ -1,0 +1,170 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+        xmlns:games="clr-namespace:TelltaleModding.Core.Games;assembly=TelltaleModding.Core"
+        x:Class="TelltaleModding.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Telltale Modding Studio"
+        Width="1280" Height="800"
+        MinWidth="960" MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+
+    <DockPanel Margin="12">
+
+        <!-- Header -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="Telltale Modding Studio" FontSize="22" FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+                <TextBlock Text="{Binding GameKindDisplay}" Foreground="Gray"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
+                       Text="{Binding EngineStatus}" Foreground="Gray" FontSize="11"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       MaxWidth="520" ToolTip.Tip="{Binding EngineStatus}" />
+        </DockPanel>
+
+        <!-- Log -->
+        <Grid DockPanel.Dock="Bottom" RowDefinitions="Auto,120" Margin="0,10,0,0">
+            <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                <TextBlock Text="Output" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right"
+                            Orientation="Horizontal" Spacing="6">
+                    <ProgressBar IsIndeterminate="True" Width="120"
+                                 IsVisible="{Binding IsRunning}" />
+                    <Button Content="Cancel" Command="{Binding CancelRunCommand}" />
+                    <Button Content="Clear" Command="{Binding ClearLogCommand}" />
+                </StackPanel>
+            </DockPanel>
+            <TextBox Grid.Row="1" Text="{Binding Log, Mode=OneWay}" IsReadOnly="True"
+                     AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace"
+                     FontSize="11" />
+        </Grid>
+
+        <!-- Main three-column body -->
+        <Grid ColumnDefinitions="280,8,*,8,360">
+
+            <!-- Game picker -->
+            <Grid Grid.Column="0" RowDefinitions="Auto,*">
+                <TextBlock Grid.Row="0" Text="Game" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <ListBox Grid.Row="1" ItemsSource="{Binding Games}"
+                         SelectedItem="{Binding SelectedGame}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="games:GameEntry">
+                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" FontSize="12" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+
+            <!-- Archive browser -->
+            <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto">
+                <TextBlock Grid.Row="0" Text="Archive" FontWeight="SemiBold" Margin="0,0,0,6" />
+
+                <DockPanel Grid.Row="1" Margin="0,0,0,6">
+                    <Button DockPanel.Dock="Right" Content="Open archive…"
+                            Command="{Binding OpenArchiveCommand}" Margin="6,0,0,0" />
+                    <TextBox Text="{Binding ArchivePath}" IsReadOnly="True"
+                             Watermark="No archive selected" />
+                </DockPanel>
+
+                <DockPanel Grid.Row="2" Margin="0,0,0,6">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding ArchiveInfoDisplay}"
+                               Foreground="Gray" FontSize="11" VerticalAlignment="Center"
+                               Margin="6,0,0,0" />
+                    <TextBox Text="{Binding EntryFilter}" Watermark="Filter files (name or category, e.g. Model)…" />
+                </DockPanel>
+
+                <ListBox Grid.Row="3" ItemsSource="{Binding Entries}"
+                         SelectedItem="{Binding SelectedEntry}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ArchiveEntryViewModel">
+                            <Grid ColumnDefinitions="*,90,80">
+                                <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                           TextTrimming="CharacterEllipsis" FontSize="12" />
+                                <TextBlock Grid.Column="1" Text="{Binding Category}"
+                                           Foreground="Gray" FontSize="11" />
+                                <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}"
+                                           Foreground="Gray" FontSize="11"
+                                           HorizontalAlignment="Right" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                    <Button Content="List files" Command="{Binding ListArchiveCommand}" />
+                    <Button Content="Extract selected" Command="{Binding ExtractSelectedCommand}" />
+                    <Button Content="Extract all" Command="{Binding ExtractAllCommand}" />
+                    <CheckBox Content="Decode textures/audio (-m)" IsChecked="{Binding MetaExtract}"
+                              ToolTip.Tip="Extract DDS from D3DTX, OGG from AUD. Do not use for files you plan to rebuild into a patch." />
+                </StackPanel>
+            </Grid>
+
+            <!-- Mod project + preview -->
+            <Grid Grid.Column="4" RowDefinitions="Auto,Auto,*,Auto,Auto,220">
+                <TextBlock Grid.Row="0" Text="Mod project" FontWeight="SemiBold" Margin="0,0,0,6" />
+
+                <DockPanel Grid.Row="1" Margin="0,0,0,6">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="6,0,0,0">
+                        <Button Content="Open" Command="{Binding LoadProjectCommand}" />
+                        <Button Content="Save" Command="{Binding SaveProjectCommand}" />
+                    </StackPanel>
+                    <TextBox Text="{Binding ProjectName}" Watermark="Mod name" />
+                </DockPanel>
+
+                <ListBox Grid.Row="2" ItemsSource="{Binding Swaps}"
+                         SelectedItem="{Binding SelectedSwap}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SwapViewModel">
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                                <CheckBox Grid.Column="0" Grid.RowSpan="2"
+                                          IsChecked="{Binding Enabled}"
+                                          VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Grid.Column="1" Grid.Row="0"
+                                           Text="{Binding TargetAssetName}"
+                                           FontSize="12" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1" Grid.Row="1"
+                                           Text="{Binding ReplacementFileName}"
+                                           Foreground="Gray" FontSize="11"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="6" Margin="0,6,0,6">
+                    <Button Content="Add swap from selected file"
+                            Command="{Binding AddSwapFromEntryCommand}"
+                            ToolTip.Tip="Pick a replacement for the file selected in the archive browser" />
+                    <Button Content="Remove" Command="{Binding RemoveSwapCommand}" />
+                </StackPanel>
+
+                <Button Grid.Row="4" Content="Build patch archive"
+                        Command="{Binding BuildPatchCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        FontWeight="SemiBold" Margin="0,0,0,6"
+                        ToolTip.Tip="Builds a minimal 0.ttarch/0.ttarch2 containing only your swapped files" />
+
+                <!-- Preview -->
+                <Grid Grid.Row="5" RowDefinitions="Auto,*,Auto">
+                    <DockPanel Grid.Row="0">
+                        <TextBlock Text="Texture preview" FontWeight="SemiBold" />
+                        <Button DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                Content="Open .dds…" FontSize="11" Padding="6,2"
+                                Command="{Binding PreviewFileCommand}" />
+                    </DockPanel>
+                    <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1"
+                            CornerRadius="4" Margin="0,4">
+                        <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" />
+                    </Border>
+                    <TextBlock Grid.Row="2" Text="{Binding PreviewStatus}" Foreground="Gray"
+                               FontSize="11" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding PreviewStatus}" />
+                </Grid>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>
