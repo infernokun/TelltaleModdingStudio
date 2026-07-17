@@ -16,6 +16,12 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Build native engine (enables end-to-end integration tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev
+          make -C engine/ttarchext
+
       - name: Build
         run: dotnet build TelltaleModding.sln --configuration Release
 

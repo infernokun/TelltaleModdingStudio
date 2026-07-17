@@ -16,3 +16,7 @@ artifacts/
 # Test results
 [Tt]est[Rr]esults/
 *.trx
+
+# Native engine build (produced by engine/ttarchext/Makefile)
+engine/ttarchext/ttarchext
+*.o

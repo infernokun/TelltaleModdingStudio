@@ -23,13 +23,13 @@ Updated 29 July 2003: thanks to Mehul Motani for pointing out an error in the co
 #define DATAERROR         -1
 #define KEYBYTES         8
 
-unsigned long F(blf_ctx *bc, unsigned long x)
+uint32_t F(blf_ctx *bc, uint32_t x)
 {
-   unsigned long a;
-   unsigned long b;
-   unsigned long c;
-   unsigned long d;
-   unsigned long y;
+   uint32_t a;
+   uint32_t b;
+   uint32_t c;
+   uint32_t d;
+   uint32_t y;
 
    d = x & 0x00FF;
    x >>= 8;
@@ -45,11 +45,11 @@ unsigned long F(blf_ctx *bc, unsigned long x)
    return y;
 }
 
-void Blowfish_encipher(blf_ctx *bc, unsigned long *xl, unsigned long *xr)
+void Blowfish_encipher(blf_ctx *bc, uint32_t *xl, uint32_t *xr)
 {
-   unsigned long  Xl;
-   unsigned long  Xr;
-   unsigned long  temp;
+   uint32_t  Xl;
+   uint32_t  Xr;
+   uint32_t  temp;
    short          i;
 
    Xl = *xl;
@@ -76,11 +76,11 @@ void Blowfish_encipher(blf_ctx *bc, unsigned long *xl, unsigned long *xr)
    *xr = Xr;
 }
 
-void Blowfish_decipher(blf_ctx *bc, unsigned long *xl, unsigned long *xr)
+void Blowfish_decipher(blf_ctx *bc, uint32_t *xl, uint32_t *xr)
 {
-   unsigned long  Xl;
-   unsigned long  Xr;
-   unsigned long  temp;
+   uint32_t  Xl;
+   uint32_t  Xr;
+   uint32_t  temp;
    short          i;
 
    Xl = *xl;
@@ -114,9 +114,9 @@ short InitializeBlowfish(blf_ctx *bc, unsigned char key[], int keybytes)
 	 short          i;
 	 short          j;
 	 short          k;
-	 unsigned long  data;
-	 unsigned long  datal;
-	 unsigned long  datar;
+	 uint32_t  data;
+	 uint32_t  datal;
+	 uint32_t  datar;
 
 	/* initialise p & s-boxes without file read */
 	for (i = 0; i < N+2; i++)
@@ -177,9 +177,9 @@ void blf_key (blf_ctx *c, unsigned char *k, int len)
 	InitializeBlowfish(c, k, len);
 }
 
-void blf_enc(blf_ctx *c, unsigned long *data, int blocks)
+void blf_enc(blf_ctx *c, uint32_t *data, int blocks)
 {
-	unsigned long *d;
+	uint32_t *d;
 	int i;
 
 	d = data;
@@ -190,9 +190,9 @@ void blf_enc(blf_ctx *c, unsigned long *data, int blocks)
 	}
 }
 
-void blf_dec(blf_ctx *c, unsigned long *data, int blocks)
+void blf_dec(blf_ctx *c, uint32_t *data, int blocks)
 {
-	unsigned long *d;
+	uint32_t *d;
 	int i;
 
 	d = data;
@@ -205,18 +205,18 @@ void blf_dec(blf_ctx *c, unsigned long *data, int blocks)
 
 // modified functions for version 7
 
-unsigned long bswap(unsigned long num) {
+uint32_t bswap(uint32_t num) {
     return(((num & 0xff000000) >> 24) |
            ((num & 0x00ff0000) >>  8) |
            ((num & 0x0000ff00) <<  8) |
            ((num & 0x000000ff) << 24));
 }
 
-void Blowfish_encipher7(blf_ctx *bc, unsigned long *xl, unsigned long *xr)
+void Blowfish_encipher7(blf_ctx *bc, uint32_t *xl, uint32_t *xr)
 {
-   unsigned long  Xl;
-   unsigned long  Xr;
-   unsigned long  temp;
+   uint32_t  Xl;
+   uint32_t  Xr;
+   uint32_t  temp;
    short          i;
 
    Xl = *xl;
@@ -250,11 +250,11 @@ void Blowfish_encipher7(blf_ctx *bc, unsigned long *xl, unsigned long *xr)
    *xr = Xr;
 }
 
-void Blowfish_decipher7(blf_ctx *bc, unsigned long *xl, unsigned long *xr)
+void Blowfish_decipher7(blf_ctx *bc, uint32_t *xl, uint32_t *xr)
 {
-   unsigned long  Xl;
-   unsigned long  Xr;
-   unsigned long  temp;
+   uint32_t  Xl;
+   uint32_t  Xr;
+   uint32_t  temp;
    short          i;
 
    Xl = *xl;
@@ -294,9 +294,9 @@ short InitializeBlowfish7(blf_ctx *bc, unsigned char key[], int keybytes)
 	 short          i;
 	 short          j;
 	 short          k;
-	 unsigned long  data;
-	 unsigned long  datal;
-	 unsigned long  datar;
+	 uint32_t  data;
+	 uint32_t  datal;
+	 uint32_t  datar;
 
 	/* initialise p & s-boxes without file read */
 	for (i = 0; i < N+2; i++)
@@ -358,9 +358,9 @@ void blf_key7 (blf_ctx *c, unsigned char *k, int len)
 	InitializeBlowfish7(c, k, len);
 }
 
-void blf_enc7(blf_ctx *c, unsigned long *data, int blocks)
+void blf_enc7(blf_ctx *c, uint32_t *data, int blocks)
 {
-	unsigned long *d;
+	uint32_t *d;
 	int i;
 
 	d = data;
@@ -371,9 +371,9 @@ void blf_enc7(blf_ctx *c, unsigned long *data, int blocks)
 	}
 }
 
-void blf_dec7(blf_ctx *c, unsigned long *data, int blocks)
+void blf_dec7(blf_ctx *c, uint32_t *data, int blocks)
 {
-	unsigned long *d;
+	uint32_t *d;
 	int i;
 
 	d = data;

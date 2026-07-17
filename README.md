@@ -46,14 +46,24 @@ dotnet test                      # runs the Core test suite (works on any OS)
 dotnet run --project src/TelltaleModding.App
 ```
 
-The Core library, tests, and the app itself build and run cross-platform, but
-**ttarchext.exe is a Windows binary** (it loads the game's own Oodle DLL), so
-actual extract/build operations require Windows. On other platforms the app still
-opens, inspects archives, and edits projects — engine actions are disabled with an
+Everything builds and runs cross-platform. The engine comes in two flavours:
+
+- **`ttarchext.exe`** (shipped) — the Windows binary. Required for
+  Oodle-compressed archives (lowercase `zCTT`/`eCTT` tags), because Oodle
+  decompression works by loading the game's own `oo2core` DLL.
+- **Native build** — `make -C engine/ttarchext` (needs `zlib1g-dev`) produces a
+  Linux/macOS `ttarchext` that handles encrypted, zlib-compressed, and plain
+  archives. This repo carries a small portability fix for it (the original
+  Blowfish code assumed 32-bit `unsigned long`).
+
+The app picks whichever flavour runs on your OS automatically, or you can point
+the `TTARCHEXT_PATH` environment variable at a specific binary. When only the
+`.exe` is present on a non-Windows host, engine actions are disabled with an
 explanatory status message.
 
-The engine is located automatically from `engine/ttarchext/ttarchext.exe`, or you
-can point the `TTARCHEXT_PATH` environment variable at it.
+With a native engine present, `dotnet test` also runs end-to-end integration
+tests: listing and extracting from the real sample archives and round-tripping a
+built patch. CI does this on every push.
 
 ## Notes
 

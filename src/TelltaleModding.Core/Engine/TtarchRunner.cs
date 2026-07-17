@@ -65,10 +65,10 @@ public sealed class TtarchRunner
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        if (!EngineLocator.CanRunEngine)
+        if (!EngineLocator.CanExecute(_enginePath))
             throw new TtarchException(
-                "ttarchext is a Windows executable and can only be run on Windows. " +
-                "Command construction is available on this platform, but not execution.");
+                "The located engine is the Windows ttarchext.exe, which cannot run on this OS. " +
+                "Build the native engine with 'make -C engine/ttarchext' (see its Makefile).");
 
         var psi = new ProcessStartInfo
         {
