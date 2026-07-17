@@ -1,3 +1,18 @@
-input/
-output/
-ttarchext/
+# Build output
+[Bb]in/
+[Oo]bj/
+artifacts/
+
+# Working folders used by the app at runtime
+/input/
+/output/
+/staging/
+
+# IDE / user files
+.vs/
+*.user
+*.suo
+
+# Test results
+[Tt]est[Rr]esults/
+*.trx

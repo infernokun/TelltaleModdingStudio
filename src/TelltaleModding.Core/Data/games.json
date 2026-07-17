@@ -1,0 +1,410 @@
+[
+  {
+    "gameNum": 0,
+    "name": "Wallace & Gromit: Episode 1: Fright of the Bumblebees",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 1,
+    "name": "Wallace & Gromit: Episode 2: The Last Resort",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 2,
+    "name": "Wallace & Gromit: Episode 3: Muzzled",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 3,
+    "name": "Telltale Texas Hold'em",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 4,
+    "name": "Bone: Out From Boneville",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 5,
+    "name": "Bone: The Great Cow Race",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 6,
+    "name": "Sam & Max: Episode 101 - Culture Shock",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 7,
+    "name": "Sam & Max: Episode 102 - Situation: Comedy",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 8,
+    "name": "Sam & Max: Episode 103 - The Mole, The Mob, and the Meatball",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 9,
+    "name": "Sam & Max: Episode 104 - Abe Lincoln Must Die!",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 10,
+    "name": "Sam & Max: Episode 105 - Reality 2.0",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 11,
+    "name": "Sam & Max: Episode 106 - Bright Side of the Moon",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 12,
+    "name": "Sam & Max: Episode 201 - Ice Station Santa",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 13,
+    "name": "Sam & Max: Episode 202 - Moai Better Blues",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 14,
+    "name": "Sam & Max: Episode 203 - Night of the Raving Dead",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 15,
+    "name": "Sam & Max: Episode 204 - Chariots of the Dogs",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 16,
+    "name": "Sam & Max: Episode 205 - What's New, Beelzebub",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 17,
+    "name": "Strong Bad: Episode 1 - Homestar Ruiner",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 18,
+    "name": "Strong Bad: Episode 2 - Strong Badia the Free",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 19,
+    "name": "Strong Bad: Episode 3 - Baddest of the Bands",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 20,
+    "name": "Strong Bad: Episode 4 - Daneresque 3",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 21,
+    "name": "Strong Bad: Episode 5 - 8-Bit Is Enough",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 22,
+    "name": "CSI 3 - Dimensions of Murder / Bone demo",
+    "kind": "Ttarch",
+    "oldMode": 1
+  },
+  {
+    "gameNum": 23,
+    "name": "CSI 4 - Hard Evidence (demo)",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 24,
+    "name": "Tales of Monkey Island 101: Launch of the Screaming Narwhal",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 25,
+    "name": "Wallace & Gromit: Episode 4: The Bogey Man",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 26,
+    "name": "Tales of Monkey Island 102: The Siege of Spinner Cay",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 27,
+    "name": "Tales of Monkey Island 103: Lair of the Leviathan",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 28,
+    "name": "CSI 5 - Deadly Intent",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 29,
+    "name": "Tales of Monkey Island 104: The Trial and Execution of Guybrush Threepwood",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 30,
+    "name": "CSI 4 - Hard Evidence",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 31,
+    "name": "Tales of Monkey Island 105: Rise of the Pirate God",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 32,
+    "name": "CSI 5 - Deadly Intent (demo)",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 33,
+    "name": "Sam & Max: Episode 301 - The Penal Zone",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 34,
+    "name": "Sam & Max: Episode 302 - The Tomb of Sammun-Mak",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 35,
+    "name": "Sam & Max: Episode 303 - They Stole Max's Brain!",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 36,
+    "name": "Puzzle Agent - The Mystery of Scoggins",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 37,
+    "name": "Sam & Max: Episode 304 - Beyond the Alley of the Dolls",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 38,
+    "name": "Sam & Max: Episode 305 - The City That Dares Not Sleep",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 39,
+    "name": "Poker Night at the Inventory",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 40,
+    "name": "CSI 6 - Fatal Conspiracy",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 41,
+    "name": "Back To The Future: Episode 1 - It's About Time",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 42,
+    "name": "Back To The Future: Episode 2 - Get Tannen!",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 43,
+    "name": "Back To The Future: Episode 3 - Citizen Brown",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 44,
+    "name": "Hector: Episode 1 - We Negotiate with Terrorists",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 45,
+    "name": "Back To The Future: Episode 4 - Double Visions",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 46,
+    "name": "Back To The Future: Episode 5 - OUTATIME",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 47,
+    "name": "Puzzle Agent 2",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 48,
+    "name": "Jurassik Park: The Game",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 49,
+    "name": "Hector: Episode 2 - Senseless Act of Justice",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 50,
+    "name": "Hector: Episode 3 - Beyond Reasonable Doom",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 51,
+    "name": "Law and Order: Legacies",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 52,
+    "name": "Walking Dead: A New Day",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 53,
+    "name": "Poker Night 2",
+    "kind": "Ttarch",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 54,
+    "name": "The Wolf Among Us",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 55,
+    "name": "The Walking Dead: Season 2",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 56,
+    "name": "Tales from the Borderlands (all episodes)",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 57,
+    "name": "Game of Thrones (all episodes)",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 58,
+    "name": "Minecraft: Story Mode",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 59,
+    "name": "The Walking Dead: Michonne",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 60,
+    "name": "Batman: The Telltale Series",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 61,
+    "name": "The Walking Dead: A New Frontier",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 62,
+    "name": "Marvel's Guardians of the Galaxy",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 63,
+    "name": "Minecraft: Story Mode - Season Two",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 64,
+    "name": "Batman: The Enemy Within",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  },
+  {
+    "gameNum": 65,
+    "name": "Bone: Out From Boneville 2.0",
+    "kind": "Ttarch",
+    "oldMode": 2
+  },
+  {
+    "gameNum": 66,
+    "name": "Bone: The Great Cow Race 2.0",
+    "kind": "Ttarch",
+    "oldMode": 2
+  },
+  {
+    "gameNum": 67,
+    "name": "The Walking Dead: The Telltale Definitive Series",
+    "kind": "Ttarch2",
+    "oldMode": 0
+  }
+]
