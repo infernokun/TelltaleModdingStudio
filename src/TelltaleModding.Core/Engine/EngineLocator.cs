@@ -71,8 +71,10 @@ public static class EngineLocator
             : new[] { NativeExeName, WindowsExeName };
 
         // Walk up a few levels so this works from bin/ output dirs and the repo root.
-        var dir = start;
-        for (int i = 0; i < 6 && dir is not null; i++)
+        // Normalize away any trailing separator first: GetDirectoryName("…\net8.0\")
+        // returns "…\net8.0", which would silently burn one walk iteration.
+        var dir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(start));
+        for (int i = 0; i < 8 && dir is not null; i++)
         {
             foreach (var name in names)
             {
