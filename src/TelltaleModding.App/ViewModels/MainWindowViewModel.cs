@@ -6,6 +6,7 @@ using TelltaleModding.App.Services;
 using TelltaleModding.Core.Archives;
 using TelltaleModding.Core.Engine;
 using TelltaleModding.Core.Games;
+using TelltaleModding.Core.Meshes;
 using TelltaleModding.Core.Meta;
 using TelltaleModding.Core.Textures;
 using TelltaleModding.Core.Projects;
@@ -217,6 +218,28 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         FolderRoots.Clear();
         FolderRoots.Add(FileNodeViewModel.ForRoot(path));
         FolderInfo = $"{Path.GetFileName(Path.TrimEndingDirectorySeparator(path))} — click a file to inspect it.";
+        _textureIndex = null; // rebuilt lazily for the new folder
+    }
+
+    /// <summary>
+    /// Texture lookup for the open folder: Telltale references textures by the CRC64
+    /// of the file name without extension, so hashing every .d3dtx name lets a mesh's
+    /// texture symbols resolve straight to files.
+    /// </summary>
+    private Dictionary<ulong, string>? _textureIndex;
+
+    private Dictionary<ulong, string> GetTextureIndex(string anchorFile)
+    {
+        if (_textureIndex is not null)
+            return _textureIndex;
+        var index = new Dictionary<ulong, string>();
+        var root = FolderPath ?? Path.GetDirectoryName(anchorFile);
+        if (root is not null && Directory.Exists(root))
+        {
+            foreach (var tex in Directory.EnumerateFiles(root, "*.d3dtx", SearchOption.AllDirectories))
+                index[TelltaleCrc64.HashSymbol(Path.GetFileNameWithoutExtension(tex))] = tex;
+        }
+        return _textureIndex = index;
     }
 
     partial void OnSelectedFolderNodeChanged(FileNodeViewModel? value)
@@ -235,11 +258,71 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (extension == ".d3dtx")
         {
+            IsMeshPreview = false;
             ShowD3dtxPreview(value.FullPath);
             return;
         }
 
+        if (extension == ".d3dmesh")
+        {
+            ShowD3dMeshPreview(value.FullPath);
+            return;
+        }
+
+        IsMeshPreview = false;
         FolderInfo = DescribeFolderFile(value.FullPath);
+    }
+
+    /// <summary>True while the preview pane shows the 3D viewport instead of an image.</summary>
+    [ObservableProperty]
+    private bool _isMeshPreview;
+
+    /// <summary>Raised when a mesh (plus optional matched diffuse texture) is ready to render.</summary>
+    public event Action<MeshGeometry, DdsImage?>? MeshPreviewReady;
+
+    /// <summary>Loads a .d3dmesh into the 3D viewport, auto-matching its texture.</summary>
+    public void ShowD3dMeshPreview(string path)
+    {
+        try
+        {
+            if (!D3dMeshFile.TryLoad(File.ReadAllBytes(path), out var mesh, out var error))
+            {
+                IsMeshPreview = false;
+                FolderInfo = $"{Path.GetFileName(path)} — {error}";
+                return;
+            }
+
+            var geometry = mesh!.GetGeometry();
+
+            // Resolve the first referenced texture that exists in the folder and decodes.
+            DdsImage? diffuse = null;
+            string? textureName = null;
+            var textureIndex = GetTextureIndex(path);
+            foreach (var symbol in mesh.TextureSymbols)
+            {
+                if (!textureIndex.TryGetValue(symbol, out var texPath))
+                    continue;
+                if (D3dtxTexture.TryLoad(File.ReadAllBytes(texPath), out var tex, out _) &&
+                    tex!.TryToDds(out var dds, out _) &&
+                    DdsImage.TryDecode(dds!, out var image, out _))
+                {
+                    diffuse = image;
+                    textureName = Path.GetFileName(texPath);
+                    break;
+                }
+            }
+
+            IsMeshPreview = true;
+            MeshPreviewReady?.Invoke(geometry, diffuse);
+            var textureNote = textureName is not null ? $" · textured ({textureName})" : " · no matching texture in folder";
+            PreviewStatus = $"{mesh.Name} — {mesh.Describe()}{textureNote}";
+            FolderInfo = PreviewStatus;
+        }
+        catch (Exception ex)
+        {
+            IsMeshPreview = false;
+            FolderInfo = $"Could not preview mesh: {ex.Message}";
+        }
     }
 
     /// <summary>Converts a .d3dtx in memory and shows it in the preview pane.</summary>
