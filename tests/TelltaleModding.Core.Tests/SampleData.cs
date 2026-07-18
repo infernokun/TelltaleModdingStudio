@@ -14,6 +14,11 @@ internal static class SampleData
     public static string GameOfThrones => Sample("GameOfThrones_pc_GameOfThrones102_data.ttarch2");
     public static string TestArchive => Sample("test.ttarch2");
 
+    // Real extracted assets (MSV6 era) used by the meta-stream/format tests.
+    public static string MeshSample => Sample("adv_arenaEntrance_meshesA.d3dmesh");
+    public static string TinyMeshSample => Sample("obj_screenCUILayer1.d3dmesh");
+    public static string TinyTextureSample => Sample("color_EEE.d3dtx");
+
     private static string FindRepoRoot()
     {
         var dir = AppContext.BaseDirectory;
