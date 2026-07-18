@@ -130,9 +130,14 @@
                     </TreeView.ItemTemplate>
                 </TreeView>
 
-                <TextBlock Grid.Row="2" Text="{Binding FolderInfo}" Foreground="Gray"
-                           FontSize="11" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"
-                           ToolTip.Tip="{Binding FolderInfo}" />
+                <DockPanel Grid.Row="2" Margin="0,6,0,0">
+                    <Button DockPanel.Dock="Right" Content="Export DDS…" FontSize="11" Padding="6,2"
+                            Command="{Binding ExportDdsCommand}" Margin="6,0,0,0"
+                            ToolTip.Tip="Convert the selected .d3dtx to a standard DDS file" />
+                    <TextBlock Text="{Binding FolderInfo}" Foreground="Gray"
+                               FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding FolderInfo}" />
+                </DockPanel>
               </Grid>
               </TabItem>
             </TabControl>

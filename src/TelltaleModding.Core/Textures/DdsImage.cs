@@ -103,7 +103,26 @@ public sealed class DdsImage
             return true;
         }
 
-        error = "Unsupported DDS pixel format (only DXT1/3/5 and 32-bit RGB/RGBA are decoded).";
+        const uint DDPF_ALPHA = 0x2;
+        const uint DDPF_LUMINANCE = 0x20000;
+        if ((pfFlags & (DDPF_ALPHA | DDPF_LUMINANCE)) != 0 && rgbBitCount == 8)
+        {
+            if (body.Length < width * height)
+            {
+                error = "8-bit DDS data is truncated.";
+                return false;
+            }
+            // Shown as opaque grayscale: masks/alpha maps are unreadable as actual alpha.
+            for (int i = 0; i < width * height; i++)
+            {
+                byte v = body[i];
+                rgba[i * 4] = v; rgba[i * 4 + 1] = v; rgba[i * 4 + 2] = v; rgba[i * 4 + 3] = 255;
+            }
+            image = new DdsImage(width, height, rgba);
+            return true;
+        }
+
+        error = "Unsupported DDS pixel format (only DXT1/3/5, 32-bit RGB/RGBA, and 8-bit alpha/luminance are decoded).";
         return false;
     }
 

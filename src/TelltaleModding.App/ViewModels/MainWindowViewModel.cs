@@ -7,6 +7,7 @@ using TelltaleModding.Core.Archives;
 using TelltaleModding.Core.Engine;
 using TelltaleModding.Core.Games;
 using TelltaleModding.Core.Meta;
+using TelltaleModding.Core.Textures;
 using TelltaleModding.Core.Projects;
 
 namespace TelltaleModding.App.ViewModels;
@@ -220,6 +221,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     partial void OnSelectedFolderNodeChanged(FileNodeViewModel? value)
     {
+        ExportDdsCommand.NotifyCanExecuteChanged();
         if (value is null || value.IsDirectory || !File.Exists(value.FullPath))
             return;
 
@@ -231,7 +233,75 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        if (extension == ".d3dtx")
+        {
+            ShowD3dtxPreview(value.FullPath);
+            return;
+        }
+
         FolderInfo = DescribeFolderFile(value.FullPath);
+    }
+
+    /// <summary>Converts a .d3dtx in memory and shows it in the preview pane.</summary>
+    private void ShowD3dtxPreview(string path)
+    {
+        try
+        {
+            if (!D3dtxTexture.TryLoad(File.ReadAllBytes(path), out var tex, out var loadError))
+            {
+                FolderInfo = $"{Path.GetFileName(path)} — {loadError}";
+                return;
+            }
+
+            FolderInfo = $"{Path.GetFileName(path)} — {tex!.Describe()}";
+            if (tex.TryToDds(out var dds, out var ddsError) &&
+                DdsImage.TryDecode(dds!, out var image, out ddsError))
+            {
+                PreviewBitmap = DdsPreview.ToBitmap(image!);
+                PreviewStatus = $"{tex.Name} — {tex.Describe()}";
+            }
+            else
+            {
+                PreviewBitmap = null;
+                PreviewStatus = $"No preview: {ddsError}";
+            }
+        }
+        catch (Exception ex)
+        {
+            FolderInfo = $"Could not read file: {ex.Message}";
+        }
+    }
+
+    private bool CanExportDds() =>
+        SelectedFolderNode is { IsDirectory: false } node &&
+        node.FullPath.EndsWith(".d3dtx", StringComparison.OrdinalIgnoreCase);
+
+    [RelayCommand(CanExecute = nameof(CanExportDds))]
+    private async Task ExportDdsAsync()
+    {
+        if (Dialogs is null || SelectedFolderNode is null) return;
+        var source = SelectedFolderNode.FullPath;
+        try
+        {
+            if (!D3dtxTexture.TryLoad(File.ReadAllBytes(source), out var tex, out var error) ||
+                !tex!.TryToDds(out var dds, out error))
+            {
+                AppendLog($"✗ Cannot convert {Path.GetFileName(source)}: {error}");
+                return;
+            }
+
+            var target = await Dialogs.SaveFileAsync("Export as DDS",
+                Path.GetFileNameWithoutExtension(source) + ".dds",
+                ("DDS textures", new[] { "*.dds" }));
+            if (target is null) return;
+
+            await File.WriteAllBytesAsync(target, dds!);
+            AppendLog($"✓ Exported {Path.GetFileName(target)} ({tex.Describe()}).");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"✗ Export failed: {ex.Message}");
+        }
     }
 
     /// <summary>One-line description of a file: meta-stream summary for Telltale assets, size otherwise.</summary>
