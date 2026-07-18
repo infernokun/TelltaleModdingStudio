@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
         xmlns:games="clr-namespace:TelltaleModding.Core.Games;assembly=TelltaleModding.Core"
+        xmlns:views="clr-namespace:TelltaleModding.App.Views"
         x:Class="TelltaleModding.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Telltale Modding Studio"
@@ -151,7 +152,12 @@
 
                 <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1"
                         CornerRadius="4" Margin="0,6">
-                    <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" Margin="8" />
+                    <Panel>
+                        <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" Margin="8"
+                               IsVisible="{Binding !IsMeshPreview}" />
+                        <views:MeshViewport x:Name="Viewport"
+                                            IsVisible="{Binding IsMeshPreview}" />
+                    </Panel>
                 </Border>
 
                 <StackPanel Grid.Row="2" Spacing="2">
