@@ -67,6 +67,16 @@ public class MetaStreamHeaderTests
     }
 
     [Fact]
+    public void Describe_names_root_class_and_sections()
+    {
+        var header = MetaStreamHeader.Parse(File.ReadAllBytes(SampleData.MeshSample));
+        var summary = header.Describe();
+        Assert.Contains("MSV6", summary);
+        Assert.Contains("root D3DMesh", summary);
+        Assert.Contains("28 class versions", summary);
+    }
+
+    [Fact]
     public void Rejects_non_telltale_data()
     {
         Assert.False(MetaStreamHeader.TryParse("not a mesh file at all!!"u8, out _, out var error));

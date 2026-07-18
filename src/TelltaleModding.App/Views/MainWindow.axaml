@@ -58,25 +58,26 @@
                 </ListBox>
             </Grid>
 
-            <!-- Archive browser -->
-            <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto">
-                <TextBlock Grid.Row="0" Text="Archive" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <!-- Archive browser / folder explorer -->
+            <TabControl Grid.Column="2" Padding="0,6,0,0">
+              <TabItem Header="Archive">
+              <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,6,0,0">
 
-                <DockPanel Grid.Row="1" Margin="0,0,0,6">
+                <DockPanel Grid.Row="0" Margin="0,0,0,6">
                     <Button DockPanel.Dock="Right" Content="Open archive…"
                             Command="{Binding OpenArchiveCommand}" Margin="6,0,0,0" />
                     <TextBox Text="{Binding ArchivePath}" IsReadOnly="True"
                              Watermark="No archive selected" />
                 </DockPanel>
 
-                <DockPanel Grid.Row="2" Margin="0,0,0,6">
+                <DockPanel Grid.Row="1" Margin="0,0,0,6">
                     <TextBlock DockPanel.Dock="Right" Text="{Binding ArchiveInfoDisplay}"
                                Foreground="Gray" FontSize="11" VerticalAlignment="Center"
                                Margin="6,0,0,0" />
                     <TextBox Text="{Binding EntryFilter}" Watermark="Filter files (name or category, e.g. Model)…" />
                 </DockPanel>
 
-                <ListBox Grid.Row="3" ItemsSource="{Binding Entries}"
+                <ListBox Grid.Row="2" ItemsSource="{Binding Entries}"
                          SelectedItem="{Binding SelectedEntry}">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:ArchiveEntryViewModel">
@@ -93,14 +94,48 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
 
-                <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
                     <Button Content="List files" Command="{Binding ListArchiveCommand}" />
                     <Button Content="Extract selected" Command="{Binding ExtractSelectedCommand}" />
                     <Button Content="Extract all" Command="{Binding ExtractAllCommand}" />
                     <CheckBox Content="Decode textures/audio (-m)" IsChecked="{Binding MetaExtract}"
                               ToolTip.Tip="Extract DDS from D3DTX, OGG from AUD. Do not use for files you plan to rebuild into a patch." />
                 </StackPanel>
-            </Grid>
+              </Grid>
+              </TabItem>
+
+              <TabItem Header="Folder">
+              <Grid RowDefinitions="Auto,*,Auto" Margin="0,6,0,0">
+                <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                    <Button DockPanel.Dock="Right" Content="Open folder…"
+                            Command="{Binding OpenFolderCommand}" Margin="6,0,0,0" />
+                    <TextBox Text="{Binding FolderPath}" IsReadOnly="True"
+                             Watermark="No folder open — open a folder you extracted an archive into" />
+                </DockPanel>
+
+                <TreeView Grid.Row="1" ItemsSource="{Binding FolderRoots}"
+                          SelectedItem="{Binding SelectedFolderNode}">
+                    <TreeView.Styles>
+                        <Style Selector="TreeViewItem">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" x:DataType="vm:FileNodeViewModel" />
+                        </Style>
+                    </TreeView.Styles>
+                    <TreeView.ItemTemplate>
+                        <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:FileNodeViewModel">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{Binding Icon}" FontSize="12" />
+                                <TextBlock Text="{Binding Name}" FontSize="12" />
+                            </StackPanel>
+                        </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+
+                <TextBlock Grid.Row="2" Text="{Binding FolderInfo}" Foreground="Gray"
+                           FontSize="11" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding FolderInfo}" />
+              </Grid>
+              </TabItem>
+            </TabControl>
 
             <!-- Mod project + preview -->
             <Grid Grid.Column="4" RowDefinitions="Auto,Auto,*,Auto,Auto,220">
