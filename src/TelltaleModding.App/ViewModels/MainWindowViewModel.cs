@@ -6,6 +6,7 @@ using TelltaleModding.App.Services;
 using TelltaleModding.Core.Archives;
 using TelltaleModding.Core.Engine;
 using TelltaleModding.Core.Games;
+using TelltaleModding.Core.Meta;
 using TelltaleModding.Core.Projects;
 
 namespace TelltaleModding.App.ViewModels;
@@ -184,6 +185,77 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// meta-extracted files must not be rebuilt into archives.</summary>
     [ObservableProperty]
     private bool _metaExtract;
+
+    // ---- Extracted-folder explorer --------------------------------------
+
+    [ObservableProperty]
+    private string? _folderPath;
+
+    /// <summary>Root of the explorer tree (single element so the TreeView shows the folder itself).</summary>
+    public ObservableCollection<FileNodeViewModel> FolderRoots { get; } = new();
+
+    [ObservableProperty]
+    private string _folderInfo = "Open an extracted folder to browse its assets.";
+
+    [ObservableProperty]
+    private FileNodeViewModel? _selectedFolderNode;
+
+    [RelayCommand]
+    private async Task OpenFolderAsync()
+    {
+        if (Dialogs is null) return;
+        var path = await Dialogs.OpenFolderAsync("Open extracted folder");
+        if (path is null) return;
+        OpenFolder(path);
+    }
+
+    /// <summary>Loads a folder into the explorer (exposed for tests and drag-drop).</summary>
+    public void OpenFolder(string path)
+    {
+        FolderPath = path;
+        FolderRoots.Clear();
+        FolderRoots.Add(FileNodeViewModel.ForRoot(path));
+        FolderInfo = $"{Path.GetFileName(Path.TrimEndingDirectorySeparator(path))} — click a file to inspect it.";
+    }
+
+    partial void OnSelectedFolderNodeChanged(FileNodeViewModel? value)
+    {
+        if (value is null || value.IsDirectory || !File.Exists(value.FullPath))
+            return;
+
+        var extension = Path.GetExtension(value.FullPath).ToLowerInvariant();
+        if (extension == ".dds")
+        {
+            ShowPreview(value.FullPath);
+            FolderInfo = PreviewStatus;
+            return;
+        }
+
+        FolderInfo = DescribeFolderFile(value.FullPath);
+    }
+
+    /// <summary>One-line description of a file: meta-stream summary for Telltale assets, size otherwise.</summary>
+    internal static string DescribeFolderFile(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            using var stream = File.OpenRead(path);
+            var head = new byte[Math.Min(info.Length, 64 * 1024)];
+            stream.ReadExactly(head);
+
+            if (MetaStreamHeader.TryParse(head, out var header, out _, isCompleteFile: head.Length == info.Length) &&
+                (head.Length < info.Length || header!.TotalSize == info.Length))
+            {
+                return $"{info.Name} — {header!.Describe()}";
+            }
+            return $"{info.Name} — {info.Length:N0} bytes";
+        }
+        catch (Exception ex)
+        {
+            return $"Could not read file: {ex.Message}";
+        }
+    }
 
     // ---- Mod project ----------------------------------------------------
 

@@ -70,6 +70,23 @@ public sealed class MetaStreamHeader
         ["NIBM"] = "MBIN (byte-swapped)",
     };
 
+    /// <summary>Human-readable one-line summary, e.g. for a file-info status line.</summary>
+    public string Describe()
+    {
+        var root = Classes.Count > 0
+            ? Classes[0].TypeName ?? $"0x{Classes[0].TypeHash:X16}"
+            : "empty";
+        return $"{Format.ToString().ToUpperInvariant()} · root {root} · {Classes.Count} class versions" +
+               $" · data {FormatSize(DefaultSectionSize)} · bulk {FormatSize(AsyncSectionSize)}";
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB",
+    };
+
     /// <summary>True if a class with the given name appears in the header's version records.</summary>
     public bool ContainsClass(string typeName)
     {
