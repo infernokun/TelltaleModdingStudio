@@ -11,139 +11,161 @@
 
     <DockPanel Margin="12">
 
-        <!-- Header -->
+        <!-- Toolbar: game selection + engine status -->
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Text="Telltale Modding Studio" FontSize="22" FontWeight="SemiBold"
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Telltale Modding Studio" FontSize="18" FontWeight="SemiBold"
                            VerticalAlignment="Center" />
-                <TextBlock Text="{Binding GameKindDisplay}" Foreground="Gray"
+                <ComboBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}"
+                          Width="320" VerticalAlignment="Center"
+                          PlaceholderText="Select a game…">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="games:GameEntry">
+                            <TextBlock Text="{Binding Name}" FontSize="12" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="{Binding GameKindDisplay}" Foreground="Gray" FontSize="11"
                            VerticalAlignment="Center" />
             </StackPanel>
             <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
                        Text="{Binding EngineStatus}" Foreground="Gray" FontSize="11"
                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                       MaxWidth="520" ToolTip.Tip="{Binding EngineStatus}" />
+                       MaxWidth="420" ToolTip.Tip="{Binding EngineStatus}" />
         </DockPanel>
 
-        <!-- Log -->
-        <Grid DockPanel.Dock="Bottom" RowDefinitions="Auto,120" Margin="0,10,0,0">
-            <DockPanel Grid.Row="0" Margin="0,0,0,4">
-                <TextBlock Text="Output" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right"
-                            Orientation="Horizontal" Spacing="6">
+        <!-- Collapsible output log -->
+        <Expander DockPanel.Dock="Bottom" Header="Output" Margin="0,8,0,0"
+                  IsExpanded="{Binding IsRunning, Mode=OneWay}">
+            <Grid RowDefinitions="Auto,140">
+                <StackPanel Grid.Row="0" HorizontalAlignment="Right"
+                            Orientation="Horizontal" Spacing="6" Margin="0,0,0,4">
                     <ProgressBar IsIndeterminate="True" Width="120"
                                  IsVisible="{Binding IsRunning}" />
                     <Button Content="Cancel" Command="{Binding CancelRunCommand}" />
                     <Button Content="Clear" Command="{Binding ClearLogCommand}" />
                 </StackPanel>
-            </DockPanel>
-            <TextBox Grid.Row="1" Text="{Binding Log, Mode=OneWay}" IsReadOnly="True"
-                     AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace"
-                     FontSize="11" />
-        </Grid>
-
-        <!-- Main three-column body -->
-        <Grid ColumnDefinitions="280,8,*,8,360">
-
-            <!-- Game picker -->
-            <Grid Grid.Column="0" RowDefinitions="Auto,*">
-                <TextBlock Grid.Row="0" Text="Game" FontWeight="SemiBold" Margin="0,0,0,6" />
-                <ListBox Grid.Row="1" ItemsSource="{Binding Games}"
-                         SelectedItem="{Binding SelectedGame}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="games:GameEntry">
-                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" FontSize="12" />
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <TextBox Grid.Row="1" Text="{Binding Log, Mode=OneWay}" IsReadOnly="True"
+                         AcceptsReturn="True" TextWrapping="NoWrap"
+                         FontFamily="Consolas,Menlo,monospace" FontSize="11" />
             </Grid>
+        </Expander>
 
-            <!-- Archive browser / folder explorer -->
-            <TabControl Grid.Column="2" Padding="0,6,0,0">
-              <TabItem Header="Archive">
-              <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,6,0,0">
+        <!-- Browse | Preview | Mod project -->
+        <Grid ColumnDefinitions="360,6,*,6,300">
 
-                <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                    <Button DockPanel.Dock="Right" Content="Open archive…"
-                            Command="{Binding OpenArchiveCommand}" Margin="6,0,0,0" />
-                    <TextBox Text="{Binding ArchivePath}" IsReadOnly="True"
-                             Watermark="No archive selected" />
-                </DockPanel>
+            <!-- Browse panel -->
+            <TabControl Grid.Column="0" Padding="0,4,0,0">
+                <TabItem Header="Archive">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,6,0,0">
+                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                            <Button DockPanel.Dock="Right" Content="Open…"
+                                    Command="{Binding OpenArchiveCommand}" Margin="6,0,0,0"
+                                    ToolTip.Tip="Open a .ttarch/.ttarch2 archive" />
+                            <TextBox Text="{Binding ArchivePath}" IsReadOnly="True"
+                                     Watermark="No archive selected" />
+                        </DockPanel>
 
-                <DockPanel Grid.Row="1" Margin="0,0,0,6">
-                    <TextBlock DockPanel.Dock="Right" Text="{Binding ArchiveInfoDisplay}"
-                               Foreground="Gray" FontSize="11" VerticalAlignment="Center"
-                               Margin="6,0,0,0" />
-                    <TextBox Text="{Binding EntryFilter}" Watermark="Filter files (name or category, e.g. Model)…" />
-                </DockPanel>
+                        <DockPanel Grid.Row="1" Margin="0,0,0,6">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding ArchiveInfoDisplay}"
+                                       Foreground="Gray" FontSize="11" VerticalAlignment="Center"
+                                       Margin="6,0,0,0" />
+                            <TextBox Text="{Binding EntryFilter}"
+                                     Watermark="Filter (name or category)…" />
+                        </DockPanel>
 
-                <ListBox Grid.Row="2" ItemsSource="{Binding Entries}"
-                         SelectedItem="{Binding SelectedEntry}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ArchiveEntryViewModel">
-                            <Grid ColumnDefinitions="*,90,80">
-                                <TextBlock Grid.Column="0" Text="{Binding Name}"
-                                           TextTrimming="CharacterEllipsis" FontSize="12" />
-                                <TextBlock Grid.Column="1" Text="{Binding Category}"
-                                           Foreground="Gray" FontSize="11" />
-                                <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}"
-                                           Foreground="Gray" FontSize="11"
-                                           HorizontalAlignment="Right" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                        <ListBox Grid.Row="2" ItemsSource="{Binding Entries}"
+                                 SelectedItem="{Binding SelectedEntry}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ArchiveEntryViewModel">
+                                    <Grid ColumnDefinitions="*,80,70">
+                                        <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                   TextTrimming="CharacterEllipsis" FontSize="12" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Category}"
+                                                   Foreground="Gray" FontSize="11" />
+                                        <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}"
+                                                   Foreground="Gray" FontSize="11"
+                                                   HorizontalAlignment="Right" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
 
-                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
-                    <Button Content="List files" Command="{Binding ListArchiveCommand}" />
-                    <Button Content="Extract selected" Command="{Binding ExtractSelectedCommand}" />
-                    <Button Content="Extract all" Command="{Binding ExtractAllCommand}" />
-                    <CheckBox Content="Decode textures/audio (-m)" IsChecked="{Binding MetaExtract}"
-                              ToolTip.Tip="Extract DDS from D3DTX, OGG from AUD. Do not use for files you plan to rebuild into a patch." />
-                </StackPanel>
-              </Grid>
-              </TabItem>
-
-              <TabItem Header="Folder">
-              <Grid RowDefinitions="Auto,*,Auto" Margin="0,6,0,0">
-                <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                    <Button DockPanel.Dock="Right" Content="Open folder…"
-                            Command="{Binding OpenFolderCommand}" Margin="6,0,0,0" />
-                    <TextBox Text="{Binding FolderPath}" IsReadOnly="True"
-                             Watermark="No folder open — open a folder you extracted an archive into" />
-                </DockPanel>
-
-                <TreeView Grid.Row="1" ItemsSource="{Binding FolderRoots}"
-                          SelectedItem="{Binding SelectedFolderNode}">
-                    <TreeView.Styles>
-                        <Style Selector="TreeViewItem">
-                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" x:DataType="vm:FileNodeViewModel" />
-                        </Style>
-                    </TreeView.Styles>
-                    <TreeView.ItemTemplate>
-                        <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:FileNodeViewModel">
+                        <StackPanel Grid.Row="3" Spacing="6" Margin="0,6,0,0">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="{Binding Icon}" FontSize="12" />
-                                <TextBlock Text="{Binding Name}" FontSize="12" />
+                                <Button Content="List files" Command="{Binding ListArchiveCommand}" />
+                                <Button Content="Extract selected" Command="{Binding ExtractSelectedCommand}" />
+                                <Button Content="Extract all" Command="{Binding ExtractAllCommand}" />
                             </StackPanel>
-                        </TreeDataTemplate>
-                    </TreeView.ItemTemplate>
-                </TreeView>
+                            <CheckBox Content="Decode textures/audio (-m)" IsChecked="{Binding MetaExtract}"
+                                      ToolTip.Tip="Extract DDS from D3DTX, OGG from AUD. Do not use for files you plan to rebuild into a patch." />
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
 
-                <DockPanel Grid.Row="2" Margin="0,6,0,0">
-                    <Button DockPanel.Dock="Right" Content="Export DDS…" FontSize="11" Padding="6,2"
-                            Command="{Binding ExportDdsCommand}" Margin="6,0,0,0"
-                            ToolTip.Tip="Convert the selected .d3dtx to a standard DDS file" />
-                    <TextBlock Text="{Binding FolderInfo}" Foreground="Gray"
-                               FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                               ToolTip.Tip="{Binding FolderInfo}" />
-                </DockPanel>
-              </Grid>
-              </TabItem>
+                <TabItem Header="Folder">
+                    <Grid RowDefinitions="Auto,*" Margin="0,6,0,0">
+                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                            <Button DockPanel.Dock="Right" Content="Open…"
+                                    Command="{Binding OpenFolderCommand}" Margin="6,0,0,0"
+                                    ToolTip.Tip="Browse a folder you extracted an archive into" />
+                            <TextBox Text="{Binding FolderPath}" IsReadOnly="True"
+                                     Watermark="No folder open" />
+                        </DockPanel>
+
+                        <TreeView Grid.Row="1" ItemsSource="{Binding FolderRoots}"
+                                  SelectedItem="{Binding SelectedFolderNode}">
+                            <TreeView.Styles>
+                                <Style Selector="TreeViewItem">
+                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" x:DataType="vm:FileNodeViewModel" />
+                                </Style>
+                            </TreeView.Styles>
+                            <TreeView.ItemTemplate>
+                                <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:FileNodeViewModel">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding Icon}" FontSize="12" />
+                                        <TextBlock Text="{Binding Name}" FontSize="12" />
+                                    </StackPanel>
+                                </TreeDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                    </Grid>
+                </TabItem>
             </TabControl>
 
-            <!-- Mod project + preview -->
-            <Grid Grid.Column="4" RowDefinitions="Auto,Auto,*,Auto,Auto,220">
+            <GridSplitter Grid.Column="1" Background="Transparent" ResizeDirection="Columns" />
+
+            <!-- Preview panel: the workspace centerpiece -->
+            <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto" Margin="4,0">
+                <DockPanel Grid.Row="0">
+                    <TextBlock Text="Preview" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                Orientation="Horizontal" Spacing="6">
+                        <Button Content="Export DDS…" FontSize="11" Padding="8,3"
+                                Command="{Binding ExportDdsCommand}"
+                                ToolTip.Tip="Convert the selected .d3dtx to a standard DDS file" />
+                        <Button Content="Open .dds…" FontSize="11" Padding="8,3"
+                                Command="{Binding PreviewFileCommand}" />
+                    </StackPanel>
+                </DockPanel>
+
+                <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1"
+                        CornerRadius="4" Margin="0,6">
+                    <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" Margin="8" />
+                </Border>
+
+                <StackPanel Grid.Row="2" Spacing="2">
+                    <TextBlock Text="{Binding PreviewStatus}" Foreground="Gray" FontSize="11"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PreviewStatus}" />
+                    <TextBlock Text="{Binding FolderInfo}" Foreground="Gray" FontSize="11"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FolderInfo}" />
+                </StackPanel>
+            </Grid>
+
+            <GridSplitter Grid.Column="3" Background="Transparent" ResizeDirection="Columns" />
+
+            <!-- Mod project panel -->
+            <Grid Grid.Column="4" RowDefinitions="Auto,Auto,*,Auto,Auto">
                 <TextBlock Grid.Row="0" Text="Mod project" FontWeight="SemiBold" Margin="0,0,0,6" />
 
                 <DockPanel Grid.Row="1" Margin="0,0,0,6">
@@ -175,7 +197,7 @@
                 </ListBox>
 
                 <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="6" Margin="0,6,0,6">
-                    <Button Content="Add swap from selected file"
+                    <Button Content="Add swap from selection"
                             Command="{Binding AddSwapFromEntryCommand}"
                             ToolTip.Tip="Pick a replacement for the file selected in the archive browser" />
                     <Button Content="Remove" Command="{Binding RemoveSwapCommand}" />
@@ -185,25 +207,8 @@
                         Command="{Binding BuildPatchCommand}"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center"
-                        FontWeight="SemiBold" Margin="0,0,0,6"
+                        FontWeight="SemiBold"
                         ToolTip.Tip="Builds a minimal 0.ttarch/0.ttarch2 containing only your swapped files" />
-
-                <!-- Preview -->
-                <Grid Grid.Row="5" RowDefinitions="Auto,*,Auto">
-                    <DockPanel Grid.Row="0">
-                        <TextBlock Text="Texture preview" FontWeight="SemiBold" />
-                        <Button DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                Content="Open .dds…" FontSize="11" Padding="6,2"
-                                Command="{Binding PreviewFileCommand}" />
-                    </DockPanel>
-                    <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1"
-                            CornerRadius="4" Margin="0,4">
-                        <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" />
-                    </Border>
-                    <TextBlock Grid.Row="2" Text="{Binding PreviewStatus}" Foreground="Gray"
-                               FontSize="11" TextTrimming="CharacterEllipsis"
-                               ToolTip.Tip="{Binding PreviewStatus}" />
-                </Grid>
             </Grid>
         </Grid>
     </DockPanel>
