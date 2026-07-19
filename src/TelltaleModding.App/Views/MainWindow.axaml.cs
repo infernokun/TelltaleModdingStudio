@@ -16,7 +16,7 @@ public partial class MainWindow : Window
             if (DataContext is MainWindowViewModel vm)
             {
                 vm.Dialogs = new DialogService(this);
-                vm.MeshPreviewReady += (geometry, texture) => Viewport.SetMesh(geometry, texture);
+                vm.MeshPreviewReady += (geometry, textures, normalMaps) => Viewport.SetMesh(geometry, textures, normalMaps);
             }
         };
 

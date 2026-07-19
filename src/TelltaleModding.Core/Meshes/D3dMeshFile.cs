@@ -412,6 +412,7 @@ public sealed class D3dMeshFile
         var positions = new Vector3[count];
         var normals = new Vector3[count];
         var uvs = new Vector2[count];
+        var tangents = new Vector4[count];
 
         foreach (var attr in Attributes)
         {
@@ -432,6 +433,9 @@ public sealed class D3dMeshFile
                     case GfxVertexAttribute.Normal:
                         normals[i] = new Vector3(Sn16(at), Sn16(at + 2), Sn16(at + 4));
                         break;
+                    case GfxVertexAttribute.Tangent:
+                        tangents[i] = new Vector4(Sn16(at), Sn16(at + 2), Sn16(at + 4), Sn16(at + 6));
+                        break;
                     case GfxVertexAttribute.TexCoord:
                         var (scale, offset) = _texCoordTransforms[0];
                         Vector2 raw = attr.Format switch
@@ -448,15 +452,15 @@ public sealed class D3dMeshFile
             }
         }
 
-        return new MeshGeometry(positions, normals, uvs, indices, Batches, BoundsMin, BoundsMax);
+        return new MeshGeometry(positions, normals, uvs, tangents, indices, Batches, BoundsMin, BoundsMax);
     }
 
     private float Sn16(int at) =>
         Math.Max(-1f, BinaryPrimitives.ReadInt16LittleEndian(_bufferData.AsSpan(at)) / 32767f);
 }
 
-/// <summary>Decoded, renderable mesh data (LOD 0).</summary>
+/// <summary>Decoded, renderable mesh data (LOD 0). Tangent W carries handedness.</summary>
 public sealed record MeshGeometry(
-    Vector3[] Positions, Vector3[] Normals, Vector2[] TexCoords,
+    Vector3[] Positions, Vector3[] Normals, Vector2[] TexCoords, Vector4[] Tangents,
     int[] Indices, IReadOnlyList<MeshBatch> Batches,
     Vector3 BoundsMin, Vector3 BoundsMax);
