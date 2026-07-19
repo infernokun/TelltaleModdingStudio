@@ -62,6 +62,9 @@ public sealed class D3dMeshFile
     /// <summary>Per-material handle symbols (parallel to batch MaterialIndex).</summary>
     public IReadOnlyList<ulong> MaterialHandles { get; private init; } = Array.Empty<ulong>();
 
+    /// <summary>Bone symbols this mesh is skinned to (empty for static meshes).</summary>
+    public IReadOnlyList<ulong> BoneSymbols { get; private init; } = Array.Empty<ulong>();
+
     /// <summary>
     /// Embedded material property sets (name symbol + raw payload). The payload holds
     /// compiled material data whose texture references can be found by scanning for
@@ -264,7 +267,8 @@ public sealed class D3dMeshFile
             }
             Expect(end, "nested array");
         }
-        NestedArray(() => { U64(); off += 24; Sphere(); U32(); });   // bone: symbol, bounds, vert count
+        var boneSymbols = new List<ulong>();
+        NestedArray(() => { boneSymbols.Add(U64()); off += 24; Sphere(); U32(); });   // bone: symbol, bounds, vert count
         NestedArray(() => { SkipBlock(); U32(); });                  // transform block, camera-facing type
 
         SkipBlock();                          // material requirements
@@ -288,6 +292,7 @@ public sealed class D3dMeshFile
             TextureSymbols = textureSymbols,
             MaterialHandles = materialHandles,
             MaterialResources = materialResources,
+            BoneSymbols = boneSymbols,
         };
 
         // Sparse texcoord transforms
@@ -364,6 +369,7 @@ public sealed class D3dMeshFile
             TextureSymbols = mesh.TextureSymbols,
             MaterialHandles = mesh.MaterialHandles,
             MaterialResources = mesh.MaterialResources,
+            BoneSymbols = mesh.BoneSymbols,
             Attributes = attrs,
             IndexBuffer = ibuf,
             VertexBuffers = vbufs,
