@@ -34,9 +34,10 @@ public readonly record struct GfxBufferInfo(int Count, int Stride, int DataOffse
 
 /// <summary>One draw batch of LOD 0: an index range with its material and texture slot.</summary>
 /// <param name="DiffuseTextureIndex">Index into the mesh's texture list (-1 when untextured).</param>
+/// <param name="BonePaletteIndex">Index into the mesh's bone palettes (-1 for static batches).</param>
 public readonly record struct MeshBatch(
     int StartIndex, int PrimitiveCount, int MaterialIndex, int MinVertex, int MaxVertex,
-    int DiffuseTextureIndex);
+    int DiffuseTextureIndex, int BonePaletteIndex);
 
 /// <summary>
 /// A parsed Telltale .d3dmesh (D3DMesh version 25 — the Game of Thrones /
@@ -64,6 +65,10 @@ public sealed class D3dMeshFile
 
     /// <summary>Bone symbols this mesh is skinned to (empty for static meshes).</summary>
     public IReadOnlyList<ulong> BoneSymbols { get; private init; } = Array.Empty<ulong>();
+
+    /// <summary>Bone palettes; batch <see cref="MeshBatch.BonePaletteIndex"/> selects one.</summary>
+    public IReadOnlyList<IReadOnlyList<ulong>> BonePalettes { get; private init; } =
+        Array.Empty<IReadOnlyList<ulong>>();
 
     /// <summary>
     /// Embedded material property sets (name symbol + raw payload). The payload holds
@@ -211,9 +216,10 @@ public sealed class D3dMeshFile
                 int startIndex = I32(), numPrims = I32();
                 int diffuseIndex = TexIndices();
                 int materialIndex = I32();
-                U32(); U32();                 // bone palette index, local transform index
+                int bonePalette = I32();
+                U32();                        // local transform index
                 if (l == 0)
-                    batches.Add(new MeshBatch(startIndex, numPrims, materialIndex, minVert, maxVert, diffuseIndex));
+                    batches.Add(new MeshBatch(startIndex, numPrims, materialIndex, minVert, maxVert, diffuseIndex, bonePalette));
             }
             Expect(batchesEnd, "batches");
             SkipBlock();                      // vertex streams bit set
@@ -267,8 +273,26 @@ public sealed class D3dMeshFile
             }
             Expect(end, "nested array");
         }
-        var boneSymbols = new List<ulong>();
-        NestedArray(() => { boneSymbols.Add(U64()); off += 24; Sphere(); U32(); });   // bone: symbol, bounds, vert count
+        // mBones is an array of palettes: batches index a palette; vertex blend
+        // indices index within that palette.
+        var bonePalettes = new List<IReadOnlyList<ulong>>();
+        {
+            int end = Block();
+            int outerCount = I32();
+            for (int o = 0; o < outerCount; o++)
+            {
+                int innerCount = I32();
+                var palette = new ulong[innerCount];
+                for (int i = 0; i < innerCount; i++)
+                {
+                    palette[i] = U64();
+                    off += 24; Sphere(); U32();
+                }
+                bonePalettes.Add(palette);
+            }
+            Expect(end, "bone palettes");
+        }
+        var boneSymbols = bonePalettes.SelectMany(p => p).Distinct().ToList();
         NestedArray(() => { SkipBlock(); U32(); });                  // transform block, camera-facing type
 
         SkipBlock();                          // material requirements
@@ -293,6 +317,7 @@ public sealed class D3dMeshFile
             MaterialHandles = materialHandles,
             MaterialResources = materialResources,
             BoneSymbols = boneSymbols,
+            BonePalettes = bonePalettes,
         };
 
         // Sparse texcoord transforms
@@ -370,6 +395,7 @@ public sealed class D3dMeshFile
             MaterialHandles = mesh.MaterialHandles,
             MaterialResources = mesh.MaterialResources,
             BoneSymbols = mesh.BoneSymbols,
+            BonePalettes = mesh.BonePalettes,
             Attributes = attrs,
             IndexBuffer = ibuf,
             VertexBuffers = vbufs,
@@ -413,6 +439,9 @@ public sealed class D3dMeshFile
         var normals = new Vector3[count];
         var uvs = new Vector2[count];
         var tangents = new Vector4[count];
+        var blendWeights = new Vector4[count];
+        var blendIndices = new (byte A, byte B, byte C, byte D)[count];
+        bool skinned = false;
 
         foreach (var attr in Attributes)
         {
@@ -436,6 +465,17 @@ public sealed class D3dMeshFile
                     case GfxVertexAttribute.Tangent:
                         tangents[i] = new Vector4(Sn16(at), Sn16(at + 2), Sn16(at + 4), Sn16(at + 6));
                         break;
+                    case GfxVertexAttribute.BlendWeight:
+                        skinned = true;
+                        blendWeights[i] = new Vector4(Sn16(at), Sn16(at + 2), Sn16(at + 4), Sn16(at + 6));
+                        break;
+                    case GfxVertexAttribute.BlendIndex:
+                        // Stored premultiplied by 3 (D3D9 shader-constant row addressing);
+                        // verified: every index in a full game is a multiple of 3.
+                        blendIndices[i] = (
+                            (byte)(_bufferData[at] / 3), (byte)(_bufferData[at + 1] / 3),
+                            (byte)(_bufferData[at + 2] / 3), (byte)(_bufferData[at + 3] / 3));
+                        break;
                     case GfxVertexAttribute.TexCoord:
                         var (scale, offset) = _texCoordTransforms[0];
                         Vector2 raw = attr.Format switch
@@ -452,7 +492,9 @@ public sealed class D3dMeshFile
             }
         }
 
-        return new MeshGeometry(positions, normals, uvs, tangents, indices, Batches, BoundsMin, BoundsMax);
+        return new MeshGeometry(
+            positions, normals, uvs, tangents, indices, Batches, BoundsMin, BoundsMax,
+            skinned ? blendWeights : null, skinned ? blendIndices : null, BonePalettes);
     }
 
     private float Sn16(int at) =>
@@ -463,4 +505,9 @@ public sealed class D3dMeshFile
 public sealed record MeshGeometry(
     Vector3[] Positions, Vector3[] Normals, Vector2[] TexCoords, Vector4[] Tangents,
     int[] Indices, IReadOnlyList<MeshBatch> Batches,
-    Vector3 BoundsMin, Vector3 BoundsMax);
+    Vector3 BoundsMin, Vector3 BoundsMax,
+    Vector4[]? BlendWeights = null, (byte A, byte B, byte C, byte D)[]? BlendIndices = null,
+    IReadOnlyList<IReadOnlyList<ulong>>? BonePalettes = null)
+{
+    public bool IsSkinned => BlendWeights is not null && BlendIndices is not null;
+}
