@@ -43,15 +43,24 @@ public static class KnownAnimationTypes
     public static readonly ulong CompressedSkeletonPoseKeys = TelltaleCrc64.HashSymbol("CompressedSkeletonPoseKeys");
     public static readonly ulong KeyframedTransform = TelltaleCrc64.HashSymbol("KeyframedValue<Transform>");
 
-    private static readonly HashSet<ulong> KeyframedValueHashes = new[]
+    /// <summary>
+    /// Wire size of a KeyframedValue&lt;T&gt;'s min/max values: positive = raw bytes
+    /// (intrinsic types), -1 = block-prefixed (Transform, String).
+    /// </summary>
+    private static readonly Dictionary<ulong, int> KfvValueSizes = new (string Name, int Size)[]
     {
-        "KeyframedValue<Transform>", "KeyframedValue<Vector3>", "KeyframedValue<Quaternion>",
-        "KeyframedValue<float>", "KeyframedValue<bool>", "KeyframedValue<Symbol>",
-        "KeyframedValue<String>", "KeyframedValue<Color>",
-    }.Select(TelltaleCrc64.HashSymbol).ToHashSet();
+        ("KeyframedValue<Transform>", -1), ("KeyframedValue<String>", -1),
+        ("KeyframedValue<float>", 4), ("KeyframedValue<bool>", 1),
+        ("KeyframedValue<Vector3>", 12), ("KeyframedValue<Quaternion>", 16),
+        ("KeyframedValue<Symbol>", 8), ("KeyframedValue<Color>", 16),
+        ("KeyframedValue<Vector2>", 8),
+    }.ToDictionary(t => TelltaleCrc64.HashSymbol(t.Name), t => t.Size);
 
-    /// <summary>True for any KeyframedValue&lt;T&gt; type (bodies share a self-describing layout).</summary>
-    public static bool IsKeyframedValue(ulong hash) => KeyframedValueHashes.Contains(hash);
+    /// <summary>True for any KeyframedValue&lt;T&gt; type we know how to walk.</summary>
+    public static bool IsKeyframedValue(ulong hash) => KfvValueSizes.ContainsKey(hash);
+
+    /// <summary>Raw min/max value size for a KfV type, or -1 when block-prefixed.</summary>
+    public static int KeyframedValueSize(ulong hash) => KfvValueSizes[hash];
 
     private static readonly Dictionary<ulong, string> Names = new[]
     {
@@ -218,10 +227,16 @@ public sealed class AnimationFile
                     ulong boneSymbol = BinaryPrimitives.ReadUInt64LittleEndian(file.AsSpan(off + 4));
                     uint chFlags = BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(off + 12));
                     off = headerEnd;
-                    off += (int)BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(off)); // min value block
-                    off += (int)BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(off)); // max value block
+                    // min/max values: intrinsic types are raw; Transform/String are blocked.
+                    int valueSize = KnownAnimationTypes.KeyframedValueSize(hash);
+                    for (int m = 0; m < 2; m++)
+                    {
+                        off += valueSize >= 0
+                            ? valueSize
+                            : (int)BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(off));
+                    }
                     if (off < 0 || off + 8 > trailerStart)
-                        throw new InvalidDataException("keyframed min/max blocks out of range");
+                        throw new InvalidDataException("keyframed min/max values out of range");
                     int arrayEnd = off + (int)U32();
                     int sampleCount = (int)U32();
                     if (arrayEnd > trailerStart || sampleCount < 0 || sampleCount > (arrayEnd - off) / 9)
