@@ -9,9 +9,9 @@ using TelltaleModding.Core.Textures;
 namespace TelltaleModding.App.Views;
 
 /// <summary>
-/// Orbit-camera 3D preview of a decoded mesh. Drag to rotate, wheel to zoom.
-/// Renders with a simple headlight-style lambert shade, textured when a
-/// diffuse texture is supplied.
+/// Orbit-camera 3D preview of a decoded mesh. Left-drag rotates, right- or
+/// middle-drag pans, wheel zooms, double-click resets the view. Renders with a
+/// simple headlight-style lambert shade, textured when a diffuse texture is supplied.
 /// </summary>
 public class MeshViewport : OpenGlControlBase
 {
@@ -37,11 +37,11 @@ public class MeshViewport : OpenGlControlBase
     private MeshBatch[] _batches = Array.Empty<MeshBatch>();
     private bool _glReady;
 
-    private Vector3 _center;
+    private Vector3 _center, _homeCenter;
     private float _radius = 1f;
     private float _yaw = 0.8f, _pitch = 0.35f, _zoom = 2.4f;
     private Point _lastPointer;
-    private bool _dragging;
+    private bool _rotating, _panning;
 
     /// <summary>
     /// Loads a decoded mesh into the viewport. <paramref name="batchTextures"/> holds
@@ -69,7 +69,7 @@ public class MeshViewport : OpenGlControlBase
         _pendingBatchTextures = batchTextures;
         _meshDirty = _textureDirty = true;
 
-        _center = (geometry.BoundsMin + geometry.BoundsMax) / 2f;
+        _homeCenter = _center = (geometry.BoundsMin + geometry.BoundsMax) / 2f;
         _radius = Math.Max(0.01f, (geometry.BoundsMax - geometry.BoundsMin).Length() / 2f);
         _zoom = 2.4f;
         RequestNextFrameRendering();
@@ -273,7 +273,19 @@ public class MeshViewport : OpenGlControlBase
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        _dragging = true;
+
+        if (e.ClickCount == 2)
+        {
+            // Double-click: reset the view.
+            _center = _homeCenter;
+            _yaw = 0.8f; _pitch = 0.35f; _zoom = 2.4f;
+            RequestNextFrameRendering();
+            return;
+        }
+
+        var props = e.GetCurrentPoint(this).Properties;
+        _rotating = props.IsLeftButtonPressed;
+        _panning = props.IsRightButtonPressed || props.IsMiddleButtonPressed;
         _lastPointer = e.GetPosition(this);
         e.Pointer.Capture(this);
     }
@@ -281,20 +293,39 @@ public class MeshViewport : OpenGlControlBase
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (!_dragging)
+        if (!_rotating && !_panning)
             return;
         var p = e.GetPosition(this);
-        _yaw -= (float)(p.X - _lastPointer.X) * 0.01f;
-        _pitch += (float)(p.Y - _lastPointer.Y) * 0.01f;
-        _pitch = Math.Clamp(_pitch, -1.5f, 1.5f);
+        float dx = (float)(p.X - _lastPointer.X);
+        float dy = (float)(p.Y - _lastPointer.Y);
         _lastPointer = p;
+
+        if (_rotating)
+        {
+            _yaw -= dx * 0.01f;
+            _pitch += dy * 0.01f;
+            _pitch = Math.Clamp(_pitch, -1.5f, 1.5f);
+        }
+        else
+        {
+            // Pan: shift the orbit center along the camera's right/up axes,
+            // scaled so a full drag across the view moves about one view-height.
+            float panScale = _radius * _zoom * 0.0016f;
+            var forward = new Vector3(
+                -MathF.Cos(_pitch) * MathF.Sin(_yaw),
+                -MathF.Sin(_pitch),
+                -MathF.Cos(_pitch) * MathF.Cos(_yaw));
+            var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
+            var up = Vector3.Cross(right, forward);
+            _center += (-right * dx + up * dy) * panScale;
+        }
         RequestNextFrameRendering();
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        _dragging = false;
+        _rotating = _panning = false;
         e.Pointer.Capture(null);
     }
 
