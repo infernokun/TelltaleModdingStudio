@@ -342,9 +342,38 @@ public class MeshViewport : OpenGlControlBase
 
     // ---- Orbit interaction ----------------------------------------------
 
+    // The GL control itself is not reliably hit-testable in Avalonia (no background
+    // brush), so the view hosts it in a transparent panel and forwards input here.
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        HandlePointerPressed(e);
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        HandlePointerMoved(e);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        HandlePointerReleased(e);
+    }
+
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        base.OnPointerWheelChanged(e);
+        HandlePointerWheel(e);
+    }
+
+    public void HandlePointerPressed(PointerPressedEventArgs e)
+    {
+        if (e.Handled)
+            return;
+        e.Handled = true;
 
         if (e.ClickCount == 2)
         {
@@ -362,11 +391,11 @@ public class MeshViewport : OpenGlControlBase
         e.Pointer.Capture(this);
     }
 
-    protected override void OnPointerMoved(PointerEventArgs e)
+    public void HandlePointerMoved(PointerEventArgs e)
     {
-        base.OnPointerMoved(e);
         if (!_rotating && !_panning)
             return;
+        e.Handled = true;
         var p = e.GetPosition(this);
         float dx = (float)(p.X - _lastPointer.X);
         float dy = (float)(p.Y - _lastPointer.Y);
@@ -394,16 +423,17 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    public void HandlePointerReleased(PointerReleasedEventArgs e)
     {
-        base.OnPointerReleased(e);
         _rotating = _panning = false;
         e.Pointer.Capture(null);
     }
 
-    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    public void HandlePointerWheel(PointerWheelEventArgs e)
     {
-        base.OnPointerWheelChanged(e);
+        if (e.Handled)
+            return;
+        e.Handled = true;
         _zoom = Math.Clamp(_zoom * (e.Delta.Y > 0 ? 0.85f : 1.18f), 1.05f, 20f);
         RequestNextFrameRendering();
     }

@@ -215,11 +215,53 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public void OpenFolder(string path)
     {
         FolderPath = path;
-        FolderRoots.Clear();
-        FolderRoots.Add(FileNodeViewModel.ForRoot(path));
-        FolderInfo = $"{Path.GetFileName(Path.TrimEndingDirectorySeparator(path))} — click a file to inspect it.";
+        _folderTreeRoot = FileNodeViewModel.ForRoot(path);
+        _allFolderFiles = null;
         _textureIndex = null;   // rebuilt lazily for the new folder
         _skeletonIndex = null;
+        FolderFilter = "";
+        ApplyFolderFilter();
+        FolderInfo = $"{Path.GetFileName(Path.TrimEndingDirectorySeparator(path))} — click a file to inspect it.";
+    }
+
+    private FileNodeViewModel? _folderTreeRoot;
+    private List<string>? _allFolderFiles;
+
+    /// <summary>Search text for the folder explorer; matches flatten into a result list.</summary>
+    [ObservableProperty]
+    private string _folderFilter = "";
+
+    partial void OnFolderFilterChanged(string value) => ApplyFolderFilter();
+
+    private const int MaxFilterResults = 400;
+
+    private void ApplyFolderFilter()
+    {
+        FolderRoots.Clear();
+        if (FolderPath is null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(FolderFilter))
+        {
+            if (_folderTreeRoot is not null)
+                FolderRoots.Add(_folderTreeRoot);
+            return;
+        }
+
+        _allFolderFiles ??= Directory.EnumerateFiles(FolderPath, "*", SearchOption.AllDirectories).ToList();
+        int shown = 0;
+        foreach (var file in _allFolderFiles)
+        {
+            if (!Path.GetFileName(file).Contains(FolderFilter, StringComparison.OrdinalIgnoreCase))
+                continue;
+            FolderRoots.Add(FileNodeViewModel.ForSearchResult(FolderPath, file));
+            if (++shown >= MaxFilterResults)
+            {
+                FolderRoots.Add(new FileNodeViewModel($"… more matches — refine the filter", "", isDirectory: false));
+                break;
+            }
+        }
+        FolderInfo = $"{shown} match{(shown == 1 ? "" : "es")} for \"{FolderFilter}\"";
     }
 
     /// <summary>

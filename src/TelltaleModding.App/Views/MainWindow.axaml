@@ -105,7 +105,7 @@
                 </TabItem>
 
                 <TabItem Header="Folder">
-                    <Grid RowDefinitions="Auto,*" Margin="0,6,0,0">
+                    <Grid RowDefinitions="Auto,Auto,*" Margin="0,6,0,0">
                         <DockPanel Grid.Row="0" Margin="0,0,0,6">
                             <Button DockPanel.Dock="Right" Content="Open…"
                                     Command="{Binding OpenFolderCommand}" Margin="6,0,0,0"
@@ -114,7 +114,10 @@
                                      Watermark="No folder open" />
                         </DockPanel>
 
-                        <TreeView Grid.Row="1" ItemsSource="{Binding FolderRoots}"
+                        <TextBox Grid.Row="1" Margin="0,0,0,6" Text="{Binding FolderFilter}"
+                                 Watermark="Filter files (e.g. rhys, .skl, ColorA)…" />
+
+                        <TreeView Grid.Row="2" ItemsSource="{Binding FolderRoots}"
                                   SelectedItem="{Binding SelectedFolderNode}">
                             <TreeView.Styles>
                                 <Style Selector="TreeViewItem">
@@ -152,7 +155,7 @@
 
                 <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1"
                         CornerRadius="4" Margin="0,6">
-                    <Panel>
+                    <Panel x:Name="ViewportHost" Background="Transparent">
                         <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" Margin="8"
                                IsVisible="{Binding !IsMeshPreview}" />
                         <views:MeshViewport x:Name="Viewport"
