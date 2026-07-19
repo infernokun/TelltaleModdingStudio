@@ -93,3 +93,78 @@ public class AnimationFileTests
         Assert.InRange(rotation.Length(), 0.99f, 1.01f);
     }
 }
+
+public class CspkDecoderTests
+{
+    private static CspkClip Decode(string name)
+    {
+        Assert.True(AnimationFile.TryLoad(
+            File.ReadAllBytes(SampleData.Sample(name)), out var anim, out var error), error);
+        var clip = CspkDecoder.TryDecodeFixedRate(anim!.PoseKeysPayload!, anim.Length);
+        Assert.NotNull(clip);
+        return clip!;
+    }
+
+    [Fact]
+    public void Decodes_fixed_rate_phoneme_pose()
+    {
+        var clip = Decode("fiona_phoneme_default_happyC.anm");
+        Assert.Equal(20, clip.BoneSymbols.Count);
+        Assert.Equal(2, clip.SampleCount);
+        foreach (var samples in clip.Rotations)
+            foreach (var q in samples)
+                Assert.InRange(q.Length(), 0.999f, 1.001f);
+    }
+
+    [Fact]
+    public void Decodes_eight_word_head_variant_smoothly()
+    {
+        // rebeccaLayInBed carries the rarer 8-word payload head and 6 samples.
+        var clip = Decode("sk55_idle_rebeccaLayInBed.anm");
+        Assert.Equal(108, clip.BoneSymbols.Count);
+        Assert.Equal(6, clip.SampleCount);
+
+        // Delta-chained samples stay unit length and rotate < 5° per step (idle).
+        foreach (var samples in clip.Rotations)
+        {
+            for (int s = 1; s < samples.Length; s++)
+            {
+                float dot = Math.Abs(System.Numerics.Quaternion.Dot(samples[s - 1], samples[s]));
+                float degrees = 2f * MathF.Acos(Math.Min(dot, 1f)) * 180f / MathF.PI;
+                Assert.True(degrees < 5f, $"step of {degrees}°");
+            }
+        }
+    }
+
+    [Fact]
+    public void Decoded_pose_matches_skeleton_rest_rotations()
+    {
+        var clip = Decode("skB6_idle_bossanovaFists.anm");
+        Assert.True(SkeletonFile.TryLoad(
+            File.ReadAllBytes(SampleData.Sample("sk55_sasha.skl")), out var skl, out _));
+
+        // For the bones this rig shares with Sasha's skeleton, an idle's first
+        // sample should sit near the rest rotation for most bones.
+        var rest = skl!.Bones.ToDictionary(b => b.JointSymbol, b => b.LocalRotation);
+        int matched = 0, close = 0;
+        for (int i = 0; i < clip.BoneSymbols.Count; i++)
+        {
+            if (!rest.TryGetValue(clip.BoneSymbols[i], out var rq))
+                continue;
+            matched++;
+            if (Math.Abs(System.Numerics.Quaternion.Dot(clip.Rotations[i][0], rq)) > 0.85f)
+                close++;
+        }
+        Assert.True(matched > 20, $"only {matched} shared bones");
+        Assert.True(close > matched * 0.6, $"{close}/{matched} near rest");
+    }
+
+    [Fact]
+    public void Rejects_variable_rate_container()
+    {
+        Assert.True(AnimationFile.TryLoad(
+            File.ReadAllBytes(SampleData.Sample("sk54_action_rhysWakeUpDragged.anm")),
+            out var anim, out _));
+        Assert.Null(CspkDecoder.TryDecodeFixedRate(anim!.PoseKeysPayload!, anim.Length));
+    }
+}

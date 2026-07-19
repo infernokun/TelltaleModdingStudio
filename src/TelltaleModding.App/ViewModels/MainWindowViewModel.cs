@@ -584,6 +584,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private SkeletonFile? _playbackSkeleton;
     private MeshSkinner? _playbackSkinner;
     private Dictionary<ulong, TransformTrack>? _playbackTracks;
+    private CspkClip? _playbackCspk;
+    private Dictionary<ulong, int>? _cspkBoneIndex;
     private float _playbackLength;
     private float _playbackTime;
     private Avalonia.Threading.DispatcherTimer? _playbackTimer;
@@ -607,9 +609,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 {
                     if (!AnimationFile.TryLoad(File.ReadAllBytes(path), out var anim, out _))
                         continue;
-                    // Applicable when its keyframed tracks target this skeleton's bones.
+                    // Applicable when its keyframed tracks or compressed pose
+                    // channel target this skeleton's bones.
                     int matching = anim!.TransformTracks.Count(t => skeleton.JointSymbols.Contains(t.BoneSymbol));
-                    if (matching == 0)
+                    if (matching == 0 && anim.FindBoneSymbols(skeleton.JointSymbols).Count == 0)
                         continue;
                     items.Add(new AnimationItem(path, Path.GetFileNameWithoutExtension(path), anim.Length, matching));
                 }
@@ -639,6 +642,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             .Where(t => _playbackSkeleton.JointSymbols.Contains(t.BoneSymbol))
             .GroupBy(t => t.BoneSymbol)
             .ToDictionary(g => g.Key, g => g.First());
+        _playbackCspk = anim.PoseKeysPayload is { } blob
+            ? CspkDecoder.TryDecodeFixedRate(blob, anim.Length)
+            : null;
+        _cspkBoneIndex = null;
+        if (_playbackCspk is { } clip)
+        {
+            _cspkBoneIndex = new Dictionary<ulong, int>();
+            for (int i = 0; i < clip.BoneSymbols.Count; i++)
+                if (clip.BoneSymbols[i] != 0)
+                    _cspkBoneIndex.TryAdd(clip.BoneSymbols[i], i);
+        }
         _playbackLength = Math.Max(0.05f, anim.Length);
         _playbackTime = 0f;
         _skinPositions = new System.Numerics.Vector3[_playbackGeometry!.Positions.Length];
@@ -652,8 +666,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _playbackTimer.Tick += PlaybackTick;
         _playbackTimer.Start();
         IsPlaying = true;
-        AppendLog($"▶ {SelectedAnimation.Name} ({_playbackTracks.Count} bone tracks; " +
-                  "bones without tracks hold the bind pose until compressed pose keys are decoded).");
+        AppendLog(_playbackCspk is { } c
+            ? $"▶ {SelectedAnimation.Name} ({_playbackTracks.Count} keyframed tracks + " +
+              $"compressed pose: {c.BoneSymbols.Count} bones × {c.SampleCount} samples)."
+            : $"▶ {SelectedAnimation.Name} ({_playbackTracks.Count} keyframed tracks; " +
+              "compressed pose channel is variable-rate — those bones hold the bind pose).");
     }
 
     private void PlaybackTick(object? sender, EventArgs e)
@@ -668,6 +685,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             {
                 var (rot, pos) = track.Sample(_playbackTime);
                 return (pos, rot);
+            }
+            // Compressed pose rotations; translations stay at rest (the CSPK
+            // translation stream's semantics are not decoded yet, and bone
+            // offsets barely animate in practice).
+            if (_cspkBoneIndex is not null
+                && _cspkBoneIndex.TryGetValue(bone.JointSymbol, out int ci))
+            {
+                var rot = _playbackCspk!.SampleRotation(ci, _playbackTime);
+                if (_playbackCspk.IsAdditive)
+                    rot = System.Numerics.Quaternion.Normalize(
+                        System.Numerics.Quaternion.Multiply(bone.LocalRotation, rot));
+                return (bone.LocalPosition, rot);
             }
             return (bone.LocalPosition, bone.LocalRotation);
         });
