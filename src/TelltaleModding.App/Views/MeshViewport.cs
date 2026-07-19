@@ -25,13 +25,16 @@ public class MeshViewport : OpenGlControlBase
 
     private float[]? _pendingVertices;
     private int[]? _pendingIndices;
-    private DdsImage? _pendingTexture;
+    private IReadOnlyList<DdsImage?>? _pendingBatchTextures;
+    private IReadOnlyList<MeshBatch>? _pendingBatches;
     private bool _meshDirty, _textureDirty;
 
-    private int _program, _vao, _vbo, _ebo, _texture;
+    private int _program, _vao, _vbo, _ebo;
     private int _uMvp = -1, _uHasTex = -1;
     private int _indexCount;
-    private bool _hasTexture;
+    private readonly List<int> _textures = new();          // GL ids, parallel to _batchTextureSlots
+    private int[] _batchTextureSlots = Array.Empty<int>(); // per-batch index into _textures, -1 = none
+    private MeshBatch[] _batches = Array.Empty<MeshBatch>();
     private bool _glReady;
 
     private Vector3 _center;
@@ -40,8 +43,11 @@ public class MeshViewport : OpenGlControlBase
     private Point _lastPointer;
     private bool _dragging;
 
-    /// <summary>Loads a decoded mesh (and optional diffuse texture) into the viewport.</summary>
-    public void SetMesh(MeshGeometry geometry, DdsImage? texture)
+    /// <summary>
+    /// Loads a decoded mesh into the viewport. <paramref name="batchTextures"/> holds
+    /// one entry per batch of the geometry (null where no texture matched).
+    /// </summary>
+    public void SetMesh(MeshGeometry geometry, IReadOnlyList<DdsImage?> batchTextures)
     {
         var v = new float[geometry.Positions.Length * 8];
         for (int i = 0; i < geometry.Positions.Length; i++)
@@ -59,7 +65,8 @@ public class MeshViewport : OpenGlControlBase
 
         _pendingVertices = v;
         _pendingIndices = geometry.Indices;
-        _pendingTexture = texture;
+        _pendingBatches = geometry.Batches;
+        _pendingBatchTextures = batchTextures;
         _meshDirty = _textureDirty = true;
 
         _center = (geometry.BoundsMin + geometry.BoundsMax) / 2f;
@@ -127,7 +134,6 @@ public class MeshViewport : OpenGlControlBase
         _vao = gl.GenVertexArray();
         _vbo = gl.GenBuffer();
         _ebo = gl.GenBuffer();
-        _texture = gl.GenTexture();
         _glReady = true;
     }
 
@@ -137,8 +143,15 @@ public class MeshViewport : OpenGlControlBase
         gl.DeleteBuffer(_vbo);
         gl.DeleteBuffer(_ebo);
         gl.DeleteVertexArray(_vao);
-        gl.DeleteTexture(_texture);
+        DeleteTextures(gl);
         gl.DeleteProgram(_program);
+    }
+
+    private void DeleteTextures(GlInterface gl)
+    {
+        foreach (var id in _textures)
+            gl.DeleteTexture(id);
+        _textures.Clear();
     }
 
     protected override unsafe void OnOpenGlRender(GlInterface gl, int fb)
@@ -188,22 +201,37 @@ public class MeshViewport : OpenGlControlBase
         if (_textureDirty)
         {
             _textureDirty = false;
-            _hasTexture = _pendingTexture is not null;
-            if (_pendingTexture is { } tex)
+            DeleteTextures(gl);
+            _batches = _pendingBatches?.ToArray() ?? Array.Empty<MeshBatch>();
+            _batchTextureSlots = new int[_batches.Length];
+            Array.Fill(_batchTextureSlots, -1);
+
+            // Upload each distinct image once; batches sharing an image share a slot.
+            var slotByImage = new Dictionary<DdsImage, int>();
+            for (int b = 0; b < _batches.Length; b++)
             {
-                gl.BindTexture(GL_TEXTURE_2D, _texture);
-                fixed (byte* p = tex.Rgba)
-                    gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex.Width, tex.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, new IntPtr(p));
-                gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                var image = _pendingBatchTextures is not null && b < _pendingBatchTextures.Count
+                    ? _pendingBatchTextures[b] : null;
+                if (image is null)
+                    continue;
+                if (!slotByImage.TryGetValue(image, out int slot))
+                {
+                    int id = gl.GenTexture();
+                    gl.BindTexture(GL_TEXTURE_2D, id);
+                    fixed (byte* p = image.Rgba)
+                        gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.Width, image.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, new IntPtr(p));
+                    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    slot = _textures.Count;
+                    _textures.Add(id);
+                    slotByImage[image] = slot;
+                }
+                _batchTextureSlots[b] = slot;
             }
         }
 
         if (_indexCount == 0)
             return;
-
-        gl.BindTexture(GL_TEXTURE_2D, _texture);
-        gl.Uniform1f(_uHasTex, _hasTexture ? 1f : 0f);
 
         float aspect = (float)(Bounds.Width / Math.Max(1.0, Bounds.Height));
         float distance = _radius * _zoom;
@@ -220,7 +248,23 @@ public class MeshViewport : OpenGlControlBase
         var mvp = view * proj;
         gl.UniformMatrix4fv(_uMvp, 1, false, &mvp);
 
-        gl.DrawElements(GL_TRIANGLES, _indexCount, GL_UNSIGNED_INT, IntPtr.Zero);
+        if (_batches.Length == 0)
+        {
+            gl.Uniform1f(_uHasTex, 0f);
+            gl.DrawElements(GL_TRIANGLES, _indexCount, GL_UNSIGNED_INT, IntPtr.Zero);
+        }
+        else
+        {
+            for (int b = 0; b < _batches.Length; b++)
+            {
+                int slot = _batchTextureSlots[b];
+                if (slot >= 0)
+                    gl.BindTexture(GL_TEXTURE_2D, _textures[slot]);
+                gl.Uniform1f(_uHasTex, slot >= 0 ? 1f : 0f);
+                gl.DrawElements(GL_TRIANGLES, _batches[b].PrimitiveCount * 3, GL_UNSIGNED_INT,
+                    new IntPtr(_batches[b].StartIndex * sizeof(int)));
+            }
+        }
         gl.BindVertexArray(0);
     }
 

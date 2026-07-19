@@ -82,6 +82,37 @@ public class D3dMeshFileTests
     }
 
     [Fact]
+    public void Material_resources_resolve_to_per_region_diffuse_textures()
+    {
+        var mesh = Load(SampleData.Sample("skB4_banditMarauder_body.d3dmesh"));
+        Assert.Equal(3, mesh.MaterialResources.Count);
+        Assert.Equal(3, mesh.MaterialHandles.Count);
+
+        // Simulated folder index containing this character's texture set.
+        string[] textureNames =
+        {
+            "skB4_banditMarauder_bodyLowerColorA", "skB4_banditMarauder_bodyLower_nm", "skB4_banditMarauder_bodyLower_detail",
+            "skB4_banditMarauder_bodyUpperColorA", "skB4_banditMarauder_bodyUpper_nm", "skB4_banditMarauder_bodyUpper_detail",
+            "skB4_banditMarauder_headColorA", "skB4_banditMarauder_head_nm", "skB4_banditMarauder_head_detail",
+        };
+        var index = textureNames.ToDictionary(
+            n => TelltaleModding.Core.Meta.TelltaleCrc64.HashSymbol(n), n => n + ".d3dtx");
+
+        // Every batch's material handle must resolve to an embedded resource, and each
+        // resource's diffuse must be the ColorA texture for its body region.
+        var diffuses = new List<string>();
+        foreach (var (nameSymbol, payload) in mesh.MaterialResources)
+        {
+            Assert.Contains(nameSymbol, mesh.MaterialHandles);
+            var picked = MaterialTextureLocator.PickDiffuseTexture(payload, index);
+            Assert.NotNull(picked);
+            Assert.EndsWith("ColorA.d3dtx", picked);
+            diffuses.Add(picked!);
+        }
+        Assert.Equal(3, diffuses.Distinct().Count());
+    }
+
+    [Fact]
     public void Rejects_texture_files()
     {
         Assert.False(D3dMeshFile.TryLoad(File.ReadAllBytes(SampleData.TinyTextureSample), out _, out var error));
