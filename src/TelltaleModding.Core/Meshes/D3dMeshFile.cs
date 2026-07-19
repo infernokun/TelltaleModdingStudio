@@ -32,9 +32,11 @@ public readonly record struct GfxAttributeParams(
 /// <summary>One GPU buffer: element count, stride, and offset into the bulk payload.</summary>
 public readonly record struct GfxBufferInfo(int Count, int Stride, int DataOffset);
 
-/// <summary>One draw batch of LOD 0: an index range with its material.</summary>
+/// <summary>One draw batch of LOD 0: an index range with its material and texture slot.</summary>
+/// <param name="DiffuseTextureIndex">Index into the mesh's texture list (-1 when untextured).</param>
 public readonly record struct MeshBatch(
-    int StartIndex, int PrimitiveCount, int MaterialIndex, int MinVertex, int MaxVertex);
+    int StartIndex, int PrimitiveCount, int MaterialIndex, int MinVertex, int MaxVertex,
+    int DiffuseTextureIndex);
 
 /// <summary>
 /// A parsed Telltale .d3dmesh (D3DMesh version 25 — the Game of Thrones /
@@ -56,6 +58,17 @@ public sealed class D3dMeshFile
 
     /// <summary>Symbols (CRC64 of the texture file name, no extension) of referenced textures.</summary>
     public IReadOnlyList<ulong> TextureSymbols { get; private init; } = Array.Empty<ulong>();
+
+    /// <summary>Per-material handle symbols (parallel to batch MaterialIndex).</summary>
+    public IReadOnlyList<ulong> MaterialHandles { get; private init; } = Array.Empty<ulong>();
+
+    /// <summary>
+    /// Embedded material property sets (name symbol + raw payload). The payload holds
+    /// compiled material data whose texture references can be found by scanning for
+    /// known texture symbols.
+    /// </summary>
+    public IReadOnlyList<(ulong NameSymbol, byte[] Payload)> MaterialResources { get; private init; } =
+        Array.Empty<(ulong, byte[])>();
 
     public IReadOnlyList<GfxAttributeParams> Attributes { get; private init; } = Array.Empty<GfxAttributeParams>();
     public GfxBufferInfo? IndexBuffer { get; private init; }
@@ -135,12 +148,18 @@ public sealed class D3dMeshFile
         if (version is < 22 or >= 52)
             throw new InvalidDataException($"D3DMesh version {version} is outside the supported tier (22-51).");
 
-        // Internal resources (embedded material property sets) — skipped by block.
+        // Internal resources: embedded material property sets are kept for texture lookup.
+        ulong propertySetHash = TelltaleCrc64.HashSymbol("PropertySet");
+        var materialResources = new List<(ulong NameSymbol, byte[] Payload)>();
         int resourceCount = I32();
         for (int i = 0; i < resourceCount; i++)
         {
-            U64(); U64();
-            SkipBlock();
+            ulong resourceName = U64();
+            ulong resourceType = U64();
+            int resourceEnd = Block();
+            if (resourceType == propertySetHash)
+                materialResources.Add((resourceName, file[off..resourceEnd]));
+            off = resourceEnd;
         }
         if (U32() != 0)
             SkipBlock(); // tool-only data
@@ -150,12 +169,22 @@ public sealed class D3dMeshFile
 
         void Sphere() => SkipBlock();
         void Handle() => SkipBlock();
-        void TexIndices()
+        // Custom payload: (slot, value) pairs terminated by a slot with the high bit
+        // set. Slot 0 = diffuse texture index into mTextures.
+        int TexIndices()
         {
             int end = Block();
-            uint i = U32();
-            while ((i & 0x80000000) == 0) { U32(); i = U32(); }
+            int diffuse = -1;
+            uint slot = U32();
+            while ((slot & 0x80000000) == 0)
+            {
+                int value = I32();
+                if (slot == 0)
+                    diffuse = value;
+                slot = U32();
+            }
             Expect(end, "T3MeshTextureIndices");
+            return diffuse;
         }
 
         int ArrayHeader(out int end)
@@ -177,11 +206,11 @@ public sealed class D3dMeshFile
                 U32();                        // batch usage flags
                 int minVert = I32(), maxVert = I32();
                 int startIndex = I32(), numPrims = I32();
-                TexIndices();
+                int diffuseIndex = TexIndices();
                 int materialIndex = I32();
                 U32(); U32();                 // bone palette index, local transform index
                 if (l == 0)
-                    batches.Add(new MeshBatch(startIndex, numPrims, materialIndex, minVert, maxVert));
+                    batches.Add(new MeshBatch(startIndex, numPrims, materialIndex, minVert, maxVert, diffuseIndex));
             }
             Expect(batchesEnd, "batches");
             SkipBlock();                      // vertex streams bit set
@@ -204,11 +233,15 @@ public sealed class D3dMeshFile
         }
         Expect(texsEnd, "mTextures");
 
-        // mMaterials
+        // mMaterials (the handle block carries the material's name symbol)
+        var materialHandles = new List<ulong>();
         int matCount = ArrayHeader(out int matsEnd);
         for (int i = 0; i < matCount; i++)
         {
-            Handle(); U64(); off += 24; Sphere(); U32();
+            int handleEnd = Block();
+            materialHandles.Add(handleEnd - off >= 8 ? U64() : 0);
+            off = handleEnd;
+            U64(); off += 24; Sphere(); U32();
         }
         Expect(matsEnd, "mMaterials");
 
@@ -253,6 +286,8 @@ public sealed class D3dMeshFile
             BoundsMax = boundsMax,
             Batches = batches,
             TextureSymbols = textureSymbols,
+            MaterialHandles = materialHandles,
+            MaterialResources = materialResources,
         };
 
         // Sparse texcoord transforms
@@ -327,6 +362,8 @@ public sealed class D3dMeshFile
             BoundsMax = mesh.BoundsMax,
             Batches = mesh.Batches,
             TextureSymbols = mesh.TextureSymbols,
+            MaterialHandles = mesh.MaterialHandles,
+            MaterialResources = mesh.MaterialResources,
             Attributes = attrs,
             IndexBuffer = ibuf,
             VertexBuffers = vbufs,
