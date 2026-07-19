@@ -20,6 +20,13 @@ public partial class MainWindow : Window
             }
         };
 
+        // The GL viewport is not reliably hit-testable, so its transparent host
+        // panel forwards pointer input (handlers no-op when the viewport handled it).
+        ViewportHost.PointerPressed += (_, e) => Viewport.HandlePointerPressed(e);
+        ViewportHost.PointerMoved += (_, e) => Viewport.HandlePointerMoved(e);
+        ViewportHost.PointerReleased += (_, e) => Viewport.HandlePointerReleased(e);
+        ViewportHost.PointerWheelChanged += (_, e) => Viewport.HandlePointerWheel(e);
+
         // Debug hook: --preview-mesh <path> loads a mesh at startup (used for
         // automated screenshot verification of the GL pipeline).
         Opened += (_, _) =>

@@ -43,6 +43,24 @@ public sealed partial class FileNodeViewModel : ViewModelBase
         return root;
     }
 
+    /// <summary>Creates a virtual grouping node with preloaded children.</summary>
+    public static FileNodeViewModel ForGroup(string label, IEnumerable<FileNodeViewModel> children)
+    {
+        var group = new FileNodeViewModel(label, "", isDirectory: true);
+        group._childrenLoaded = true;
+        group.Children.Clear();
+        foreach (var child in children)
+            group.Children.Add(child);
+        return group;
+    }
+
+    /// <summary>Creates a flat search-result node showing a path relative to the root.</summary>
+    public static FileNodeViewModel ForSearchResult(string rootPath, string filePath)
+    {
+        var relative = Path.GetRelativePath(rootPath, filePath);
+        return new FileNodeViewModel(relative, filePath, isDirectory: false);
+    }
+
     public string Icon => IsDirectory ? "📁" : Path.GetExtension(Name).ToLowerInvariant() switch
     {
         ".d3dmesh" => "🧊",
@@ -71,18 +89,49 @@ public sealed partial class FileNodeViewModel : ViewModelBase
 
         try
         {
-            var dirs = Directory.EnumerateDirectories(FullPath)
-                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
-                .Select(p => new FileNodeViewModel(Path.GetFileName(p), p, isDirectory: true));
+            foreach (var dir in Directory.EnumerateDirectories(FullPath).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+                Children.Add(new FileNodeViewModel(Path.GetFileName(dir), dir, isDirectory: true));
+
             var files = Directory.EnumerateFiles(FullPath)
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
-                .Select(p => new FileNodeViewModel(Path.GetFileName(p), p, isDirectory: false));
-            foreach (var node in dirs.Concat(files))
-                Children.Add(node);
+                .Select(p => new FileNodeViewModel(Path.GetFileName(p), p, isDirectory: false))
+                .ToList();
+
+            // Big flat folders become unmanageable as one list; group files by kind.
+            if (files.Count > 64)
+            {
+                foreach (var group in files
+                    .GroupBy(f => CategoryLabel(Path.GetExtension(f.Name)))
+                    .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    Children.Add(ForGroup($"{group.Key} ({group.Count():N0})", group));
+                }
+            }
+            else
+            {
+                foreach (var file in files)
+                    Children.Add(file);
+            }
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
             Children.Add(new FileNodeViewModel($"⚠ {ex.Message}", "", isDirectory: false));
         }
     }
+
+    private static string CategoryLabel(string extension) => extension.ToLowerInvariant() switch
+    {
+        ".d3dmesh" => "Meshes",
+        ".d3dtx" => "Textures",
+        ".dds" => "DDS images",
+        ".skl" => "Skeletons",
+        ".anm" => "Animations",
+        ".chore" => "Chores",
+        ".prop" => "Props",
+        ".scene" => "Scenes",
+        ".lua" or ".lenc" => "Scripts",
+        ".aud" or ".ogg" or ".wav" => "Audio",
+        "" => "Other",
+        var ext => ext.TrimStart('.'),
+    };
 }
