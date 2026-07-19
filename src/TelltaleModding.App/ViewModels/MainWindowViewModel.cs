@@ -218,7 +218,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         FolderRoots.Clear();
         FolderRoots.Add(FileNodeViewModel.ForRoot(path));
         FolderInfo = $"{Path.GetFileName(Path.TrimEndingDirectorySeparator(path))} — click a file to inspect it.";
-        _textureIndex = null; // rebuilt lazily for the new folder
+        _textureIndex = null;   // rebuilt lazily for the new folder
+        _skeletonIndex = null;
     }
 
     /// <summary>
@@ -369,6 +370,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 ModelDetails.Add($"Batch {b}: {batch.PrimitiveCount:N0} tris · material {batch.MaterialIndex} · {textureLabel}");
             }
 
+            // For skinned meshes, name the skeleton whose joints cover the bone palette.
+            if (mesh.BoneSymbols.Count > 0)
+            {
+                var match = FindBestSkeleton(mesh.BoneSymbols);
+                ModelDetails.Insert(0, match is { } m
+                    ? $"Skeleton: {Path.GetFileName(m.Path)} · {m.Hit}/{mesh.BoneSymbols.Count} bones matched"
+                    : $"Skeleton: none found for {mesh.BoneSymbols.Count} bones (open the folder containing data\\*.skl)");
+            }
+
             IsMeshPreview = true;
             MeshPreviewReady?.Invoke(geometry, batchTextures);
             var textureNote = matchedNames.Count > 0
@@ -444,6 +454,38 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             AppendLog($"✗ Export failed: {ex.Message}");
         }
+    }
+
+    private List<(string Path, SkeletonFile Skeleton)>? _skeletonIndex;
+
+    /// <summary>All parseable .skl files under the open folder (cached per folder).</summary>
+    private List<(string Path, SkeletonFile Skeleton)> GetSkeletonIndex()
+    {
+        if (_skeletonIndex is not null)
+            return _skeletonIndex;
+        var list = new List<(string, SkeletonFile)>();
+        if (FolderPath is not null && Directory.Exists(FolderPath))
+        {
+            foreach (var p in Directory.EnumerateFiles(FolderPath, "*.skl", SearchOption.AllDirectories))
+            {
+                if (SkeletonFile.TryLoad(File.ReadAllBytes(p), out var skl, out _))
+                    list.Add((p, skl!));
+            }
+        }
+        return _skeletonIndex = list;
+    }
+
+    /// <summary>Best skeleton for a bone set: the one containing the most of its bones.</summary>
+    private (string Path, int Hit)? FindBestSkeleton(IReadOnlyList<ulong> boneSymbols)
+    {
+        (string Path, int Hit)? best = null;
+        foreach (var (path, skeleton) in GetSkeletonIndex())
+        {
+            int hit = boneSymbols.Count(skeleton.JointSymbols.Contains);
+            if (hit > 0 && (best is null || hit > best.Value.Hit))
+                best = (path, hit);
+        }
+        return best;
     }
 
     /// <summary>One-line description of a file: meta-stream summary for Telltale assets, size otherwise.</summary>
