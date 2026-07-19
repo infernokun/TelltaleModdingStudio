@@ -281,8 +281,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Per-batch breakdown of the previewed model (texture assignments etc.).</summary>
     public ObservableCollection<string> ModelDetails { get; } = new();
 
-    /// <summary>Raised when a mesh and its per-batch textures are ready to render.</summary>
-    public event Action<MeshGeometry, IReadOnlyList<DdsImage?>>? MeshPreviewReady;
+    /// <summary>Raised when a mesh and its per-batch diffuse/normal textures are ready to render.</summary>
+    public event Action<MeshGeometry, IReadOnlyList<DdsImage?>, IReadOnlyList<DdsImage?>>? MeshPreviewReady;
 
     /// <summary>Loads a .d3dmesh into the 3D viewport, auto-matching per-batch textures.</summary>
     public void ShowD3dMeshPreview(string path)
@@ -325,36 +325,45 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
             // Character meshes carry no mTextures; their diffuse lives in the embedded
             // material property sets. Scan each material's payload for symbols that
-            // match folder textures and classify the diffuse by name.
-            var imageByMaterial = new Dictionary<int, DdsImage?>();
-            DdsImage? ResolveMaterial(int materialIndex)
+            // match folder textures and classify diffuse/normal maps by name.
+            DdsImage? DecodeTexture(string? path, bool track)
+            {
+                if (path is null ||
+                    !D3dtxTexture.TryLoad(File.ReadAllBytes(path), out var tex, out _) ||
+                    !tex!.TryToDds(out var dds, out _) ||
+                    !DdsImage.TryDecode(dds!, out var decoded, out _))
+                    return null;
+                if (track)
+                    matchedNames.Add(Path.GetFileName(path));
+                nameByImage[decoded!] = Path.GetFileName(path);
+                return decoded;
+            }
+
+            var imageByMaterial = new Dictionary<int, (DdsImage? Diffuse, DdsImage? Normal)>();
+            (DdsImage? Diffuse, DdsImage? Normal) ResolveMaterialMaps(int materialIndex)
             {
                 if (materialIndex < 0 || materialIndex >= mesh.MaterialHandles.Count)
-                    return null;
+                    return (null, null);
                 if (imageByMaterial.TryGetValue(materialIndex, out var cached))
                     return cached;
-                DdsImage? image = null;
+                (DdsImage?, DdsImage?) result = (null, null);
                 ulong handle = mesh.MaterialHandles[materialIndex];
                 foreach (var (nameSymbol, payload) in mesh.MaterialResources)
                 {
                     if (nameSymbol != handle && mesh.MaterialResources.Count != 1)
                         continue;
-                    var path = MaterialTextureLocator.PickDiffuseTexture(payload, textureIndex);
-                    if (path is not null &&
-                        D3dtxTexture.TryLoad(File.ReadAllBytes(path), out var tex, out _) &&
-                        tex!.TryToDds(out var dds, out _) &&
-                        DdsImage.TryDecode(dds!, out var decoded, out _))
-                    {
-                        image = decoded;
-                        matchedNames.Add(Path.GetFileName(path));
-                        nameByImage[decoded!] = Path.GetFileName(path);
-                    }
+                    result = (
+                        DecodeTexture(MaterialTextureLocator.PickDiffuseTexture(payload, textureIndex), track: true),
+                        DecodeTexture(MaterialTextureLocator.PickNormalMap(payload, textureIndex), track: false));
                     break;
                 }
-                return imageByMaterial[materialIndex] = image;
+                return imageByMaterial[materialIndex] = result;
             }
 
+            DdsImage? ResolveMaterial(int materialIndex) => ResolveMaterialMaps(materialIndex).Diffuse;
+
             var batchTextures = new DdsImage?[geometry.Batches.Count];
+            var batchNormalMaps = new DdsImage?[geometry.Batches.Count];
             ModelDetails.Clear();
             for (int b = 0; b < geometry.Batches.Count; b++)
             {
@@ -364,10 +373,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     // Untextured batch but the mesh has textures: fall back to slot 0
                     // so single-texture meshes with sparse indices still render textured.
                     ?? (batch.DiffuseTextureIndex < 0 ? ResolveSlot(0) : null);
+                batchNormalMaps[b] = ResolveMaterialMaps(batch.MaterialIndex).Normal;
 
                 var textureLabel = batchTextures[b] is { } img && nameByImage.TryGetValue(img, out var n)
                     ? n : "no texture matched";
-                ModelDetails.Add($"Batch {b}: {batch.PrimitiveCount:N0} tris · material {batch.MaterialIndex} · {textureLabel}");
+                var normalLabel = batchNormalMaps[b] is { } nm && nameByImage.TryGetValue(nm, out var nn)
+                    ? $" + {nn}" : "";
+                ModelDetails.Add($"Batch {b}: {batch.PrimitiveCount:N0} tris · material {batch.MaterialIndex} · {textureLabel}{normalLabel}");
             }
 
             // For skinned meshes, name the skeleton whose joints cover the bone palette.
@@ -380,7 +392,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             }
 
             IsMeshPreview = true;
-            MeshPreviewReady?.Invoke(geometry, batchTextures);
+            MeshPreviewReady?.Invoke(geometry, batchTextures, batchNormalMaps);
             var textureNote = matchedNames.Count > 0
                 ? $" · {matchedNames.Count} texture{(matchedNames.Count == 1 ? "" : "s")} matched"
                 : " · no matching textures in folder";

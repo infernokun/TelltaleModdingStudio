@@ -21,19 +21,26 @@ public class MeshViewport : OpenGlControlBase
         GL_UNSIGNED_INT = 0x1405, GL_DEPTH_TEST = 0x0B71, GL_TEXTURE_2D = 0x0DE1,
         GL_RGBA = 0x1908, GL_UNSIGNED_BYTE = 0x1401, GL_VERTEX_SHADER = 0x8B31,
         GL_FRAGMENT_SHADER = 0x8B30, GL_COLOR_BUFFER_BIT = 0x4000, GL_DEPTH_BUFFER_BIT = 0x0100,
-        GL_LINEAR = 0x2601, GL_TEXTURE_MIN_FILTER = 0x2801, GL_TEXTURE_MAG_FILTER = 0x2800;
+        GL_LINEAR = 0x2601, GL_TEXTURE_MIN_FILTER = 0x2801, GL_TEXTURE_MAG_FILTER = 0x2800,
+        GL_TEXTURE0 = 0x84C0, GL_TEXTURE1 = 0x84C1;
+
+    private const int VertexFloats = 12; // pos3 + normal3 + uv2 + tangent4
 
     private float[]? _pendingVertices;
     private int[]? _pendingIndices;
     private IReadOnlyList<DdsImage?>? _pendingBatchTextures;
+    private IReadOnlyList<DdsImage?>? _pendingBatchNormalMaps;
     private IReadOnlyList<MeshBatch>? _pendingBatches;
     private bool _meshDirty, _textureDirty;
 
     private int _program, _vao, _vbo, _ebo;
-    private int _uMvp = -1, _uHasTex = -1;
+    private int _uMvp = -1, _uHasTex = -1, _uHasNmap = -1;
+    private Action<int, int>? _uniform1i;
+    private int _uTex = -1, _uNmap = -1;
     private int _indexCount;
-    private readonly List<int> _textures = new();          // GL ids, parallel to _batchTextureSlots
+    private readonly List<int> _textures = new();          // GL ids shared by both slot arrays
     private int[] _batchTextureSlots = Array.Empty<int>(); // per-batch index into _textures, -1 = none
+    private int[] _batchNormalSlots = Array.Empty<int>();
     private MeshBatch[] _batches = Array.Empty<MeshBatch>();
     private bool _glReady;
 
@@ -44,15 +51,16 @@ public class MeshViewport : OpenGlControlBase
     private bool _rotating, _panning;
 
     /// <summary>
-    /// Loads a decoded mesh into the viewport. <paramref name="batchTextures"/> holds
-    /// one entry per batch of the geometry (null where no texture matched).
+    /// Loads a decoded mesh into the viewport. The per-batch lists hold one entry
+    /// per batch of the geometry (null where nothing matched).
     /// </summary>
-    public void SetMesh(MeshGeometry geometry, IReadOnlyList<DdsImage?> batchTextures)
+    public void SetMesh(MeshGeometry geometry, IReadOnlyList<DdsImage?> batchTextures,
+        IReadOnlyList<DdsImage?>? batchNormalMaps = null)
     {
-        var v = new float[geometry.Positions.Length * 8];
+        var v = new float[geometry.Positions.Length * VertexFloats];
         for (int i = 0; i < geometry.Positions.Length; i++)
         {
-            int at = i * 8;
+            int at = i * VertexFloats;
             v[at] = geometry.Positions[i].X;
             v[at + 1] = geometry.Positions[i].Y;
             v[at + 2] = geometry.Positions[i].Z;
@@ -61,12 +69,17 @@ public class MeshViewport : OpenGlControlBase
             v[at + 5] = geometry.Normals[i].Z;
             v[at + 6] = geometry.TexCoords[i].X;
             v[at + 7] = geometry.TexCoords[i].Y;
+            v[at + 8] = geometry.Tangents[i].X;
+            v[at + 9] = geometry.Tangents[i].Y;
+            v[at + 10] = geometry.Tangents[i].Z;
+            v[at + 11] = geometry.Tangents[i].W;
         }
 
         _pendingVertices = v;
         _pendingIndices = geometry.Indices;
         _pendingBatches = geometry.Batches;
         _pendingBatchTextures = batchTextures;
+        _pendingBatchNormalMaps = batchNormalMaps;
         _meshDirty = _textureDirty = true;
 
         _homeCenter = _center = (geometry.BoundsMin + geometry.BoundsMax) / 2f;
@@ -74,6 +87,9 @@ public class MeshViewport : OpenGlControlBase
         _zoom = 2.4f;
         RequestNextFrameRendering();
     }
+
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.StdCall)]
+    private delegate void GlUniform1i(int location, int value);
 
     private string ShaderHeader =>
         GlVersion.Type == GlProfileType.OpenGL
@@ -88,22 +104,28 @@ public class MeshViewport : OpenGlControlBase
             in vec3 aPos;
             in vec3 aNormal;
             in vec2 aUv;
+            in vec4 aTangent;
             uniform mat4 uMvp;
             out vec3 vNormal;
             out vec2 vUv;
+            out vec4 vTangent;
             void main()
             {
                 gl_Position = uMvp * vec4(aPos, 1.0);
                 vNormal = aNormal;
                 vUv = aUv;
+                vTangent = aTangent;
             }
             """);
         int fs = gl.CreateShader(GL_FRAGMENT_SHADER);
         var fsError = gl.CompileShaderAndGetError(fs, ShaderHeader + """
             in vec3 vNormal;
             in vec2 vUv;
+            in vec4 vTangent;
             uniform sampler2D uTex;
+            uniform sampler2D uNmap;
             uniform float uHasTex;
+            uniform float uHasNmap;
             out vec4 outColor;
             void main()
             {
@@ -111,6 +133,17 @@ public class MeshViewport : OpenGlControlBase
                 if (length(vNormal) > 0.1)
                 {
                     vec3 n = normalize(vNormal);
+                    if (uHasNmap > 0.5 && length(vTangent.xyz) > 0.1)
+                    {
+                        // Telltale BC3 normal maps pack X in blue, Y in alpha; reconstruct Z.
+                        vec4 packed = texture(uNmap, vUv);
+                        vec2 nxy = packed.ba * 2.0 - 1.0;
+                        vec3 tsn = vec3(nxy, sqrt(max(0.0, 1.0 - dot(nxy, nxy))));
+                        vec3 t = normalize(vTangent.xyz - n * dot(n, vTangent.xyz));
+                        float handed = vTangent.w < 0.0 ? -1.0 : 1.0;
+                        vec3 b = cross(n, t) * handed;
+                        n = normalize(mat3(t, b, n) * tsn);
+                    }
                     lit = 0.35 + 0.65 * abs(dot(n, normalize(vec3(0.4, 0.75, 0.55))));
                 }
                 vec3 base = mix(vec3(0.72, 0.72, 0.75), texture(uTex, vUv).rgb, uHasTex);
@@ -130,6 +163,15 @@ public class MeshViewport : OpenGlControlBase
 
         _uMvp = gl.GetUniformLocationString(_program, "uMvp");
         _uHasTex = gl.GetUniformLocationString(_program, "uHasTex");
+        _uHasNmap = gl.GetUniformLocationString(_program, "uHasNmap");
+        _uTex = gl.GetUniformLocationString(_program, "uTex");
+        _uNmap = gl.GetUniformLocationString(_program, "uNmap");
+
+        // GlInterface has no Uniform1i; fetch it directly for sampler binding.
+        var uniform1iPtr = gl.GetProcAddress("glUniform1i");
+        if (uniform1iPtr != IntPtr.Zero)
+            _uniform1i = System.Runtime.InteropServices.Marshal
+                .GetDelegateForFunctionPointer<GlUniform1i>(uniform1iPtr).Invoke;
 
         _vao = gl.GenVertexArray();
         _vbo = gl.GenBuffer();
@@ -181,20 +223,27 @@ public class MeshViewport : OpenGlControlBase
             fixed (int* p = _pendingIndices)
                 gl.BufferData(GL_ELEMENT_ARRAY_BUFFER, new IntPtr(_pendingIndices.Length * sizeof(int)), new IntPtr(p), GL_STATIC_DRAW);
 
+            int stride = VertexFloats * sizeof(float);
             int aPos = gl.GetAttribLocationString(_program, "aPos");
             int aNormal = gl.GetAttribLocationString(_program, "aNormal");
             int aUv = gl.GetAttribLocationString(_program, "aUv");
-            gl.VertexAttribPointer(aPos, 3, GL_FLOAT, 0, 32, IntPtr.Zero);
+            int aTangent = gl.GetAttribLocationString(_program, "aTangent");
+            gl.VertexAttribPointer(aPos, 3, GL_FLOAT, 0, stride, IntPtr.Zero);
             gl.EnableVertexAttribArray(aPos);
             if (aNormal >= 0)
             {
-                gl.VertexAttribPointer(aNormal, 3, GL_FLOAT, 0, 32, new IntPtr(12));
+                gl.VertexAttribPointer(aNormal, 3, GL_FLOAT, 0, stride, new IntPtr(12));
                 gl.EnableVertexAttribArray(aNormal);
             }
             if (aUv >= 0)
             {
-                gl.VertexAttribPointer(aUv, 2, GL_FLOAT, 0, 32, new IntPtr(24));
+                gl.VertexAttribPointer(aUv, 2, GL_FLOAT, 0, stride, new IntPtr(24));
                 gl.EnableVertexAttribArray(aUv);
+            }
+            if (aTangent >= 0)
+            {
+                gl.VertexAttribPointer(aTangent, 4, GL_FLOAT, 0, stride, new IntPtr(32));
+                gl.EnableVertexAttribArray(aTangent);
             }
         }
 
@@ -204,16 +253,16 @@ public class MeshViewport : OpenGlControlBase
             DeleteTextures(gl);
             _batches = _pendingBatches?.ToArray() ?? Array.Empty<MeshBatch>();
             _batchTextureSlots = new int[_batches.Length];
+            _batchNormalSlots = new int[_batches.Length];
             Array.Fill(_batchTextureSlots, -1);
+            Array.Fill(_batchNormalSlots, -1);
 
             // Upload each distinct image once; batches sharing an image share a slot.
             var slotByImage = new Dictionary<DdsImage, int>();
-            for (int b = 0; b < _batches.Length; b++)
+            int SlotFor(DdsImage? image)
             {
-                var image = _pendingBatchTextures is not null && b < _pendingBatchTextures.Count
-                    ? _pendingBatchTextures[b] : null;
                 if (image is null)
-                    continue;
+                    return -1;
                 if (!slotByImage.TryGetValue(image, out int slot))
                 {
                     int id = gl.GenTexture();
@@ -226,7 +275,15 @@ public class MeshViewport : OpenGlControlBase
                     _textures.Add(id);
                     slotByImage[image] = slot;
                 }
-                _batchTextureSlots[b] = slot;
+                return slot;
+            }
+
+            for (int b = 0; b < _batches.Length; b++)
+            {
+                _batchTextureSlots[b] = SlotFor(
+                    _pendingBatchTextures is not null && b < _pendingBatchTextures.Count ? _pendingBatchTextures[b] : null);
+                _batchNormalSlots[b] = SlotFor(
+                    _pendingBatchNormalMaps is not null && b < _pendingBatchNormalMaps.Count ? _pendingBatchNormalMaps[b] : null);
             }
         }
 
@@ -248,9 +305,13 @@ public class MeshViewport : OpenGlControlBase
         var mvp = view * proj;
         gl.UniformMatrix4fv(_uMvp, 1, false, &mvp);
 
+        _uniform1i?.Invoke(_uTex, 0);
+        _uniform1i?.Invoke(_uNmap, 1);
+
         if (_batches.Length == 0)
         {
             gl.Uniform1f(_uHasTex, 0f);
+            gl.Uniform1f(_uHasNmap, 0f);
             gl.DrawElements(GL_TRIANGLES, _indexCount, GL_UNSIGNED_INT, IntPtr.Zero);
         }
         else
@@ -258,9 +319,20 @@ public class MeshViewport : OpenGlControlBase
             for (int b = 0; b < _batches.Length; b++)
             {
                 int slot = _batchTextureSlots[b];
+                int nmapSlot = _uniform1i is null ? -1 : _batchNormalSlots[b];
                 if (slot >= 0)
+                {
+                    gl.ActiveTexture(GL_TEXTURE0);
                     gl.BindTexture(GL_TEXTURE_2D, _textures[slot]);
+                }
+                if (nmapSlot >= 0)
+                {
+                    gl.ActiveTexture(GL_TEXTURE1);
+                    gl.BindTexture(GL_TEXTURE_2D, _textures[nmapSlot]);
+                    gl.ActiveTexture(GL_TEXTURE0);
+                }
                 gl.Uniform1f(_uHasTex, slot >= 0 ? 1f : 0f);
+                gl.Uniform1f(_uHasNmap, nmapSlot >= 0 ? 1f : 0f);
                 gl.DrawElements(GL_TRIANGLES, _batches[b].PrimitiveCount * 3, GL_UNSIGNED_INT,
                     new IntPtr(_batches[b].StartIndex * sizeof(int)));
             }
