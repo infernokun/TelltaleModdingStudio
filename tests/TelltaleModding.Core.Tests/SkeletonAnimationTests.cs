@@ -60,4 +60,36 @@ public class AnimationFileTests
         Assert.True(SkeletonFile.TryLoad(File.ReadAllBytes(SampleData.Sample("sk54_felix.skl")), out var felix, out _));
         Assert.True(anim.FindBoneSymbols(felix!.JointSymbols).Count < found.Count);
     }
+
+    [Fact]
+    public void Decodes_keyframed_transform_tracks()
+    {
+        Assert.True(AnimationFile.TryLoad(
+            File.ReadAllBytes(SampleData.Sample("sk54_action_rhysWakeUpDragged.anm")),
+            out var anim, out var error), error);
+
+        Assert.True(anim!.BodiesFullyParsed);
+        Assert.Equal(8, anim.TransformTracks.Count);
+
+        // Track symbols mirror the container trailer's channel targets.
+        foreach (var track in anim.TransformTracks)
+            Assert.Contains(anim.Channels, c => c.TargetSymbol == track.BoneSymbol);
+
+        // Keys are time-ordered within the animation and quaternions are unit length.
+        foreach (var track in anim.TransformTracks)
+        {
+            for (int i = 1; i < track.Keys.Count; i++)
+                Assert.True(track.Keys[i].Time >= track.Keys[i - 1].Time);
+            foreach (var key in track.Keys)
+            {
+                Assert.InRange(key.Time, -0.5f, anim.Length + 0.5f);
+                Assert.InRange(key.Rotation.Length(), 0.9f, 1.1f);
+            }
+        }
+
+        // Sampling interpolates: mid-time between two keys is between their values.
+        var dense = anim.TransformTracks.First(t => t.Keys.Count > 10);
+        var (rotation, _) = dense.Sample(dense.Keys[3].Time);
+        Assert.InRange(rotation.Length(), 0.99f, 1.01f);
+    }
 }

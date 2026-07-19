@@ -424,14 +424,30 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 ModelDetails.Add($"Batch {b}: {batch.PrimitiveCount:N0} tris · material {batch.MaterialIndex} · {textureLabel}{normalLabel}");
             }
 
-            // For skinned meshes, name the skeleton whose joints cover the bone palette.
+            // For skinned meshes, name the skeleton whose joints cover the bone palette
+            // and prime the playback state.
+            StopAnimation();
+            Animations.Clear();
+            _playbackGeometry = null;
+            _playbackSkeleton = null;
+            _playbackSkinner = null;
             if (mesh.BoneSymbols.Count > 0)
             {
                 var match = FindBestSkeleton(mesh.BoneSymbols);
                 ModelDetails.Insert(0, match is { } m
                     ? $"Skeleton: {Path.GetFileName(m.Path)} · {m.Hit}/{mesh.BoneSymbols.Count} bones matched"
                     : $"Skeleton: none found for {mesh.BoneSymbols.Count} bones (open the folder containing data\\*.skl)");
+                if (match is { } hit && geometry.IsSkinned &&
+                    GetSkeletonIndex().FirstOrDefault(s => s.Path == hit.Path).Skeleton is { } skeleton)
+                {
+                    _playbackGeometry = geometry;
+                    _playbackSkeleton = skeleton;
+                    try { _playbackSkinner = new MeshSkinner(geometry, skeleton); }
+                    catch (ArgumentException) { }
+                }
             }
+            FindAnimationsCommand.NotifyCanExecuteChanged();
+            PlayAnimationCommand.NotifyCanExecuteChanged();
 
             IsMeshPreview = true;
             MeshPreviewReady?.Invoke(geometry, batchTextures, batchNormalMaps);
@@ -540,6 +556,147 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 best = (path, hit);
         }
         return best;
+    }
+
+    // ---- Animation playback ---------------------------------------------
+
+    /// <summary>A folder animation applicable to the previewed model's skeleton.</summary>
+    public sealed record AnimationItem(string Path, string Name, float Length, int TrackCount)
+    {
+        public string Display => $"{Name} · {Length:0.#}s · {TrackCount} bone track{(TrackCount == 1 ? "" : "s")}";
+    }
+
+    public ObservableCollection<AnimationItem> Animations { get; } = new();
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PlayAnimationCommand))]
+    private AnimationItem? _selectedAnimation;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PlayAnimationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopAnimationCommand))]
+    private bool _isPlaying;
+
+    /// <summary>Raised ~30×/s during playback with skinned positions/normals.</summary>
+    public event Action<System.Numerics.Vector3[], System.Numerics.Vector3[]>? DeformedFrameReady;
+
+    private MeshGeometry? _playbackGeometry;
+    private SkeletonFile? _playbackSkeleton;
+    private MeshSkinner? _playbackSkinner;
+    private Dictionary<ulong, TransformTrack>? _playbackTracks;
+    private float _playbackLength;
+    private float _playbackTime;
+    private Avalonia.Threading.DispatcherTimer? _playbackTimer;
+    private System.Numerics.Vector3[]? _skinPositions, _skinNormals;
+
+    private bool CanFindAnimations() => _playbackSkeleton is not null && FolderPath is not null;
+
+    [RelayCommand(CanExecute = nameof(CanFindAnimations))]
+    private async Task FindAnimationsAsync()
+    {
+        var skeleton = _playbackSkeleton!;
+        var folder = FolderPath!;
+        Animations.Clear();
+        AppendLog("Scanning folder for matching animations…");
+        var found = await Task.Run(() =>
+        {
+            var items = new List<AnimationItem>();
+            foreach (var path in Directory.EnumerateFiles(folder, "*.anm", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    if (!AnimationFile.TryLoad(File.ReadAllBytes(path), out var anim, out _))
+                        continue;
+                    // Applicable when its keyframed tracks target this skeleton's bones.
+                    int matching = anim!.TransformTracks.Count(t => skeleton.JointSymbols.Contains(t.BoneSymbol));
+                    if (matching == 0)
+                        continue;
+                    items.Add(new AnimationItem(path, Path.GetFileNameWithoutExtension(path), anim.Length, matching));
+                }
+                catch (IOException) { }
+            }
+            return items.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        });
+        foreach (var item in found)
+            Animations.Add(item);
+        AppendLog($"{found.Count} animation(s) match the model's skeleton.");
+    }
+
+    private bool CanPlayAnimation() => SelectedAnimation is not null && _playbackSkinner is not null && !IsPlaying;
+
+    [RelayCommand(CanExecute = nameof(CanPlayAnimation))]
+    private void PlayAnimation()
+    {
+        if (SelectedAnimation is null || _playbackSkinner is null || _playbackSkeleton is null)
+            return;
+        if (!AnimationFile.TryLoad(File.ReadAllBytes(SelectedAnimation.Path), out var anim, out var error))
+        {
+            AppendLog($"✗ Cannot load animation: {error}");
+            return;
+        }
+
+        _playbackTracks = anim!.TransformTracks
+            .Where(t => _playbackSkeleton.JointSymbols.Contains(t.BoneSymbol))
+            .GroupBy(t => t.BoneSymbol)
+            .ToDictionary(g => g.Key, g => g.First());
+        _playbackLength = Math.Max(0.05f, anim.Length);
+        _playbackTime = 0f;
+        _skinPositions = new System.Numerics.Vector3[_playbackGeometry!.Positions.Length];
+        _skinNormals = new System.Numerics.Vector3[_playbackGeometry.Positions.Length];
+
+        _playbackTimer ??= new Avalonia.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(33),
+        };
+        _playbackTimer.Tick -= PlaybackTick;
+        _playbackTimer.Tick += PlaybackTick;
+        _playbackTimer.Start();
+        IsPlaying = true;
+        AppendLog($"▶ {SelectedAnimation.Name} ({_playbackTracks.Count} bone tracks; " +
+                  "bones without tracks hold the bind pose until compressed pose keys are decoded).");
+    }
+
+    private void PlaybackTick(object? sender, EventArgs e)
+    {
+        if (_playbackSkinner is null || _playbackSkeleton is null || _playbackTracks is null)
+            return;
+        _playbackTime = (_playbackTime + 0.033f) % _playbackLength;
+
+        var world = _playbackSkeleton.ComposeWorld(bone =>
+        {
+            if (_playbackTracks.TryGetValue(bone.JointSymbol, out var track))
+            {
+                var (rot, pos) = track.Sample(_playbackTime);
+                return (pos, rot);
+            }
+            return (bone.LocalPosition, bone.LocalRotation);
+        });
+        _playbackSkinner.Skin(world, _skinPositions!, _skinNormals!);
+        DeformedFrameReady?.Invoke(_skinPositions!, _skinNormals!);
+    }
+
+    /// <summary>Debug entry: selects and plays an animation file directly.</summary>
+    public void DebugPlayAnimation(string path)
+    {
+        if (!AnimationFile.TryLoad(File.ReadAllBytes(path), out var anim, out var error))
+        {
+            AppendLog($"✗ {error}");
+            return;
+        }
+        SelectedAnimation = new AnimationItem(path, Path.GetFileNameWithoutExtension(path),
+            anim!.Length, anim.TransformTracks.Count);
+        PlayAnimation();
+    }
+
+    private bool CanStopAnimation() => IsPlaying;
+
+    [RelayCommand(CanExecute = nameof(CanStopAnimation))]
+    private void StopAnimation()
+    {
+        _playbackTimer?.Stop();
+        IsPlaying = false;
+        if (_playbackGeometry is not null)
+            DeformedFrameReady?.Invoke(_playbackGeometry.Positions, _playbackGeometry.Normals);
     }
 
     /// <summary>One-line description of a file: meta-stream summary for Telltale assets, size otherwise.</summary>

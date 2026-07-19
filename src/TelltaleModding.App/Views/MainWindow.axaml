@@ -177,6 +177,27 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <DockPanel IsVisible="{Binding IsMeshPreview}" Margin="0,4,0,0">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="6,0,0,0"
+                                    VerticalAlignment="Top">
+                            <Button Content="Find animations" FontSize="11" Padding="6,2"
+                                    Command="{Binding FindAnimationsCommand}"
+                                    ToolTip.Tip="Scan the open folder for animations matching this model's skeleton" />
+                            <Button Content="▶" FontSize="11" Padding="8,2"
+                                    Command="{Binding PlayAnimationCommand}" />
+                            <Button Content="■" FontSize="11" Padding="8,2"
+                                    Command="{Binding StopAnimationCommand}" />
+                        </StackPanel>
+                        <ListBox ItemsSource="{Binding Animations}" SelectedItem="{Binding SelectedAnimation}"
+                                 MaxHeight="120" FontSize="11">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MainWindowViewModel+AnimationItem">
+                                    <TextBlock Text="{Binding Display}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
                 </StackPanel>
             </Grid>
 

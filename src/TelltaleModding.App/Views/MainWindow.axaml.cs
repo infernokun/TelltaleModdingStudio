@@ -17,6 +17,7 @@ public partial class MainWindow : Window
             {
                 vm.Dialogs = new DialogService(this);
                 vm.MeshPreviewReady += (geometry, textures, normalMaps) => Viewport.SetMesh(geometry, textures, normalMaps);
+                vm.DeformedFrameReady += (positions, normals) => Viewport.UpdateDeformedVertices(positions, normals);
             }
         };
 
@@ -27,14 +28,26 @@ public partial class MainWindow : Window
         ViewportHost.PointerReleased += (_, e) => Viewport.HandlePointerReleased(e);
         ViewportHost.PointerWheelChanged += (_, e) => Viewport.HandlePointerWheel(e);
 
-        // Debug hook: --preview-mesh <path> loads a mesh at startup (used for
-        // automated screenshot verification of the GL pipeline).
+        // Debug hooks for automated screenshot verification:
+        //   --preview-mesh <path>  loads a mesh (opening its folder for asset lookup)
+        //   --play-anim <path>     starts an animation on the previewed mesh
         Opened += (_, _) =>
         {
             var args = Environment.GetCommandLineArgs();
-            int flag = Array.IndexOf(args, "--preview-mesh");
-            if (flag >= 0 && flag + 1 < args.Length && DataContext is MainWindowViewModel vm)
-                vm.ShowD3dMeshPreview(args[flag + 1]);
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+            int meshFlag = Array.IndexOf(args, "--preview-mesh");
+            if (meshFlag >= 0 && meshFlag + 1 < args.Length)
+            {
+                var meshPath = args[meshFlag + 1];
+                if (System.IO.Path.GetDirectoryName(meshPath) is { } dir)
+                    vm.OpenFolder(dir);
+                vm.ShowD3dMeshPreview(meshPath);
+
+                int animFlag = Array.IndexOf(args, "--play-anim");
+                if (animFlag >= 0 && animFlag + 1 < args.Length)
+                    vm.DebugPlayAnimation(args[animFlag + 1]);
+            }
         };
     }
 }
