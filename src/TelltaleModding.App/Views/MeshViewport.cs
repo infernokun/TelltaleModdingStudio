@@ -22,7 +22,8 @@ public class MeshViewport : OpenGlControlBase
         GL_RGBA = 0x1908, GL_UNSIGNED_BYTE = 0x1401, GL_VERTEX_SHADER = 0x8B31,
         GL_FRAGMENT_SHADER = 0x8B30, GL_COLOR_BUFFER_BIT = 0x4000, GL_DEPTH_BUFFER_BIT = 0x0100,
         GL_LINEAR = 0x2601, GL_TEXTURE_MIN_FILTER = 0x2801, GL_TEXTURE_MAG_FILTER = 0x2800,
-        GL_TEXTURE0 = 0x84C0, GL_TEXTURE1 = 0x84C1;
+        GL_TEXTURE0 = 0x84C0, GL_TEXTURE1 = 0x84C1,
+        GL_BLEND = 0x0BE2, GL_SRC_ALPHA = 0x0302, GL_ONE_MINUS_SRC_ALPHA = 0x0303;
 
     private const int VertexFloats = 12; // pos3 + normal3 + uv2 + tangent4
 
@@ -36,9 +37,11 @@ public class MeshViewport : OpenGlControlBase
     private int _program, _vao, _vbo, _ebo;
     private int _uMvp = -1, _uHasTex = -1, _uHasNmap = -1;
     private Action<int, int>? _uniform1i;
+    private Action<int, int>? _blendFunc;
     private int _uTex = -1, _uNmap = -1;
     private int _indexCount;
     private readonly List<int> _textures = new();          // GL ids shared by both slot arrays
+    private readonly List<bool> _textureHasAlpha = new();  // parallel to _textures
     private int[] _batchTextureSlots = Array.Empty<int>(); // per-batch index into _textures, -1 = none
     private int[] _batchNormalSlots = Array.Empty<int>();
     private MeshBatch[] _batches = Array.Empty<MeshBatch>();
@@ -90,6 +93,18 @@ public class MeshViewport : OpenGlControlBase
 
     [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.StdCall)]
     private delegate void GlUniform1i(int location, int value);
+
+    /// <summary>True when any pixel is meaningfully transparent (not just BC noise).</summary>
+    private static bool HasMeaningfulAlpha(DdsImage image)
+    {
+        int transparent = 0;
+        for (int i = 3; i < image.Rgba.Length; i += 4)
+        {
+            if (image.Rgba[i] < 240 && ++transparent > 16)
+                return true;
+        }
+        return false;
+    }
 
     private string ShaderHeader =>
         GlVersion.Type == GlProfileType.OpenGL
@@ -146,8 +161,12 @@ public class MeshViewport : OpenGlControlBase
                     }
                     lit = 0.35 + 0.65 * abs(dot(n, normalize(vec3(0.4, 0.75, 0.55))));
                 }
-                vec3 base = mix(vec3(0.72, 0.72, 0.75), texture(uTex, vUv).rgb, uHasTex);
-                outColor = vec4(base * lit, 1.0);
+                vec4 texel = texture(uTex, vUv);
+                vec3 base = mix(vec3(0.72, 0.72, 0.75), texel.rgb, uHasTex);
+                float alpha = mix(1.0, texel.a, uHasTex);
+                if (alpha < 0.04)
+                    discard;
+                outColor = vec4(base * lit, alpha);
             }
             """);
         if (vsError is not null || fsError is not null)
@@ -167,11 +186,15 @@ public class MeshViewport : OpenGlControlBase
         _uTex = gl.GetUniformLocationString(_program, "uTex");
         _uNmap = gl.GetUniformLocationString(_program, "uNmap");
 
-        // GlInterface has no Uniform1i; fetch it directly for sampler binding.
+        // GlInterface has no Uniform1i/BlendFunc; fetch them directly.
         var uniform1iPtr = gl.GetProcAddress("glUniform1i");
         if (uniform1iPtr != IntPtr.Zero)
             _uniform1i = System.Runtime.InteropServices.Marshal
                 .GetDelegateForFunctionPointer<GlUniform1i>(uniform1iPtr).Invoke;
+        var blendFuncPtr = gl.GetProcAddress("glBlendFunc");
+        if (blendFuncPtr != IntPtr.Zero)
+            _blendFunc = System.Runtime.InteropServices.Marshal
+                .GetDelegateForFunctionPointer<GlUniform1i>(blendFuncPtr).Invoke;
 
         _vao = gl.GenVertexArray();
         _vbo = gl.GenBuffer();
@@ -194,6 +217,7 @@ public class MeshViewport : OpenGlControlBase
         foreach (var id in _textures)
             gl.DeleteTexture(id);
         _textures.Clear();
+        _textureHasAlpha.Clear();
     }
 
     protected override unsafe void OnOpenGlRender(GlInterface gl, int fb)
@@ -273,6 +297,7 @@ public class MeshViewport : OpenGlControlBase
                     gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                     slot = _textures.Count;
                     _textures.Add(id);
+                    _textureHasAlpha.Add(HasMeaningfulAlpha(image));
                     slotByImage[image] = slot;
                 }
                 return slot;
@@ -307,6 +332,8 @@ public class MeshViewport : OpenGlControlBase
 
         _uniform1i?.Invoke(_uTex, 0);
         _uniform1i?.Invoke(_uNmap, 1);
+        _blendFunc?.Invoke(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        gl.Enable(GL_BLEND);
 
         if (_batches.Length == 0)
         {
@@ -316,27 +343,37 @@ public class MeshViewport : OpenGlControlBase
         }
         else
         {
-            for (int b = 0; b < _batches.Length; b++)
+            // Opaque batches first, alpha-textured batches after, so hair/eyes
+            // blend over the surfaces behind them.
+            for (int pass = 0; pass < 2; pass++)
             {
-                int slot = _batchTextureSlots[b];
-                int nmapSlot = _uniform1i is null ? -1 : _batchNormalSlots[b];
-                if (slot >= 0)
+                for (int b = 0; b < _batches.Length; b++)
                 {
-                    gl.ActiveTexture(GL_TEXTURE0);
-                    gl.BindTexture(GL_TEXTURE_2D, _textures[slot]);
+                    int slot = _batchTextureSlots[b];
+                    bool alphaBatch = slot >= 0 && _textureHasAlpha[slot];
+                    if (alphaBatch != (pass == 1))
+                        continue;
+
+                    int nmapSlot = _uniform1i is null ? -1 : _batchNormalSlots[b];
+                    if (slot >= 0)
+                    {
+                        gl.ActiveTexture(GL_TEXTURE0);
+                        gl.BindTexture(GL_TEXTURE_2D, _textures[slot]);
+                    }
+                    if (nmapSlot >= 0)
+                    {
+                        gl.ActiveTexture(GL_TEXTURE1);
+                        gl.BindTexture(GL_TEXTURE_2D, _textures[nmapSlot]);
+                        gl.ActiveTexture(GL_TEXTURE0);
+                    }
+                    gl.Uniform1f(_uHasTex, slot >= 0 ? 1f : 0f);
+                    gl.Uniform1f(_uHasNmap, nmapSlot >= 0 ? 1f : 0f);
+                    gl.DrawElements(GL_TRIANGLES, _batches[b].PrimitiveCount * 3, GL_UNSIGNED_INT,
+                        new IntPtr(_batches[b].StartIndex * sizeof(int)));
                 }
-                if (nmapSlot >= 0)
-                {
-                    gl.ActiveTexture(GL_TEXTURE1);
-                    gl.BindTexture(GL_TEXTURE_2D, _textures[nmapSlot]);
-                    gl.ActiveTexture(GL_TEXTURE0);
-                }
-                gl.Uniform1f(_uHasTex, slot >= 0 ? 1f : 0f);
-                gl.Uniform1f(_uHasNmap, nmapSlot >= 0 ? 1f : 0f);
-                gl.DrawElements(GL_TRIANGLES, _batches[b].PrimitiveCount * 3, GL_UNSIGNED_INT,
-                    new IntPtr(_batches[b].StartIndex * sizeof(int)));
             }
         }
+        gl.Disable(GL_BLEND);
         gl.BindVertexArray(0);
     }
 
