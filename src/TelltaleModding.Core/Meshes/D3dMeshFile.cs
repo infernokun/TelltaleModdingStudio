@@ -388,8 +388,9 @@ public sealed class D3dMeshFile
 
     /// <summary>
     /// Decodes the packed vertex data into renderable arrays: float positions,
-    /// unit normals, and UV channel 0 (with the mesh's texcoord transform applied
-    /// and V flipped to top-left convention).
+    /// unit normals, and UV channel 0. UVs are dequantized with the mesh's texcoord
+    /// transform (stored as center+half-range of the authored UVs) and stay in
+    /// D3D convention (v=0 at the texture's top) — no flip.
     /// </summary>
     public MeshGeometry GetGeometry()
     {
@@ -441,8 +442,7 @@ public sealed class D3dMeshFile
                                 BitConverter.ToSingle(_bufferData, at + 4)),
                             _ => throw new InvalidDataException($"unsupported texcoord format {attr.Format}"),
                         };
-                        var uv = raw * scale + offset;
-                        uvs[i] = new Vector2(uv.X, 1f - uv.Y);
+                        uvs[i] = raw * scale + offset;
                         break;
                 }
             }
