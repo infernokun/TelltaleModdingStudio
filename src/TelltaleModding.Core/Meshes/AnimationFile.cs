@@ -1,7 +1,35 @@
 using System.Buffers.Binary;
+using System.Numerics;
 using TelltaleModding.Core.Meta;
 
 namespace TelltaleModding.Core.Meshes;
+
+/// <summary>One keyframe of a transform track.</summary>
+public readonly record struct TransformKey(float Time, Quaternion Rotation, Vector3 Translation);
+
+/// <summary>An uncompressed per-bone transform track (KeyframedValue&lt;Transform&gt;).</summary>
+public sealed record TransformTrack(ulong BoneSymbol, uint Flags, IReadOnlyList<TransformKey> Keys)
+{
+    /// <summary>Samples the track at a time with linear/slerp interpolation.</summary>
+    public (Quaternion Rotation, Vector3 Translation) Sample(float time)
+    {
+        if (Keys.Count == 0)
+            return (Quaternion.Identity, Vector3.Zero);
+        if (time <= Keys[0].Time || Keys.Count == 1)
+            return (Keys[0].Rotation, Keys[0].Translation);
+        if (time >= Keys[^1].Time)
+            return (Keys[^1].Rotation, Keys[^1].Translation);
+        int hi = 1;
+        while (Keys[hi].Time < time)
+            hi++;
+        var a = Keys[hi - 1];
+        var b = Keys[hi];
+        float span = b.Time - a.Time;
+        float t = span <= 1e-6f ? 0f : (time - a.Time) / span;
+        return (Quaternion.Slerp(a.Rotation, b.Rotation, t),
+                Vector3.Lerp(a.Translation, b.Translation, t));
+    }
+}
 
 /// <summary>One animated channel: what kind of value it drives and which target/bone.</summary>
 public readonly record struct AnimationChannel(ulong TypeHash, ulong TargetSymbol, uint Flags)
@@ -14,6 +42,16 @@ public static class KnownAnimationTypes
 {
     public static readonly ulong CompressedSkeletonPoseKeys = TelltaleCrc64.HashSymbol("CompressedSkeletonPoseKeys");
     public static readonly ulong KeyframedTransform = TelltaleCrc64.HashSymbol("KeyframedValue<Transform>");
+
+    private static readonly HashSet<ulong> KeyframedValueHashes = new[]
+    {
+        "KeyframedValue<Transform>", "KeyframedValue<Vector3>", "KeyframedValue<Quaternion>",
+        "KeyframedValue<float>", "KeyframedValue<bool>", "KeyframedValue<Symbol>",
+        "KeyframedValue<String>", "KeyframedValue<Color>",
+    }.Select(TelltaleCrc64.HashSymbol).ToHashSet();
+
+    /// <summary>True for any KeyframedValue&lt;T&gt; type (bodies share a self-describing layout).</summary>
+    public static bool IsKeyframedValue(ulong hash) => KeyframedValueHashes.Contains(hash);
 
     private static readonly Dictionary<ulong, string> Names = new[]
     {
@@ -45,6 +83,12 @@ public sealed class AnimationFile
 
     /// <summary>Raw payload of the CompressedSkeletonPoseKeys channel, if present.</summary>
     public byte[]? PoseKeysPayload { get; private init; }
+
+    /// <summary>Decoded uncompressed transform tracks (KeyframedValue&lt;Transform&gt; channels).</summary>
+    public IReadOnlyList<TransformTrack> TransformTracks { get; private init; } = Array.Empty<TransformTrack>();
+
+    /// <summary>False when an unknown channel type stopped body parsing early.</summary>
+    public bool BodiesFullyParsed { get; private init; }
 
     /// <summary>True if this animation drives a skeleton (has a pose-keys channel).</summary>
     public bool IsSkeletal => PoseKeysPayload is not null;
@@ -145,14 +189,77 @@ public sealed class AnimationFile
             }
         }
 
-        // The first body of a CompressedSkeletonPoseKeys type entry is u32 size + blob.
+        // Channel bodies, sequential in type-table order. KeyframedValue<T> bodies are
+        // self-describing (block-prefixed header/min/max/sample-array), so unknown T
+        // skips cleanly; genuinely unknown types stop parsing (container info survives).
         byte[]? poseBlob = null;
-        if (typeTable.Length > 0 && typeTable[0].Hash == KnownAnimationTypes.CompressedSkeletonPoseKeys)
+        var tracks = new List<TransformTrack>();
+        bool fullyParsed = true;
+        ulong keyframedTransform = KnownAnimationTypes.KeyframedTransform;
+        foreach (var (hash, count) in typeTable)
         {
-            int size = (int)U32();
-            if (size >= 0 && off + size <= trailerStart)
-                poseBlob = file[off..(off + size)];
+            if (!fullyParsed)
+                break;
+            for (int i = 0; i < count && fullyParsed; i++)
+            {
+                if (hash == KnownAnimationTypes.CompressedSkeletonPoseKeys)
+                {
+                    int size = (int)U32();
+                    if (size < 0 || off + size > trailerStart)
+                        throw new InvalidDataException("pose keys payload overruns trailer");
+                    poseBlob = file[off..(off + size)];
+                    off += size;
+                }
+                else if (KnownAnimationTypes.IsKeyframedValue(hash))
+                {
+                    int headerEnd = off + (int)U32();
+                    if (headerEnd < off || headerEnd > trailerStart)
+                        throw new InvalidDataException("keyframed header block out of range");
+                    ulong boneSymbol = BinaryPrimitives.ReadUInt64LittleEndian(file.AsSpan(off + 4));
+                    uint chFlags = BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(off + 12));
+                    off = headerEnd;
+                    off += (int)BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(off)); // min value block
+                    off += (int)BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(off)); // max value block
+                    if (off < 0 || off + 8 > trailerStart)
+                        throw new InvalidDataException("keyframed min/max blocks out of range");
+                    int arrayEnd = off + (int)U32();
+                    int sampleCount = (int)U32();
+                    if (arrayEnd > trailerStart || sampleCount < 0 || sampleCount > (arrayEnd - off) / 9)
+                        throw new InvalidDataException("keyframed sample array out of range");
+
+                    if (hash == keyframedTransform)
+                    {
+                        var keys = new TransformKey[sampleCount];
+                        for (int s = 0; s < sampleCount; s++)
+                        {
+                            float time = F32();
+                            if (file[off] is not ((byte)'0' or (byte)'1'))
+                                throw new InvalidDataException("bad sample bool");
+                            off++;
+                            U32();                     // tangent mode
+                            int valueEnd = off + (int)U32();
+                            var rot = new Quaternion(F32(), F32(), F32(), F32());
+                            var pos = new Vector3(F32(), F32(), F32());
+                            off = valueEnd;
+                            keys[s] = new TransformKey(time, rot, pos);
+                        }
+                        if (off != arrayEnd)
+                            throw new InvalidDataException("transform samples did not consume their array");
+                        tracks.Add(new TransformTrack(boneSymbol, chFlags, keys));
+                    }
+                    else
+                    {
+                        off = arrayEnd;               // other KfV<T>: skip whole sample array
+                    }
+                }
+                else
+                {
+                    fullyParsed = false;              // unknown body layout; stop safely
+                }
+            }
         }
+        if (fullyParsed && off != trailerStart)
+            throw new InvalidDataException($"channel bodies ended at {off}, trailer starts at {trailerStart}");
 
         return new AnimationFile
         {
@@ -161,6 +268,8 @@ public sealed class AnimationFile
             Length = length,
             Channels = channels,
             PoseKeysPayload = poseBlob,
+            TransformTracks = tracks,
+            BodiesFullyParsed = fullyParsed,
         };
     }
 

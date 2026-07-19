@@ -54,6 +54,25 @@ public class MeshViewport : OpenGlControlBase
     private bool _rotating, _panning;
 
     /// <summary>
+    /// Replaces vertex positions/normals in place (animation playback). UVs and
+    /// tangents keep their loaded values; the whole buffer re-uploads next frame.
+    /// </summary>
+    public void UpdateDeformedVertices(System.Numerics.Vector3[] positions, System.Numerics.Vector3[] normals)
+    {
+        var v = _pendingVertices;
+        if (v is null || positions.Length * VertexFloats != v.Length)
+            return;
+        for (int i = 0; i < positions.Length; i++)
+        {
+            int at = i * VertexFloats;
+            v[at] = positions[i].X; v[at + 1] = positions[i].Y; v[at + 2] = positions[i].Z;
+            v[at + 3] = normals[i].X; v[at + 4] = normals[i].Y; v[at + 5] = normals[i].Z;
+        }
+        _meshDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>
     /// Loads a decoded mesh into the viewport. The per-batch lists hold one entry
     /// per batch of the geometry (null where nothing matched).
     /// </summary>
