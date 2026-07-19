@@ -7,9 +7,11 @@ namespace TelltaleModding.Core.Meshes;
 /// <summary>One bone of a skeleton: identity, hierarchy, and local rest transform.</summary>
 /// <param name="JointSymbol">CRC64 of the bone's name.</param>
 /// <param name="ParentIndex">-1 for the root.</param>
+/// <param name="RestRotation">Rotation of the entry's mRestXForm (usually equals LocalRotation).</param>
 public readonly record struct SkeletonBone(
     ulong JointSymbol, ulong ParentNameSymbol, int ParentIndex,
-    Vector3 LocalPosition, Quaternion LocalRotation);
+    Vector3 LocalPosition, Quaternion LocalRotation,
+    Vector3 RestPosition, Quaternion RestRotation);
 
 /// <summary>
 /// A parsed Telltale .skl skeleton (GoT / Tales from the Borderlands era).
@@ -79,12 +81,15 @@ public sealed class SkeletonFile
             U64(); I32();                             // mirror bone name + index
             var pos = new Vector3(F32(), F32(), F32());
             var rot = new Quaternion(F32(), F32(), F32(), F32());
-            off = Block();                            // mRestXForm (blocked Transform)
+            int restEnd = Block();                    // mRestXForm (blocked Transform)
+            var restRot = new Quaternion(F32(), F32(), F32(), F32());
+            var restPos = new Vector3(F32(), F32(), F32());
+            off = restEnd;
             off += 36;                                // global/local/anim translation scales
             off = Block();                            // resource group membership map
             off = Block();                            // bone constraints
             U32();                                    // flags
-            bones[i] = new SkeletonBone(joint, parentName, parentIndex, pos, rot);
+            bones[i] = new SkeletonBone(joint, parentName, parentIndex, pos, rot, restPos, restRot);
         }
         if (off != entriesEnd || off != sectionEnd)
             throw new InvalidDataException($"skeleton did not consume its section (at {off}, expected {sectionEnd})");
@@ -95,6 +100,32 @@ public sealed class SkeletonFile
             JointSymbols = bones.Select(b => b.JointSymbol).ToHashSet(),
         };
     }
+
+    /// <summary>Index of each joint symbol in <see cref="Bones"/>.</summary>
+    public IReadOnlyDictionary<ulong, int> BoneIndexBySymbol =>
+        _boneIndex ??= Bones.Select((b, i) => (b.JointSymbol, i))
+            .ToDictionary(t => t.JointSymbol, t => t.i);
+
+    private Dictionary<ulong, int>? _boneIndex;
+
+    /// <summary>
+    /// World (model-space) transform of every bone from the given local pose,
+    /// composed down the parent chain. Row-vector convention (v' = v · M).
+    /// </summary>
+    public Matrix4x4[] ComposeWorld(Func<SkeletonBone, (Vector3 Pos, Quaternion Rot)> localPose)
+    {
+        var world = new Matrix4x4[Bones.Count];
+        for (int i = 0; i < Bones.Count; i++)
+        {
+            var (pos, rot) = localPose(Bones[i]);
+            var local = Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(pos);
+            world[i] = Bones[i].ParentIndex >= 0 ? local * world[Bones[i].ParentIndex] : local;
+        }
+        return world;
+    }
+
+    /// <summary>World transforms of the rest (bind) pose.</summary>
+    public Matrix4x4[] BindPoseWorld() => ComposeWorld(b => (b.LocalPosition, b.LocalRotation));
 
     /// <summary>
     /// Fraction of the given bone symbols this skeleton contains (1.0 = every bone
