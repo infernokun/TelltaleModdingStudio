@@ -277,6 +277,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isMeshPreview;
 
+    /// <summary>Per-batch breakdown of the previewed model (texture assignments etc.).</summary>
+    public ObservableCollection<string> ModelDetails { get; } = new();
+
     /// <summary>Raised when a mesh and its per-batch textures are ready to render.</summary>
     public event Action<MeshGeometry, IReadOnlyList<DdsImage?>>? MeshPreviewReady;
 
@@ -299,6 +302,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             var textureIndex = GetTextureIndex(path);
             var imageBySlot = new Dictionary<int, DdsImage?>();
             var matchedNames = new List<string>();
+            var nameByImage = new Dictionary<DdsImage, string>();
             DdsImage? ResolveSlot(int slot)
             {
                 if (slot < 0 || slot >= mesh.TextureSymbols.Count)
@@ -313,6 +317,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 {
                     image = decoded;
                     matchedNames.Add(Path.GetFileName(texPath));
+                    nameByImage[decoded!] = Path.GetFileName(texPath);
                 }
                 return imageBySlot[slot] = image;
             }
@@ -341,6 +346,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     {
                         image = decoded;
                         matchedNames.Add(Path.GetFileName(path));
+                        nameByImage[decoded!] = Path.GetFileName(path);
                     }
                     break;
                 }
@@ -348,6 +354,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             }
 
             var batchTextures = new DdsImage?[geometry.Batches.Count];
+            ModelDetails.Clear();
             for (int b = 0; b < geometry.Batches.Count; b++)
             {
                 var batch = geometry.Batches[b];
@@ -356,6 +363,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     // Untextured batch but the mesh has textures: fall back to slot 0
                     // so single-texture meshes with sparse indices still render textured.
                     ?? (batch.DiffuseTextureIndex < 0 ? ResolveSlot(0) : null);
+
+                var textureLabel = batchTextures[b] is { } img && nameByImage.TryGetValue(img, out var n)
+                    ? n : "no texture matched";
+                ModelDetails.Add($"Batch {b}: {batch.PrimitiveCount:N0} tris · material {batch.MaterialIndex} · {textureLabel}");
             }
 
             IsMeshPreview = true;

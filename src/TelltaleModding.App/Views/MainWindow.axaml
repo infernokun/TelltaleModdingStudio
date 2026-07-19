@@ -165,6 +165,15 @@
                                TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PreviewStatus}" />
                     <TextBlock Text="{Binding FolderInfo}" Foreground="Gray" FontSize="11"
                                TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FolderInfo}" />
+                    <ItemsControl ItemsSource="{Binding ModelDetails}" MaxHeight="110"
+                                  IsVisible="{Binding IsMeshPreview}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding}" Foreground="Gray" FontSize="10"
+                                           TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
             </Grid>
 
