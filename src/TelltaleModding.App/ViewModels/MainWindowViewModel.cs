@@ -446,6 +446,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 {
                     _playbackGeometry = geometry;
                     _playbackSkeleton = skeleton;
+                    _playbackSkeletonPath = hit.Path;
                     try { _playbackSkinner = new MeshSkinner(geometry, skeleton); }
                     catch (ArgumentException) { }
 
@@ -607,7 +608,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>A folder animation applicable to the previewed model's skeleton.</summary>
     public sealed record AnimationItem(string Path, string Name, float Length, int TrackCount)
     {
-        public string Display => $"{Name} · {Length:0.#}s · {TrackCount} bone track{(TrackCount == 1 ? "" : "s")}";
+        public string Display => TrackCount > 0
+            ? $"{Name} · {Length:0.#}s · {TrackCount} bone track{(TrackCount == 1 ? "" : "s")}"
+            : $"{Name} · {Length:0.#}s";
     }
 
     public ObservableCollection<AnimationItem> Animations { get; } = new();
@@ -642,30 +645,95 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         var skeleton = _playbackSkeleton!;
         Animations.Clear();
-        AppendLog("Scanning folder for matching animations…");
-        var found = await Task.Run(() =>
+
+        // A folder's scan is cached on disk per skeleton: the first pass over
+        // tens of thousands of animations is IO-bound and slow, repeats are
+        // instant. Files are revalidated by existence only.
+        string cachePath = Path.Combine(Path.GetTempPath(),
+            $"tms_animscan_{TelltaleCrc64.HashSymbol(FolderPath + "|" + _playbackSkeletonPath):x16}.txt");
+        if (File.Exists(cachePath))
         {
-            var items = new List<AnimationItem>();
+            var cached = new List<AnimationItem>();
+            foreach (var line in await File.ReadAllLinesAsync(cachePath))
+            {
+                var parts = line.Split('|');
+                if (parts.Length == 2 && float.TryParse(parts[1],
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float len)
+                    && File.Exists(parts[0]))
+                    cached.Add(new AnimationItem(parts[0], Path.GetFileNameWithoutExtension(parts[0]), len, 0));
+            }
+            if (cached.Count > 0)
+            {
+                foreach (var item in cached)
+                    Animations.Add(item);
+                FolderInfo = $"{cached.Count} animations (cached scan — delete {Path.GetFileName(cachePath)} in temp to rescan).";
+                AppendLog($"{cached.Count} animation(s) from cached scan.");
+                return;
+            }
+        }
+
+        AppendLog("Scanning folder for matching animations… (first scan of a large folder can take minutes; results stream in)");
+        var progress = new Progress<(int Scanned, List<AnimationItem> Batch)>(p =>
+        {
+            foreach (var item in p.Batch)
+                Animations.Add(item);
+            FolderInfo = $"Scanning animations… {p.Scanned} checked, {Animations.Count} match";
+        });
+        int total = await Task.Run(() =>
+        {
+            var batch = new List<AnimationItem>();
+            int scanned = 0;
             foreach (var path in FindFolderAssets("*.anm"))
             {
+                scanned++;
                 try
                 {
-                    if (!AnimationFile.TryLoad(File.ReadAllBytes(path), out var anim, out _))
+                    // Fast head/trailer probe first; fall back to a full parse
+                    // for the rare layouts the probe cannot judge.
+                    var probe = AnimationFile.ProbeSkeletonMatch(path, skeleton.JointSymbols);
+                    bool matches;
+                    float length;
+                    if (probe is { } quick)
+                    {
+                        (matches, length) = quick;
+                    }
+                    else if (AnimationFile.TryLoad(File.ReadAllBytes(path), out var anim, out _))
+                    {
+                        matches = anim!.TransformTracks.Any(t => skeleton.JointSymbols.Contains(t.BoneSymbol))
+                                  || anim.FindBoneSymbols(skeleton.JointSymbols).Count > 0;
+                        length = anim.Length;
+                    }
+                    else
+                    {
                         continue;
-                    // Applicable when its keyframed tracks or compressed pose
-                    // channel target this skeleton's bones.
-                    int matching = anim!.TransformTracks.Count(t => skeleton.JointSymbols.Contains(t.BoneSymbol));
-                    if (matching == 0 && anim.FindBoneSymbols(skeleton.JointSymbols).Count == 0)
-                        continue;
-                    items.Add(new AnimationItem(path, Path.GetFileNameWithoutExtension(path), anim.Length, matching));
+                    }
+                    if (matches)
+                        batch.Add(new AnimationItem(path, Path.GetFileNameWithoutExtension(path), length, 0));
                 }
                 catch (IOException) { }
+                if (batch.Count >= 100 || (scanned % 1000 == 0 && batch.Count > 0))
+                {
+                    ((IProgress<(int, List<AnimationItem>)>)progress).Report((scanned, batch));
+                    batch = new List<AnimationItem>();
+                }
             }
-            return items.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            if (batch.Count > 0)
+                ((IProgress<(int, List<AnimationItem>)>)progress).Report((scanned, batch));
+            return scanned;
         });
-        foreach (var item in found)
+        var sorted = Animations.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        Animations.Clear();
+        foreach (var item in sorted)
             Animations.Add(item);
-        AppendLog($"{found.Count} animation(s) match the model's skeleton.");
+        FolderInfo = $"{Animations.Count} of {total} animations match the model's skeleton.";
+        AppendLog($"{Animations.Count} animation(s) match the model's skeleton.");
+        try
+        {
+            await File.WriteAllLinesAsync(cachePath, Animations.Select(a =>
+                $"{a.Path}|{a.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)}"));
+        }
+        catch (IOException) { }
     }
 
     private bool CanPlayAnimation() => SelectedAnimation is not null && _playbackSkinner is not null && !IsPlaying;
@@ -758,6 +826,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private int _tickCount;
     private HashSet<ulong>? _ikSubtreeBones;
+    private string? _playbackSkeletonPath;
 
     /// <summary>Debug entry: selects and plays an animation file directly.</summary>
     public void DebugPlayAnimation(string path)

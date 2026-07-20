@@ -289,6 +289,98 @@ public sealed class AnimationFile
     }
 
     /// <summary>
+    /// Cheaply decides whether an .anm on disk drives any of the given joints,
+    /// without reading or parsing the whole file: the container header, type
+    /// table, and (when present) the leading pose-keys bone table all sit near
+    /// the start, and the channel-target symbol trailer is at a computable
+    /// offset. Two small reads replace a full parse. Returns the match and the
+    /// animation length, or null when the file needs a full <see cref="TryLoad"/>.
+    /// </summary>
+    public static (bool Matches, float Length)? ProbeSkeletonMatch(string path, IReadOnlySet<ulong> joints)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var head = new byte[Math.Min(stream.Length, 64 * 1024)];
+            stream.ReadExactly(head, 0, head.Length);
+            if (!MetaStreamHeader.TryParse(head, out var meta, out _))
+                return null;
+
+            int off = meta!.DefaultSectionOffset;
+            int sectionEnd = meta.DefaultSectionOffset + meta.DefaultSectionSize;
+            if (off + 32 > head.Length)
+                return null;
+            uint version = BinaryPrimitives.ReadUInt32LittleEndian(head.AsSpan(off));
+            if (version is not (4 or 5))
+                return null;
+            off += 16; // version, flags, name symbol
+            float length = BitConverter.ToSingle(head, off);
+            off += 8;  // length, additive mask
+            if (off < head.Length && head[off] is (byte)'0' or (byte)'1')
+                off++;
+            int blockEnd = off + BinaryPrimitives.ReadInt32LittleEndian(head.AsSpan(off));
+            off += 4;
+            int channelCount = BinaryPrimitives.ReadInt32LittleEndian(head.AsSpan(off));
+            off += 8;
+            int typeCount = BinaryPrimitives.ReadInt32LittleEndian(head.AsSpan(off));
+            off += 4;
+            if (channelCount <= 0 || channelCount > 4096 || typeCount <= 0 || typeCount > 256
+                || blockEnd != sectionEnd || off + typeCount * 12 > head.Length)
+                return null;
+            ulong firstType = BinaryPrimitives.ReadUInt64LittleEndian(head.AsSpan(off));
+            off += typeCount * 12;
+
+            // Pose-keys channels lead the body; their bone table is right here.
+            if (firstType == KnownAnimationTypes.CompressedSkeletonPoseKeys
+                && off + 4 <= head.Length)
+            {
+                int tableOff = off + 4 + 112;
+                if (tableOff + 4 <= head.Length)
+                {
+                    int bones = BinaryPrimitives.ReadInt32LittleEndian(head.AsSpan(off + 4 + 96));
+                    if (bones > 0 && bones <= 4096 && tableOff + bones * 8 <= head.Length)
+                    {
+                        for (int b = 0; b < bones; b++)
+                        {
+                            ulong sym = BinaryPrimitives.ReadUInt64LittleEndian(head.AsSpan(tableOff + b * 8));
+                            if (sym != 0 && joints.Contains(sym))
+                                return (true, length);
+                        }
+                        // fall through: keyframed channels may still target the rig
+                    }
+                    else
+                    {
+                        return null;
+                    }
+                }
+                else
+                {
+                    return null;
+                }
+            }
+
+            // Check the channel-target trailer.
+            int trailerStart = blockEnd - (4 * channelCount + 2 + 8 * channelCount);
+            int symbolsStart = trailerStart + 4 * channelCount + 2;
+            if (trailerStart <= 0 || symbolsStart + 8 * channelCount > stream.Length)
+                return null;
+            var trailer = new byte[8 * channelCount];
+            stream.Position = symbolsStart;
+            stream.ReadExactly(trailer, 0, trailer.Length);
+            for (int i = 0; i < channelCount; i++)
+            {
+                if (joints.Contains(BinaryPrimitives.ReadUInt64LittleEndian(trailer.AsSpan(i * 8))))
+                    return (true, length);
+            }
+            return (false, length);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or EndOfStreamException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Recovers bone symbols from the pose-keys payload by scanning for 8-byte values
     /// present in <paramref name="candidates"/> (e.g. a skeleton's joint set).
     /// </summary>
