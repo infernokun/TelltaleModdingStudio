@@ -432,6 +432,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             // and prime the playback state.
             StopAnimation();
             Animations.Clear();
+            FilteredAnimations.Clear();
             _playbackGeometry = null;
             _playbackSkeleton = null;
             _playbackSkinner = null;
@@ -615,6 +616,43 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<AnimationItem> Animations { get; } = new();
 
+    /// <summary>The animation list as shown: <see cref="Animations"/> narrowed by the filter box.</summary>
+    public ObservableCollection<AnimationItem> FilteredAnimations { get; } = new();
+
+    [ObservableProperty]
+    private string _animationFilter = "";
+
+    partial void OnAnimationFilterChanged(string value) => RefreshAnimationFilter();
+
+    private bool MatchesAnimationFilter(AnimationItem item)
+    {
+        if (string.IsNullOrWhiteSpace(AnimationFilter))
+            return true;
+        foreach (var term in AnimationFilter.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!item.Name.Contains(term, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        return true;
+    }
+
+    private void RefreshAnimationFilter()
+    {
+        FilteredAnimations.Clear();
+        foreach (var item in Animations)
+        {
+            if (MatchesAnimationFilter(item))
+                FilteredAnimations.Add(item);
+        }
+    }
+
+    private void AddAnimation(AnimationItem item)
+    {
+        Animations.Add(item);
+        if (MatchesAnimationFilter(item))
+            FilteredAnimations.Add(item);
+    }
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PlayAnimationCommand))]
     private AnimationItem? _selectedAnimation;
@@ -645,6 +683,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         var skeleton = _playbackSkeleton!;
         Animations.Clear();
+        FilteredAnimations.Clear();
 
         // A folder's scan is cached on disk per skeleton: the first pass over
         // tens of thousands of animations is IO-bound and slow, repeats are
@@ -666,7 +705,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             if (cached.Count > 0)
             {
                 foreach (var item in cached)
-                    Animations.Add(item);
+                    AddAnimation(item);
                 FolderInfo = $"{cached.Count} animations (cached scan — delete {Path.GetFileName(cachePath)} in temp to rescan).";
                 AppendLog($"{cached.Count} animation(s) from cached scan.");
                 return;
@@ -677,7 +716,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var progress = new Progress<(int Scanned, List<AnimationItem> Batch)>(p =>
         {
             foreach (var item in p.Batch)
-                Animations.Add(item);
+                AddAnimation(item);
             FolderInfo = $"Scanning animations… {p.Scanned} checked, {Animations.Count} match";
         });
         int total = await Task.Run(() =>
@@ -726,6 +765,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Animations.Clear();
         foreach (var item in sorted)
             Animations.Add(item);
+        RefreshAnimationFilter();
         FolderInfo = $"{Animations.Count} of {total} animations match the model's skeleton.";
         AppendLog($"{Animations.Count} animation(s) match the model's skeleton.");
         try
