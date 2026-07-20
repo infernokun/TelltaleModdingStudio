@@ -68,16 +68,17 @@ public sealed class CspkClip
 ///   112..    bone symbol table (boneCount × u64 CRC64s; zero = unnamed bone)
 ///   then     [4 head u32s][body][f32 sampleTime × S][u32 blockDeltaCount × B]
 ///
-/// V counts absolute (re-sync) keys per bone stream; the other S−V samples are
-/// deltas. For V ≤ 1 the body is two contiguous planar streams (translations
-/// first) of boneCount-wide groups: [delta × (S−1)][absolute lo][absolute hi]
-/// — the absolute pair sits at the END of each stream (V=0 additive clips
-/// drop it). Absolutes combine the two words into 20/22/22-bit components;
-/// rotation components dequantize with a hardcoded √2 window (smallest-three,
-/// w reconstructed, plain xyz order). Deltas pack 10/11/11 bits dequantized by
-/// the header delta windows and multiply onto the previous sample. Multi-
-/// resync bodies (V > 1) store the V absolute keys as consecutive chunked
-/// records at the front instead.
+/// V counts absolute (re-sync) keys and S−V samples are deltas. The body is
+/// uniform across all clips: [absolute record × V][delta record × (S−V)].
+/// An absolute record is 4·boneCount words holding 2·boneCount values —
+/// rotations for bones 0..N−1 first, then translations — staged in chunks
+/// of four values as [lo ×4][hi ×4]; the two words combine into 20/22/22-bit
+/// components, rotations dequantizing with a hardcoded √2 window
+/// (smallest-three, w reconstructed, plain xyz order) and translations with
+/// the header vector window. A delta record is 2 groups of boneCount words
+/// ([translation deltas][rotation deltas]), each word packing 10/11/11 bits
+/// dequantized by the header delta windows and multiplied onto the previous
+/// sample. V=0 additive overlays are delta records only.
 /// </summary>
 public static class CspkDecoder
 {
@@ -127,12 +128,13 @@ public static class CspkDecoder
         var minVector = new Vector3(window[16], window[17], window[18]);
         var rangeVector = new Vector3(window[20], window[21], window[22]);
 
-        int rotBase = groupsPerStream; // translations occupy the first stream
-        // V=1 streams store their S−1 delta groups FIRST, then the absolute
-        // (lo, hi) pair at the END of the stream. Reading the first two groups
-        // as the absolute (an early mistake) decodes near-mid delta words into
-        // near-identity rotations — poses collapse toward identity.
-        int deltaBase = 0;
+        // Unified body layout for every family: the V absolute keys come first
+        // as consecutive records of 4·bones words — 2·bones values interleaved
+        // per bone (even = translation, odd = rotation), staged in chunks of
+        // four values as [lo ×4][hi ×4] — followed by the S−V delta samples as
+        // records of 2 groups ([translation deltas][rotation deltas], one
+        // 10/11/11 word per bone). V=0 additive clips have delta records only.
+        int deltaRecordBase = 4 * values;
         int clipSamples = values > 1 ? values : samples;
         var rotations = new Quaternion[bones][];
         var translations = new Vector3[bones][];
@@ -145,19 +147,12 @@ public static class CspkDecoder
                 trans[0] = Vector3.Zero;
                 rots[0] = Quaternion.Identity;
             }
-            else if (values > 1)
+            else
             {
-                // Multi-resync clips: the V absolute keys are stored as
-                // consecutive records of 4·bones words (for V == S that is the
-                // whole body; for mixed clips the S−V single-word delta records
-                // follow and are skipped — they only refine between re-syncs by
-                // a few degrees). Each record holds 2·bones values interleaved
-                // per bone (even = translation, odd = rotation), staged in
-                // chunks of four values as [lo ×4][hi ×4].
                 for (int k = 0; k < values; k++)
                 {
                     int rec = k * 4 * bones;
-                    int rv = 2 * b + 1, tv = 2 * b;
+                    int rv = b, tv = bones + b;
                     var (qx, qy, qz) = Combine(
                         words[rec + rv / 4 * 8 + rv % 4],
                         words[rec + rv / 4 * 8 + 4 + rv % 4]);
@@ -170,26 +165,24 @@ public static class CspkDecoder
                         ty * rangeVector.Y / (1 << 22) + minVector.Y,
                         tz * rangeVector.Z / (1 << 22) + minVector.Z);
                 }
-                rotations[b] = rots;
-                translations[b] = trans;
-                continue;
-            }
-            else
-            {
-                var (tx, ty, tz) = Combine(Word(samples - 1, b), Word(samples, b));
-                trans[0] = new Vector3(
-                    tx * rangeVector.X / (1 << 20) + minVector.X,
-                    ty * rangeVector.Y / (1 << 22) + minVector.Y,
-                    tz * rangeVector.Z / (1 << 22) + minVector.Z);
-                var (qx, qy, qz) = Combine(
-                    Word(rotBase + samples - 1, b), Word(rotBase + samples, b));
-                rots[0] = AbsoluteQuat(qx, qy, qz);
+                if (values > 1)
+                {
+                    // Multi-resync clips slerp between their absolute keys; the
+                    // in-between delta samples refine by ≤ a few degrees and
+                    // are skipped for now.
+                    rotations[b] = rots;
+                    translations[b] = trans;
+                    continue;
+                }
             }
 
+            // Single-key and additive clips: chain the delta records forward.
+            // A delta record mirrors the absolute record's order: rotation
+            // deltas first, then translation deltas.
             for (int s = 1; s < samples; s++)
             {
                 trans[s] = trans[s - 1]; // translation deltas not yet decoded reliably
-                uint w = Word(rotBase + deltaBase + s - 1, b);
+                uint w = Word(deltaRecordBase + 2 * (s - 1), b);
                 float dx = (w & 0x3FF) / 1023f * rangeDeltaQ.X + minDeltaQ.X;
                 float dy = ((w >> 10) & 0x7FF) / 2047f * rangeDeltaQ.Y + minDeltaQ.Y;
                 float dz = (w >> 21) / 2047f * rangeDeltaQ.Z + minDeltaQ.Z;
@@ -246,15 +239,8 @@ public static class CspkDecoder
         // are inputs to the engine's IK layer, not poses — flag them so
         // playback keeps those bones at rest.
         var frameBones = new HashSet<int>();
-        if (values > 1 && !additive && bones > 2 && symbols[0] == 0)
+        if (!additive && bones > 2)
         {
-            bool TracksCarrier(int i)
-            {
-                for (int k = 0; k < clipSamples; k++)
-                    if (MathF.Abs(Quaternion.Dot(rotations[i][k], rotations[0][k])) <= 0.97f)
-                        return false;
-                return true;
-            }
             bool ConstantValue(int i)
             {
                 for (int k = 1; k < clipSamples; k++)
@@ -262,32 +248,42 @@ public static class CspkDecoder
                         return false;
                 return true;
             }
-            for (int i = 1; i < bones; i++)
+            bool TracksCarrier(int i)
+            {
+                if (symbols[0] != 0)
+                    return false;
+                for (int k = 0; k < clipSamples; k++)
+                    if (MathF.Abs(Quaternion.Dot(rotations[i][k], rotations[0][k])) <= 0.97f)
+                        return false;
+                return true;
+            }
+            // A large rotation repeated bit-identically on several named bones
+            // is a rig/IK frame constant (leg and spine reference frames), not
+            // animation; the same holds for bones that track the unnamed
+            // motion-carrier's heading sample-for-sample.
+            var groups = new Dictionary<(int, int, int), List<int>>();
+            for (int i = 0; i < bones; i++)
             {
                 if (symbols[i] == 0)
                     continue;
                 var q = rotations[i][0];
-                if (TracksCarrier(i))
-                {
-                    frameBones.Add(i);
-                    if (i + 1 < bones && symbols[i + 1] != 0)
-                    {
-                        var n = rotations[i + 1][0];
-                        if (MathF.Abs(MathF.Abs(n.X) - InvSqrt2) < 0.08f
-                            && MathF.Abs(n.Y) < 0.16f && MathF.Abs(n.Z) < 0.16f
-                            && MathF.Abs(n.W - InvSqrt2) < 0.08f
-                            && ConstantValue(i + 1))
-                            frameBones.Add(i + 1);
-                    }
-                }
-                else if (MathF.Abs(q.X) < 0.01f && MathF.Abs(q.Y) < 0.01f
-                         && MathF.Abs(MathF.Abs(q.Z) - InvSqrt2) < 0.08f
-                         && MathF.Abs(q.W - InvSqrt2) < 0.08f
-                         && ConstantValue(i))
-                {
-                    frameBones.Add(i); // ~90° pure-Z rig constant
-                }
+                if (MathF.Abs(q.W) > 0.92f)
+                    continue; // < ~45° from identity — could be real pose data
+                var key = ((int)MathF.Round(q.X * 500), (int)MathF.Round(q.Y * 500),
+                           (int)MathF.Round(q.Z * 500));
+                if (q.W < 0)
+                    key = (-key.Item1, -key.Item2, -key.Item3);
+                if (!groups.TryGetValue(key, out var list))
+                    groups[key] = list = new List<int>();
+                list.Add(i);
             }
+            foreach (var list in groups.Values)
+                if (list.Count >= 3 && list.All(ConstantValue))
+                    foreach (var i in list)
+                        frameBones.Add(i);
+            for (int i = 1; i < bones; i++)
+                if (symbols[i] != 0 && TracksCarrier(i))
+                    frameBones.Add(i);
         }
 
         return new CspkClip
