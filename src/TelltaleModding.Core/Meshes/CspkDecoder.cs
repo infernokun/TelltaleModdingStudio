@@ -30,12 +30,31 @@ public sealed class CspkClip
     public required bool IsAdditive { get; init; }
 
     /// <summary>
-    /// Bone indices whose stored rotation is a rig frame value (the heading
-    /// carrier and a ±90° axis conversion baked into two consecutive spine
-    /// slots of multi-resync clips), not a pose. Playback should keep these
-    /// bones at the skeleton rest pose.
+    /// Bone indices whose stored rotation is a constant rig/IK frame value
+    /// (identical large rotations repeated across several bones). Playback
+    /// should keep these bones at the skeleton rest pose.
     /// </summary>
     public required IReadOnlySet<int> FrameBones { get; init; }
+
+    /// <summary>
+    /// Bone indices whose stored rotation follows the unnamed motion carrier's
+    /// frame (root, pelvis, clavicle anchors). Their real animation is the
+    /// deviation from the carrier: sample it with
+    /// <see cref="SampleCarrierRelative"/> and compose onto the rest pose.
+    /// </summary>
+    public required IReadOnlySet<int> CarrierTracking { get; init; }
+
+    /// <summary>
+    /// The bone's rotation relative to the motion carrier's frame at a time —
+    /// near identity when the bone just rides the frame, real local motion
+    /// (torso leans, shrugs) when it deviates.
+    /// </summary>
+    public Quaternion SampleCarrierRelative(int bone, float time)
+    {
+        var carrier = SampleRotation(0, time);
+        var value = SampleRotation(bone, time);
+        return Quaternion.Normalize(Quaternion.Multiply(Quaternion.Inverse(carrier), value));
+    }
 
     /// <summary>Sampled rotation for a bone index with slerp between samples.</summary>
     public Quaternion SampleRotation(int bone, float time)
@@ -239,6 +258,7 @@ public static class CspkDecoder
         // are inputs to the engine's IK layer, not poses — flag them so
         // playback keeps those bones at rest.
         var frameBones = new HashSet<int>();
+        var carrierTracking = new HashSet<int>();
         if (!additive && bones > 2)
         {
             bool ConstantValue(int i)
@@ -282,8 +302,8 @@ public static class CspkDecoder
                     foreach (var i in list)
                         frameBones.Add(i);
             for (int i = 1; i < bones; i++)
-                if (symbols[i] != 0 && TracksCarrier(i))
-                    frameBones.Add(i);
+                if (symbols[i] != 0 && !frameBones.Contains(i) && TracksCarrier(i))
+                    carrierTracking.Add(i);
         }
 
         return new CspkClip
@@ -295,6 +315,7 @@ public static class CspkDecoder
             Translations = translations,
             IsAdditive = additive,
             FrameBones = frameBones,
+            CarrierTracking = carrierTracking,
         };
     }
 
