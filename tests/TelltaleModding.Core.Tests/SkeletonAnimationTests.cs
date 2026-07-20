@@ -160,14 +160,19 @@ public class CspkDecoderTests
     }
 
     [Fact]
-    public void Rejects_mixed_abs_delta_container()
+    public void Decodes_mixed_container_from_absolute_keys()
     {
-        // rhysWakeUpDragged: S=194 samples, V=86 absolute keys (1 < V < S) —
-        // that interleaving is not decoded yet; bones fall back to bind pose.
-        Assert.True(AnimationFile.TryLoad(
-            File.ReadAllBytes(SampleData.Sample("sk54_action_rhysWakeUpDragged.anm")),
-            out var anim, out _));
-        Assert.Null(CspkDecoder.TryDecodeFixedRate(anim!.PoseKeysPayload!, anim.Length));
+        // rhysWakeUpDragged: S=194 samples, V=86 absolute keys (1 < V < S).
+        // The decoder emits the front-loaded absolute keys; delta samples
+        // between re-syncs are skipped (they refine by a few degrees only).
+        var clip = Decode("sk54_action_rhysWakeUpDragged.anm");
+        Assert.Equal(86, clip.SampleCount);
+        Assert.False(clip.IsAdditive);
+        for (int s = 1; s < clip.SampleTimes.Length; s++)
+            Assert.True(clip.SampleTimes[s] > clip.SampleTimes[s - 1]);
+        foreach (var samples in clip.Rotations)
+            foreach (var q in samples)
+                Assert.InRange(q.Length(), 0.999f, 1.001f);
     }
 
     [Fact]
