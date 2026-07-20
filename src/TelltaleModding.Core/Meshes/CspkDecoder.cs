@@ -100,8 +100,8 @@ public static class CspkDecoder
         int payloadWords = (blob.Length - tableEnd) / 4;
         if (payloadWords != 4 + bones * 2 * (samples + values) + samples + blocks)
             return null; // not a CSPK1 payload we understand
-        if (values > 1)
-            return null; // multi-resync interleaving not solved yet
+        if (values > 1 && values != samples)
+            return null; // mixed abs/delta interleaving (1 < V < S) not solved yet
         bool additive = values == 0;
 
         var symbols = new ulong[bones];
@@ -122,16 +122,43 @@ public static class CspkDecoder
 
         int rotBase = groupsPerStream; // translations occupy the first stream
         int deltaBase = additive ? 0 : 2; // V=1: [abs lo][abs hi][deltas…]
+        int clipSamples = values > 1 ? values : samples;
         var rotations = new Quaternion[bones][];
         var translations = new Vector3[bones][];
         for (int b = 0; b < bones; b++)
         {
-            var trans = new Vector3[samples];
-            var rots = new Quaternion[samples];
+            var trans = new Vector3[clipSamples];
+            var rots = new Quaternion[clipSamples];
             if (additive)
             {
                 trans[0] = Vector3.Zero;
                 rots[0] = Quaternion.Identity;
+            }
+            else if (values > 1)
+            {
+                // All-absolute clips (V == S — walks, runs, transitions): the
+                // body is time-ordered per-sample records of 2·bones values,
+                // interleaved per bone (even = translation, odd = rotation) and
+                // staged in chunks of four values as [lo ×4][hi ×4].
+                for (int k = 0; k < values; k++)
+                {
+                    int rec = k * 4 * bones;
+                    int rv = 2 * b + 1, tv = 2 * b;
+                    var (qx, qy, qz) = Combine(
+                        words[rec + rv / 4 * 8 + rv % 4],
+                        words[rec + rv / 4 * 8 + 4 + rv % 4]);
+                    rots[k] = AbsoluteQuat(qx, qy, qz);
+                    var (tx, ty, tz) = Combine(
+                        words[rec + tv / 4 * 8 + tv % 4],
+                        words[rec + tv / 4 * 8 + 4 + tv % 4]);
+                    trans[k] = new Vector3(
+                        tx * rangeVector.X / (1 << 20) + minVector.X,
+                        ty * rangeVector.Y / (1 << 22) + minVector.Y,
+                        tz * rangeVector.Z / (1 << 22) + minVector.Z);
+                }
+                rotations[b] = rots;
+                translations[b] = trans;
+                continue;
             }
             else
             {
@@ -160,10 +187,12 @@ public static class CspkDecoder
         }
 
         // Per-sample key times follow the body; sanitize against a garbled table.
+        // Multi-resync clips carry V keys whose sample indices are not decoded
+        // yet, so their key times spread evenly instead.
         int timeBase = body + words.Length * 4;
-        var times = new float[samples];
-        bool timesOk = true;
-        for (int s = 0; s < samples; s++)
+        var times = new float[clipSamples];
+        bool timesOk = values <= 1 || values == samples;
+        for (int s = 0; timesOk && s < samples; s++)
         {
             times[s] = BinaryPrimitives.ReadSingleLittleEndian(blob[(timeBase + s * 4)..]);
             if (!float.IsFinite(times[s]) || times[s] < 0f || times[s] > animLength + 0.5f
@@ -171,13 +200,13 @@ public static class CspkDecoder
                 timesOk = false;
         }
         if (!timesOk)
-            for (int s = 0; s < samples; s++)
-                times[s] = samples == 1 ? 0f : animLength * s / (samples - 1);
+            for (int s = 0; s < clipSamples; s++)
+                times[s] = clipSamples == 1 ? 0f : animLength * s / (clipSamples - 1);
 
         return new CspkClip
         {
             BoneSymbols = symbols,
-            SampleCount = samples,
+            SampleCount = clipSamples,
             SampleTimes = times,
             Rotations = rotations,
             Translations = translations,
