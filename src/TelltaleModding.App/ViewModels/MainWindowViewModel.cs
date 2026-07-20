@@ -805,6 +805,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 && !_playbackCspk!.FrameBones.Contains(ci)
                 && _ikSubtreeBones?.Contains(bone.JointSymbol) != true)
             {
+                if (_playbackCspk.CarrierTracking.Contains(ci))
+                {
+                    // Frame-riding bones (root/pelvis/anchors): their real
+                    // animation is the deviation from the motion carrier.
+                    var rel = _playbackCspk.SampleCarrierRelative(ci, _playbackTime);
+                    return (bone.LocalPosition, System.Numerics.Quaternion.Normalize(
+                        System.Numerics.Quaternion.Multiply(bone.LocalRotation, rel)));
+                }
                 var rot = _playbackCspk.SampleRotation(ci, _playbackTime);
                 if (_playbackCspk.IsAdditive)
                     rot = System.Numerics.Quaternion.Normalize(
