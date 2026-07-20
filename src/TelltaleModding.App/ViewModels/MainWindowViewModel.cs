@@ -276,8 +276,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (_textureIndex is not null)
             return _textureIndex;
         var index = new Dictionary<ulong, string>();
-        var root = FolderPath ?? Path.GetDirectoryName(anchorFile);
-        if (root is not null && Directory.Exists(root))
+        if (FolderPath is not null)
+        {
+            foreach (var tex in FindFolderAssets("*.d3dtx"))
+                index[TelltaleCrc64.HashSymbol(Path.GetFileNameWithoutExtension(tex))] = tex;
+        }
+        else if (Path.GetDirectoryName(anchorFile) is { } root && Directory.Exists(root))
         {
             foreach (var tex in Directory.EnumerateFiles(root, "*.d3dtx", SearchOption.AllDirectories))
                 index[TelltaleCrc64.HashSymbol(Path.GetFileNameWithoutExtension(tex))] = tex;
@@ -549,19 +553,38 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private List<(string Path, SkeletonFile Skeleton)>? _skeletonIndex;
 
+    /// <summary>
+    /// Files matching a pattern under the open folder; when the folder itself
+    /// has none, its parent is searched too — extracted games often split
+    /// meshes, skeletons, and animations into sibling folders.
+    /// </summary>
+    private IEnumerable<string> FindFolderAssets(string pattern)
+    {
+        if (FolderPath is null || !Directory.Exists(FolderPath))
+            yield break;
+        bool any = false;
+        foreach (var p in Directory.EnumerateFiles(FolderPath, pattern, SearchOption.AllDirectories))
+        {
+            any = true;
+            yield return p;
+        }
+        if (any || Path.GetDirectoryName(FolderPath.TrimEnd('\\', '/')) is not { } parent
+                || !Directory.Exists(parent))
+            yield break;
+        foreach (var p in Directory.EnumerateFiles(parent, pattern, SearchOption.AllDirectories))
+            yield return p;
+    }
+
     /// <summary>All parseable .skl files under the open folder (cached per folder).</summary>
     private List<(string Path, SkeletonFile Skeleton)> GetSkeletonIndex()
     {
         if (_skeletonIndex is not null)
             return _skeletonIndex;
         var list = new List<(string, SkeletonFile)>();
-        if (FolderPath is not null && Directory.Exists(FolderPath))
+        foreach (var p in FindFolderAssets("*.skl"))
         {
-            foreach (var p in Directory.EnumerateFiles(FolderPath, "*.skl", SearchOption.AllDirectories))
-            {
-                if (SkeletonFile.TryLoad(File.ReadAllBytes(p), out var skl, out _))
-                    list.Add((p, skl!));
-            }
+            if (SkeletonFile.TryLoad(File.ReadAllBytes(p), out var skl, out _))
+                list.Add((p, skl!));
         }
         return _skeletonIndex = list;
     }
@@ -618,13 +641,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private async Task FindAnimationsAsync()
     {
         var skeleton = _playbackSkeleton!;
-        var folder = FolderPath!;
         Animations.Clear();
         AppendLog("Scanning folder for matching animations…");
         var found = await Task.Run(() =>
         {
             var items = new List<AnimationItem>();
-            foreach (var path in Directory.EnumerateFiles(folder, "*.anm", SearchOption.AllDirectories))
+            foreach (var path in FindFolderAssets("*.anm"))
             {
                 try
                 {
@@ -734,7 +756,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         DeformedFrameReady?.Invoke(_skinPositions!, _skinNormals!);
     }
 
-    private bool _posesDumped;
     private int _tickCount;
     private HashSet<ulong>? _ikSubtreeBones;
 
