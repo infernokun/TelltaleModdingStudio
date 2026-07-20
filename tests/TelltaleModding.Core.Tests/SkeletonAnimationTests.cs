@@ -160,11 +160,35 @@ public class CspkDecoderTests
     }
 
     [Fact]
-    public void Rejects_variable_rate_container()
+    public void Rejects_mixed_abs_delta_container()
     {
+        // rhysWakeUpDragged: S=194 samples, V=86 absolute keys (1 < V < S) —
+        // that interleaving is not decoded yet; bones fall back to bind pose.
         Assert.True(AnimationFile.TryLoad(
             File.ReadAllBytes(SampleData.Sample("sk54_action_rhysWakeUpDragged.anm")),
             out var anim, out _));
         Assert.Null(CspkDecoder.TryDecodeFixedRate(anim!.PoseKeysPayload!, anim.Length));
+    }
+
+    [Fact]
+    public void Decodes_all_absolute_container_smoothly()
+    {
+        // banditSquatAHoldAxe_toRunHoldAxe: V == S == 48 — every sample is an
+        // absolute key stored in chunked per-sample records.
+        var clip = Decode("skB4_banditSquat_toRun.anm");
+        Assert.Equal(48, clip.SampleCount);
+        foreach (var samples in clip.Rotations)
+        {
+            for (int s = 0; s < samples.Length; s++)
+            {
+                Assert.InRange(samples[s].Length(), 0.999f, 1.001f);
+                if (s > 0)
+                {
+                    float dot = Math.Abs(System.Numerics.Quaternion.Dot(samples[s - 1], samples[s]));
+                    float degrees = 2f * MathF.Acos(Math.Min(dot, 1f)) * 180f / MathF.PI;
+                    Assert.True(degrees < 45f, $"step of {degrees}°");
+                }
+            }
+        }
     }
 }
