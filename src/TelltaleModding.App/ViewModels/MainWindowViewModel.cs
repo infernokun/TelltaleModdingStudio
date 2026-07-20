@@ -690,9 +690,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             // translation stream's semantics are not decoded yet, and bone
             // offsets barely animate in practice).
             if (_cspkBoneIndex is not null
-                && _cspkBoneIndex.TryGetValue(bone.JointSymbol, out int ci))
+                && _cspkBoneIndex.TryGetValue(bone.JointSymbol, out int ci)
+                && !_playbackCspk!.FrameBones.Contains(ci))
             {
-                var rot = _playbackCspk!.SampleRotation(ci, _playbackTime);
+                var rot = _playbackCspk.SampleRotation(ci, _playbackTime);
                 if (_playbackCspk.IsAdditive)
                     rot = System.Numerics.Quaternion.Normalize(
                         System.Numerics.Quaternion.Multiply(bone.LocalRotation, rot));
