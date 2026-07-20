@@ -444,6 +444,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     _playbackSkeleton = skeleton;
                     try { _playbackSkinner = new MeshSkinner(geometry, skeleton); }
                     catch (ArgumentException) { }
+
+                    // Bones whose ancestry bypasses the pelvis (child 0 of the
+                    // root) form IK/helper subtrees — legs and reference frames
+                    // the engine poses via runtime IK, not via the animation's
+                    // local values. Hold them at rest during playback.
+                    _ikSubtreeBones = new HashSet<ulong>();
+                    int pelvis = skeleton.Bones.Count > 1 && skeleton.Bones[1].ParentIndex == 0 ? 1 : -1;
+                    for (int i = 0; i < skeleton.Bones.Count; i++)
+                    {
+                        if (pelvis < 0)
+                            break;
+                        int a = i;
+                        bool underPelvis = i == 0 || i == pelvis;
+                        while (a > 0)
+                        {
+                            if (a == pelvis) { underPelvis = true; break; }
+                            a = skeleton.Bones[a].ParentIndex;
+                        }
+                        if (!underPelvis)
+                            _ikSubtreeBones.Add(skeleton.Bones[i].JointSymbol);
+                    }
                 }
             }
             FindAnimationsCommand.NotifyCanExecuteChanged();
@@ -691,7 +712,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             // offsets barely animate in practice).
             if (_cspkBoneIndex is not null
                 && _cspkBoneIndex.TryGetValue(bone.JointSymbol, out int ci)
-                && !_playbackCspk!.FrameBones.Contains(ci))
+                && !_playbackCspk!.FrameBones.Contains(ci)
+                && _ikSubtreeBones?.Contains(bone.JointSymbol) != true)
             {
                 var rot = _playbackCspk.SampleRotation(ci, _playbackTime);
                 if (_playbackCspk.IsAdditive)
@@ -702,8 +724,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return (bone.LocalPosition, bone.LocalRotation);
         });
         _playbackSkinner.Skin(world, _skinPositions!, _skinNormals!);
+        if (Environment.GetEnvironmentVariable("CSPK_DUMP") is { Length: > 0 } dumpPath
+            && ++_tickCount == 30)
+        {
+            File.WriteAllLines(dumpPath, world.Select((m, i) =>
+                $"{i} {m.Translation.X:0.000} {m.Translation.Y:0.000} {m.Translation.Z:0.000}")
+                .Append($"t={_playbackTime:0.000}"));
+        }
         DeformedFrameReady?.Invoke(_skinPositions!, _skinNormals!);
     }
+
+    private bool _posesDumped;
+    private int _tickCount;
+    private HashSet<ulong>? _ikSubtreeBones;
 
     /// <summary>Debug entry: selects and plays an animation file directly.</summary>
     public void DebugPlayAnimation(string path)

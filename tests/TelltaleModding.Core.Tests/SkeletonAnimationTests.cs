@@ -137,26 +137,38 @@ public class CspkDecoderTests
     }
 
     [Fact]
-    public void Decoded_pose_matches_skeleton_rest_rotations()
+    public void Hands_on_hips_pose_puts_hands_below_the_head()
     {
-        var clip = Decode("skB6_idle_bossanovaFists.anm");
+        // Rest-proximity scoring cannot validate a decode (wrong reads collapse
+        // posed bones toward identity, which is near rest for most bones); a
+        // named pose with a distinctive silhouette can. Hands-on-hips must put
+        // the finger bones well below the head after world composition.
+        var clip = Decode("sk55_idle_sashaHandsHips.anm");
         Assert.True(SkeletonFile.TryLoad(
             File.ReadAllBytes(SampleData.Sample("sk55_sasha.skl")), out var skl, out _));
 
-        // For the bones this rig shares with Sasha's skeleton, an idle's first
-        // sample should sit near the rest rotation for most bones.
-        var rest = skl!.Bones.ToDictionary(b => b.JointSymbol, b => b.LocalRotation);
-        int matched = 0, close = 0;
+        var index = new Dictionary<ulong, int>();
         for (int i = 0; i < clip.BoneSymbols.Count; i++)
-        {
-            if (!rest.TryGetValue(clip.BoneSymbols[i], out var rq))
-                continue;
-            matched++;
-            if (Math.Abs(System.Numerics.Quaternion.Dot(clip.Rotations[i][0], rq)) > 0.85f)
-                close++;
-        }
-        Assert.True(matched > 20, $"only {matched} shared bones");
-        Assert.True(close > matched * 0.6, $"{close}/{matched} near rest");
+            if (clip.BoneSymbols[i] != 0)
+                index.TryAdd(clip.BoneSymbols[i], i);
+        var world = skl!.ComposeWorld(bone =>
+            index.TryGetValue(bone.JointSymbol, out int ci)
+                ? (bone.LocalPosition, clip.Rotations[ci][0])
+                : (bone.LocalPosition, bone.LocalRotation));
+
+        // In the T-pose rest, finger bones sit far out on the X axis and the
+        // head bones are the highest — identify both sets from the bind pose.
+        var bind = skl.BindPoseWorld();
+        var fingers = Enumerable.Range(0, bind.Length)
+            .Where(i => Math.Abs(bind[i].Translation.X) > 0.45f).ToList();
+        float headY = bind.Max(m => m.Translation.Y);
+        Assert.True(fingers.Count > 10, $"only {fingers.Count} arm-extremity bones");
+
+        float posedFingerY = fingers.Average(i => world[i].Translation.Y);
+        float posedHeadY = world.Select(m => m.Translation.Y).Max();
+        Assert.True(posedFingerY < 1.25f, $"fingers at {posedFingerY} — arms not lowered");
+        Assert.True(posedHeadY > posedFingerY + 0.1f,
+            $"head {posedHeadY} not above fingers {posedFingerY}");
     }
 
     [Fact]
