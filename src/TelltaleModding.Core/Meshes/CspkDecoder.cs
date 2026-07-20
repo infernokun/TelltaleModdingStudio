@@ -100,8 +100,6 @@ public static class CspkDecoder
         int payloadWords = (blob.Length - tableEnd) / 4;
         if (payloadWords != 4 + bones * 2 * (samples + values) + samples + blocks)
             return null; // not a CSPK1 payload we understand
-        if (values > 1 && values != samples)
-            return null; // mixed abs/delta interleaving (1 < V < S) not solved yet
         bool additive = values == 0;
 
         var symbols = new ulong[bones];
@@ -136,10 +134,13 @@ public static class CspkDecoder
             }
             else if (values > 1)
             {
-                // All-absolute clips (V == S — walks, runs, transitions): the
-                // body is time-ordered per-sample records of 2·bones values,
-                // interleaved per bone (even = translation, odd = rotation) and
-                // staged in chunks of four values as [lo ×4][hi ×4].
+                // Multi-resync clips: the V absolute keys are stored as
+                // consecutive records of 4·bones words (for V == S that is the
+                // whole body; for mixed clips the S−V single-word delta records
+                // follow and are skipped — they only refine between re-syncs by
+                // a few degrees). Each record holds 2·bones values interleaved
+                // per bone (even = translation, odd = rotation), staged in
+                // chunks of four values as [lo ×4][hi ×4].
                 for (int k = 0; k < values; k++)
                 {
                     int rec = k * 4 * bones;
@@ -186,20 +187,42 @@ public static class CspkDecoder
             translations[b] = trans;
         }
 
-        // Per-sample key times follow the body; sanitize against a garbled table.
-        // Multi-resync clips carry V keys whose sample indices are not decoded
-        // yet, so their key times spread evenly instead.
+        // Per-sample key times follow the body; sanitize against a garbled
+        // table. For multi-resync clips the block table (after the times) gives
+        // the delta count between absolute keys, which maps key k to its
+        // sample index: k + Σ ints[0..k].
         int timeBase = body + words.Length * 4;
-        var times = new float[clipSamples];
-        bool timesOk = values <= 1 || values == samples;
-        for (int s = 0; timesOk && s < samples; s++)
+        var sampleTimes = new float[samples];
+        bool timesOk = true;
+        for (int s = 0; s < samples; s++)
         {
-            times[s] = BinaryPrimitives.ReadSingleLittleEndian(blob[(timeBase + s * 4)..]);
-            if (!float.IsFinite(times[s]) || times[s] < 0f || times[s] > animLength + 0.5f
-                || (s > 0 && times[s] < times[s - 1]))
+            sampleTimes[s] = BinaryPrimitives.ReadSingleLittleEndian(blob[(timeBase + s * 4)..]);
+            if (!float.IsFinite(sampleTimes[s]) || sampleTimes[s] < 0f
+                || sampleTimes[s] > animLength + 0.5f
+                || (s > 0 && sampleTimes[s] < sampleTimes[s - 1]))
                 timesOk = false;
         }
-        if (!timesOk)
+        var times = new float[clipSamples];
+        if (timesOk && values > 1 && values < samples)
+        {
+            int intBase = timeBase + samples * 4;
+            int idx = 0;
+            for (int k = 0; k < values; k++)
+            {
+                if (k < blocks)
+                    idx += (int)Math.Min(BinaryPrimitives.ReadUInt32LittleEndian(
+                        blob[(intBase + k * 4)..]), (uint)samples);
+                times[k] = sampleTimes[Math.Min(idx, samples - 1)];
+                if (k > 0 && times[k] <= times[k - 1])
+                    timesOk = false;
+                idx++;
+            }
+        }
+        else if (timesOk && clipSamples == samples)
+        {
+            times = sampleTimes;
+        }
+        if (!timesOk || (values > 1 && values < samples && !timesOk))
             for (int s = 0; s < clipSamples; s++)
                 times[s] = clipSamples == 1 ? 0f : animLength * s / (clipSamples - 1);
 
