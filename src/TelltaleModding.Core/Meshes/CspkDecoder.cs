@@ -29,6 +29,14 @@ public sealed class CspkClip
     /// </summary>
     public required bool IsAdditive { get; init; }
 
+    /// <summary>
+    /// Bone indices whose stored rotation is a rig frame value (the heading
+    /// carrier and a ±90° axis conversion baked into two consecutive spine
+    /// slots of multi-resync clips), not a pose. Playback should keep these
+    /// bones at the skeleton rest pose.
+    /// </summary>
+    public required IReadOnlySet<int> FrameBones { get; init; }
+
     /// <summary>Sampled rotation for a bone index with slerp between samples.</summary>
     public Quaternion SampleRotation(int bone, float time)
     {
@@ -226,6 +234,56 @@ public static class CspkDecoder
             for (int s = 0; s < clipSamples; s++)
                 times[s] = clipSamples == 1 ? 0f : animLength * s / (clipSamples - 1);
 
+        // Multi-resync clips bake rig frame / IK-reference values into some
+        // named slots: headings matching the leading unnamed carrier, ±90° X
+        // axis conversions right after them, and ~90° pure-Z constants. They
+        // are inputs to the engine's IK layer, not poses — flag them so
+        // playback keeps those bones at rest.
+        var frameBones = new HashSet<int>();
+        if (values > 1 && !additive && bones > 2 && symbols[0] == 0)
+        {
+            bool TracksCarrier(int i)
+            {
+                for (int k = 0; k < clipSamples; k++)
+                    if (MathF.Abs(Quaternion.Dot(rotations[i][k], rotations[0][k])) <= 0.97f)
+                        return false;
+                return true;
+            }
+            bool ConstantValue(int i)
+            {
+                for (int k = 1; k < clipSamples; k++)
+                    if (MathF.Abs(Quaternion.Dot(rotations[i][k], rotations[i][0])) < 0.9999f)
+                        return false;
+                return true;
+            }
+            for (int i = 1; i < bones; i++)
+            {
+                if (symbols[i] == 0)
+                    continue;
+                var q = rotations[i][0];
+                if (TracksCarrier(i))
+                {
+                    frameBones.Add(i);
+                    if (i + 1 < bones && symbols[i + 1] != 0)
+                    {
+                        var n = rotations[i + 1][0];
+                        if (MathF.Abs(MathF.Abs(n.X) - InvSqrt2) < 0.08f
+                            && MathF.Abs(n.Y) < 0.16f && MathF.Abs(n.Z) < 0.16f
+                            && MathF.Abs(n.W - InvSqrt2) < 0.08f
+                            && ConstantValue(i + 1))
+                            frameBones.Add(i + 1);
+                    }
+                }
+                else if (MathF.Abs(q.X) < 0.01f && MathF.Abs(q.Y) < 0.01f
+                         && MathF.Abs(MathF.Abs(q.Z) - InvSqrt2) < 0.08f
+                         && MathF.Abs(q.W - InvSqrt2) < 0.08f
+                         && ConstantValue(i))
+                {
+                    frameBones.Add(i); // ~90° pure-Z rig constant
+                }
+            }
+        }
+
         return new CspkClip
         {
             BoneSymbols = symbols,
@@ -234,6 +292,7 @@ public static class CspkDecoder
             Rotations = rotations,
             Translations = translations,
             IsAdditive = additive,
+            FrameBones = frameBones,
         };
     }
 
