@@ -70,13 +70,14 @@ public sealed class CspkClip
 ///
 /// V counts absolute (re-sync) keys per bone stream; the other S−V samples are
 /// deltas. For V ≤ 1 the body is two contiguous planar streams (translations
-/// first) of boneCount-wide groups: [absolute lo][absolute hi][delta × (S−1)]
-/// (V=0 additive clips drop the absolutes). Absolutes combine the two words
-/// into 20/22/22-bit components; rotation components dequantize with a
-/// hardcoded √2 window (smallest-three, w reconstructed, plain xyz order).
-/// Deltas pack 10/11/11 bits dequantized by the header delta windows and
-/// multiply onto the previous sample. The interleaving for V > 1 (multiple
-/// re-sync keys) is not solved yet — those return null.
+/// first) of boneCount-wide groups: [delta × (S−1)][absolute lo][absolute hi]
+/// — the absolute pair sits at the END of each stream (V=0 additive clips
+/// drop it). Absolutes combine the two words into 20/22/22-bit components;
+/// rotation components dequantize with a hardcoded √2 window (smallest-three,
+/// w reconstructed, plain xyz order). Deltas pack 10/11/11 bits dequantized by
+/// the header delta windows and multiply onto the previous sample. Multi-
+/// resync bodies (V > 1) store the V absolute keys as consecutive chunked
+/// records at the front instead.
 /// </summary>
 public static class CspkDecoder
 {
@@ -127,7 +128,11 @@ public static class CspkDecoder
         var rangeVector = new Vector3(window[20], window[21], window[22]);
 
         int rotBase = groupsPerStream; // translations occupy the first stream
-        int deltaBase = additive ? 0 : 2; // V=1: [abs lo][abs hi][deltas…]
+        // V=1 streams store their S−1 delta groups FIRST, then the absolute
+        // (lo, hi) pair at the END of the stream. Reading the first two groups
+        // as the absolute (an early mistake) decodes near-mid delta words into
+        // near-identity rotations — poses collapse toward identity.
+        int deltaBase = 0;
         int clipSamples = values > 1 ? values : samples;
         var rotations = new Quaternion[bones][];
         var translations = new Vector3[bones][];
@@ -171,12 +176,13 @@ public static class CspkDecoder
             }
             else
             {
-                var (tx, ty, tz) = Combine(Word(0, b), Word(1, b));
+                var (tx, ty, tz) = Combine(Word(samples - 1, b), Word(samples, b));
                 trans[0] = new Vector3(
                     tx * rangeVector.X / (1 << 20) + minVector.X,
                     ty * rangeVector.Y / (1 << 22) + minVector.Y,
                     tz * rangeVector.Z / (1 << 22) + minVector.Z);
-                var (qx, qy, qz) = Combine(Word(rotBase, b), Word(rotBase + 1, b));
+                var (qx, qy, qz) = Combine(
+                    Word(rotBase + samples - 1, b), Word(rotBase + samples, b));
                 rots[0] = AbsoluteQuat(qx, qy, qz);
             }
 
