@@ -178,30 +178,13 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <DockPanel IsVisible="{Binding IsMeshPreview}" Margin="0,4,0,0">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="6,0,0,0"
-                                    VerticalAlignment="Top">
-                            <Button Content="Find animations" FontSize="11" Padding="6,2"
-                                    Command="{Binding FindAnimationsCommand}"
-                                    ToolTip.Tip="Scan the open folder for animations matching this model's skeleton" />
-                            <Button Content="▶" FontSize="11" Padding="8,2"
-                                    Command="{Binding PlayAnimationCommand}" />
-                            <Button Content="■" FontSize="11" Padding="8,2"
-                                    Command="{Binding StopAnimationCommand}" />
-                        </StackPanel>
-                        <StackPanel Spacing="2">
-                            <TextBox Text="{Binding AnimationFilter}" Watermark="Filter animations (e.g. shrug, idle sasha)…"
-                                     FontSize="11" Padding="6,3" />
-                            <ListBox ItemsSource="{Binding FilteredAnimations}" SelectedItem="{Binding SelectedAnimation}"
-                                     MaxHeight="120" FontSize="11">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:MainWindowViewModel+AnimationItem">
-                                        <TextBlock Text="{Binding Display}" FontSize="11" TextTrimming="CharacterEllipsis" />
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                        </StackPanel>
-                    </DockPanel>
+                    <!-- Animation playback UI removed for now: the compressed-pose
+                         decoder (TelltaleModding.Core CspkDecoder + the playback
+                         plumbing in the view model) stays in the repo, and the
+                         debug flags (double-dash preview-mesh / play-anim) still
+                         drive it for development, but faithful in-app playback
+                         needs the engine's runtime IK/layering, so the feature
+                         is shelved rather than shown half-right. -->
                 </StackPanel>
             </Grid>
 
