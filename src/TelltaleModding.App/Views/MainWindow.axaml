@@ -189,14 +189,18 @@
                             <Button Content="■" FontSize="11" Padding="8,2"
                                     Command="{Binding StopAnimationCommand}" />
                         </StackPanel>
-                        <ListBox ItemsSource="{Binding Animations}" SelectedItem="{Binding SelectedAnimation}"
-                                 MaxHeight="120" FontSize="11">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="vm:MainWindowViewModel+AnimationItem">
-                                    <TextBlock Text="{Binding Display}" FontSize="11" TextTrimming="CharacterEllipsis" />
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                        <StackPanel Spacing="2">
+                            <TextBox Text="{Binding AnimationFilter}" Watermark="Filter animations (e.g. shrug, idle sasha)…"
+                                     FontSize="11" Padding="6,3" />
+                            <ListBox ItemsSource="{Binding FilteredAnimations}" SelectedItem="{Binding SelectedAnimation}"
+                                     MaxHeight="120" FontSize="11">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:MainWindowViewModel+AnimationItem">
+                                        <TextBlock Text="{Binding Display}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
                     </DockPanel>
                 </StackPanel>
             </Grid>
