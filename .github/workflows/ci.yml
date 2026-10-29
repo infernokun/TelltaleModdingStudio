@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: ["main"]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -32,6 +33,8 @@ jobs:
     runs-on: windows-latest
     needs: build-test
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -39,15 +42,43 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      # A tag like v1.2.0 sets the version; manual runs keep the project's own.
+      - name: Version
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '' }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
       - name: Publish self-contained win-x64
-        run: >
-          dotnet publish src/TelltaleModding.App -c Release -r win-x64
-          --self-contained true -p:PublishSingleFile=true -o publish
+        shell: pwsh
+        run: |
+          $props = @('-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=none')
+          if ($env:VERSION) { $props += "-p:Version=$env:VERSION" }
+          dotnet publish src/TelltaleModding.App -c Release -r win-x64 --self-contained true @props -o publish/TelltaleModdingStudio
 
       - name: Bundle engine
-        run: Copy-Item -Recurse engine publish/engine
+        run: Copy-Item -Recurse engine publish/TelltaleModdingStudio/engine
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          $name = if ($env:VERSION) { "TelltaleModdingStudio-$env:VERSION-win-x64.zip" } else { "TelltaleModdingStudio-win-x64.zip" }
+          Compress-Archive -Path publish/TelltaleModdingStudio -DestinationPath $name
+          "ZIP=$name" >> $env:GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
         with:
           name: TelltaleModdingStudio-win-x64
-          path: publish/
+          path: ${{ env.ZIP }}
+
+      # On a tag, attach the zip to that tag's release (created with generated notes if missing).
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create $env:GITHUB_REF_NAME --title "Telltale Modding Studio $env:VERSION" --generate-notes }
+          gh release upload $env:GITHUB_REF_NAME $env:ZIP --clobber

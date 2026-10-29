@@ -1,0 +1,58 @@
+name: Bug report
+description: Something doesn't work or looks wrong.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game
+      options:
+        - "The Walking Dead: The Telltale Definitive Series"
+        - "The Walking Dead: Season Two"
+        - "The Walking Dead: Michonne"
+        - "Tales from the Borderlands"
+        - "The Wolf Among Us"
+        - "Game of Thrones"
+        - "Other / not game specific"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: The release you downloaded, e.g. 1.0.0.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Home
+        - Characters
+        - Scenes
+        - Dialogue
+        - Scripts
+        - Assets
+        - Mod
+        - Settings
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead. Name the character, scene or file if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here if it's something you can see.
+  - type: textarea
+    id: crash
+    attributes:
+      label: Crash log
+      description: If the app crashed, attach or paste `%LOCALAPPDATA%\TelltaleModdingStudio\crash.log` (Settings also has a button to open it).
+      render: text
