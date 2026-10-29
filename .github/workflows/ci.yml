@@ -35,6 +35,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
@@ -66,10 +68,29 @@ jobs:
           Compress-Archive -Path publish/TelltaleModdingStudio -DestinationPath $name
           "ZIP=$name" >> $env:GITHUB_ENV
 
+      # SHA-256 of the zip and of the exe inside it, in the usual "hash  name" form.
+      - name: Checksums
+        shell: pwsh
+        run: |
+          $files = @($env:ZIP, 'publish/TelltaleModdingStudio/TelltaleModding.App.exe')
+          $lines = foreach ($f in $files) { '{0}  {1}' -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path $f -Leaf) }
+          [IO.File]::WriteAllText('SHA256SUMS.txt', ($lines -join "`n") + "`n")
+          Get-Content SHA256SUMS.txt
+
+      # Signed record that these files were built by this workflow from this commit
+      # (check with: gh attestation verify <file> --repo <owner>/<repo>).
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            ${{ env.ZIP }}
+            publish/TelltaleModdingStudio/TelltaleModding.App.exe
+
       - uses: actions/upload-artifact@v4
         with:
           name: TelltaleModdingStudio-win-x64
-          path: ${{ env.ZIP }}
+          path: |
+            ${{ env.ZIP }}
+            SHA256SUMS.txt
 
       # On a tag, attach the zip to that tag's release (created with generated notes if missing).
       - name: Attach to release
@@ -81,4 +102,4 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $false
           gh release view $env:GITHUB_REF_NAME 2>$null
           if ($LASTEXITCODE -ne 0) { gh release create $env:GITHUB_REF_NAME --title "Telltale Modding Studio $env:VERSION" --generate-notes }
-          gh release upload $env:GITHUB_REF_NAME $env:ZIP --clobber
+          gh release upload $env:GITHUB_REF_NAME $env:ZIP SHA256SUMS.txt --clobber

@@ -13,6 +13,8 @@ the games' resource descriptions, and to read classic `.ttarch` archives.
 
 **Download:** the Windows build is on the [Releases](../../releases) page. Unzip it
 and run `TelltaleModding.App.exe`; keep the `engine` folder next to it.
+Each release lists SHA-256 checksums in `SHA256SUMS.txt`, and releases built by CI can be
+checked with `gh attestation verify <zip> --repo infernokun/TelltaleModdingStudio`.
 
 ## Screenshots
 
