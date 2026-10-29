@@ -7,6 +7,9 @@ namespace TelltaleModding.Core.Tests;
 /// <summary>Resource-set descriptions and the archive override rule built on them.</summary>
 public class ArchivePriorityTests
 {
+    // An archive path in this OS's form (the tests compare file names).
+    private static string Archive(string name) => Path.Combine(Path.GetTempPath(), "g", name);
+
     private static ResourceSetDescription Set(string name, int priority, string mode = "bootable",
         string destination = "<>", params string[] archives) =>
         new(name, priority, mode, $"<{name}>", destination, archives, $"_resdesc_50_{name}.lua");
@@ -87,9 +90,9 @@ public class ArchivePriorityTests
         };
         var paths = new[]
         {
-            @"C:\g\WDC_pc_Project_data.ttarch2", @"C:\g\WDC_pc_WalkingDead401_txmesh.ttarch2",
-            @"C:\g\WDC_pc_PC_P01_WalkingDead401_compressed.ttarch2", @"C:\g\WDC_pc_FrenchProjectSeason1_compressed.ttarch2",
-            @"C:\g\WD4_Fr_FrenchAudio401_uncompressed.ttarch2", @"C:\g\WDC_pc_Mystery_data.ttarch2",
+            Archive("WDC_pc_Project_data.ttarch2"), Archive("WDC_pc_WalkingDead401_txmesh.ttarch2"),
+            Archive("WDC_pc_PC_P01_WalkingDead401_compressed.ttarch2"), Archive("WDC_pc_FrenchProjectSeason1_compressed.ttarch2"),
+            Archive("WD4_Fr_FrenchAudio401_uncompressed.ttarch2"), Archive("WDC_pc_Mystery_data.ttarch2"),
         };
 
         var resolved = ArchivePriorities.Resolve(paths, sets).ToDictionary(a => Path.GetFileName(a.Path));
@@ -109,11 +112,11 @@ public class ArchivePriorityTests
     {
         var archives = new[]
         {
-            new CatalogArchive(@"C:\g\WDC_pc_PC_P01_WalkingDead401_compressed.ttarch2", 400, "P", true, true),
-            new CatalogArchive(@"C:\g\WDC_pc_WalkingDead401_txmesh.ttarch2", 101, "E", true, true),
-            new CatalogArchive(@"C:\g\WDC_pc_WalkingDead101_txmesh.ttarch2", 101, "E1", true, true),
-            new CatalogArchive(@"C:\g\WDC_pc_ProjectSeason4_txmesh.ttarch2", 55, "S", true, true),
-            new CatalogArchive(@"C:\g\WDC_pc_FrenchProjectSeason4_compressed.ttarch2", 1500, "F", false, true),
+            new CatalogArchive(Archive("WDC_pc_PC_P01_WalkingDead401_compressed.ttarch2"), 400, "P", true, true),
+            new CatalogArchive(Archive("WDC_pc_WalkingDead401_txmesh.ttarch2"), 101, "E", true, true),
+            new CatalogArchive(Archive("WDC_pc_WalkingDead101_txmesh.ttarch2"), 101, "E1", true, true),
+            new CatalogArchive(Archive("WDC_pc_ProjectSeason4_txmesh.ttarch2"), 55, "S", true, true),
+            new CatalogArchive(Archive("WDC_pc_FrenchProjectSeason4_compressed.ttarch2"), 1500, "F", false, true),
         };
 
         var order = ArchivePriorities.InPrecedenceOrder(archives).Select(a => Path.GetFileName(a.Path)).ToArray();
