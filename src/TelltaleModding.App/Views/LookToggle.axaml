@@ -1,0 +1,82 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             x:Class="TelltaleModding.App.Views.LookToggle"
+             x:DataType="vm:ViewportLookViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="Button.segment">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{StaticResource Muted}" />
+        </Style>
+        <Style Selector="Button.segment.selected">
+            <Setter Property="Background" Value="{StaticResource CardHover}" />
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+        </Style>
+        <Style Selector="Button.segment.selected:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource CardHover}" />
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Studio | Game | Graphic black: how the viewport shades, and how far graphic black reaches -->
+    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+        <Border Background="{StaticResource Card}" BorderBrush="{StaticResource Line}" BorderThickness="1"
+                CornerRadius="8" Padding="2" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+                <Button Classes="segment" Classes.selected="{Binding IsStudio}" Content="Studio"
+                        Command="{Binding ShowStudioCommand}"
+                        ToolTip.Tip="Studio lighting: neutral key, fill and rim lights"
+                        AutomationProperties.Name="Studio look" />
+                <Button Classes="segment" Classes.selected="{Binding IsGameLook}" Content="Game"
+                        Command="{Binding ShowGameLookCommand}"
+                        ToolTip.Tip="{Binding GameLookTip}"
+                        AutomationProperties.Name="Game look" />
+                <Button Classes="segment" Classes.selected="{Binding IsGraphicBlack}" Content="Graphic black"
+                        Command="{Binding ShowGraphicBlackCommand}"
+                        ToolTip.Tip="{Binding GraphicBlackTip}"
+                        AutomationProperties.Name="Graphic black look" />
+            </StackPanel>
+        </Border>
+        <Button Classes="segment" IsVisible="{Binding ShowEngineIntensity}"
+                Background="{StaticResource Card}" BorderBrush="{StaticResource Line}" BorderThickness="1"
+                Content="{Binding Preferences.EngineDefaultIntensity, StringFormat='{}{0:0%}'}"
+                ToolTip.Tip="Engine default intensity: how far the game's own black shadows reach"
+                AutomationProperties.Name="Engine default intensity">
+            <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight">
+                    <StackPanel Width="220" Spacing="6">
+                        <TextBlock Text="Engine default intensity" FontWeight="SemiBold" />
+                        <TextBlock Text="The game's own graphic black: 0% turns it off; 100% is the game's default."
+                                   TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}" />
+                        <Slider Minimum="0" Maximum="2" SmallChange="0.05" LargeChange="0.25"
+                                Value="{Binding Preferences.EngineDefaultIntensity}"
+                                AutomationProperties.Name="Engine default intensity slider" />
+                    </StackPanel>
+                </Flyout>
+            </Button.Flyout>
+        </Button>
+        <Button Classes="segment" IsVisible="{Binding IsGraphicBlack}"
+                Background="{StaticResource Card}" BorderBrush="{StaticResource Line}" BorderThickness="1"
+                Content="{Binding Preferences.GraphicBlackIntensity, StringFormat='{}{0:0%}'}"
+                ToolTip.Tip="Graphic black intensity: how far the black shadows reach"
+                AutomationProperties.Name="Graphic black intensity">
+            <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight">
+                    <StackPanel Width="220" Spacing="6">
+                        <TextBlock Text="Graphic black intensity" FontWeight="SemiBold" />
+                        <TextBlock Text="0% turns it off; 100% is full graphic black; higher inks more shadow."
+                                   TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}" />
+                        <Slider Minimum="0" Maximum="2" SmallChange="0.05" LargeChange="0.25"
+                                Value="{Binding Preferences.GraphicBlackIntensity}"
+                                AutomationProperties.Name="Graphic black intensity slider" />
+                    </StackPanel>
+                </Flyout>
+            </Button.Flyout>
+        </Button>
+    </StackPanel>
+</UserControl>

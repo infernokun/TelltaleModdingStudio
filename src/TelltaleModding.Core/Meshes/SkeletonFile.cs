@@ -11,12 +11,22 @@ namespace TelltaleModding.Core.Meshes;
 public readonly record struct SkeletonBone(
     ulong JointSymbol, ulong ParentNameSymbol, int ParentIndex,
     Vector3 LocalPosition, Quaternion LocalRotation,
-    Vector3 RestPosition, Quaternion RestRotation);
+    Vector3 RestPosition, Quaternion RestRotation)
+{
+    /// <summary>
+    /// The entry's mAnimTranslationScale (global × local translation scale): how this bone's
+    /// proportions differ from the rig its animations were authored on. The engine uses it to
+    /// turn an animation's translation direction onto this skeleton's rest direction (see
+    /// <see cref="CspkDecoder.TranslationFrame"/>).
+    /// </summary>
+    public Vector3 AnimTranslationScale { get; init; }
+}
 
 /// <summary>
-/// A parsed Telltale .skl skeleton (GoT / Tales from the Borderlands era).
-/// Layout from TelltaleToolLib's serializer registration, verified byte-exact
-/// against a full game's skeletons.
+/// A parsed Telltale .skl skeleton (Wolf Among Us / Game of Thrones through Tales from
+/// the Borderlands era). Layout from TelltaleToolLib's serializer registration, verified
+/// byte-exact against full games' skeletons. The older MSV5 games (The Wolf Among Us,
+/// Game of Thrones) write the same entries without the mirror bone name and index.
 /// </summary>
 public sealed class SkeletonFile
 {
@@ -72,24 +82,44 @@ public sealed class SkeletonFile
         if (count is < 0 or > 4096)
             throw new InvalidDataException($"implausible bone count {count}");
 
+        // Entries of the MSV5 games lack the mirror bone fields. Tell the layouts apart by
+        // where the first entry's rest transform block (32 bytes, counting its own size)
+        // starts: after joint/parent/index (20), [mirror name + index (12),] local pos + quat (28).
+        bool hasMirror = true;
+        if (count > 0)
+        {
+            int BlockSizeAt(int at) =>
+                at + 4 <= sectionEnd ? BinaryPrimitives.ReadInt32LittleEndian(file.AsSpan(at)) : -1;
+            const int restTransformBlockSize = 32;
+            hasMirror = BlockSizeAt(off + 60) == restTransformBlockSize
+                        || BlockSizeAt(off + 48) != restTransformBlockSize;
+        }
+
         var bones = new SkeletonBone[count];
         for (int i = 0; i < count; i++)
         {
             ulong joint = U64();
             ulong parentName = U64();
             int parentIndex = I32();
-            U64(); I32();                             // mirror bone name + index
+            if (hasMirror)
+            {
+                U64(); I32();                         // mirror bone name + index
+            }
             var pos = new Vector3(F32(), F32(), F32());
             var rot = new Quaternion(F32(), F32(), F32(), F32());
             int restEnd = Block();                    // mRestXForm (blocked Transform)
             var restRot = new Quaternion(F32(), F32(), F32(), F32());
             var restPos = new Vector3(F32(), F32(), F32());
             off = restEnd;
-            off += 36;                                // global/local/anim translation scales
+            off += 24;                                // global/local translation scales
+            var animScale = new Vector3(F32(), F32(), F32());
             off = Block();                            // resource group membership map
             off = Block();                            // bone constraints
             U32();                                    // flags
-            bones[i] = new SkeletonBone(joint, parentName, parentIndex, pos, rot, restPos, restRot);
+            bones[i] = new SkeletonBone(joint, parentName, parentIndex, pos, rot, restPos, restRot)
+            {
+                AnimTranslationScale = animScale,
+            };
         }
         if (off != entriesEnd || off != sectionEnd)
             throw new InvalidDataException($"skeleton did not consume its section (at {off}, expected {sectionEnd})");
@@ -101,10 +131,14 @@ public sealed class SkeletonFile
         };
     }
 
-    /// <summary>Index of each joint symbol in <see cref="Bones"/>.</summary>
+    /// <summary>
+    /// Index of each joint symbol in <see cref="Bones"/>. A few skeletons list a joint twice
+    /// (sk55_zombiePole); the first bone with the symbol wins.
+    /// </summary>
     public IReadOnlyDictionary<ulong, int> BoneIndexBySymbol =>
         _boneIndex ??= Bones.Select((b, i) => (b.JointSymbol, i))
-            .ToDictionary(t => t.JointSymbol, t => t.i);
+            .GroupBy(t => t.JointSymbol)
+            .ToDictionary(g => g.Key, g => g.First().i);
 
     private Dictionary<ulong, int>? _boneIndex;
 

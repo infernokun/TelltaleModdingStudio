@@ -1,241 +1,102 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
-        xmlns:games="clr-namespace:TelltaleModding.Core.Games;assembly=TelltaleModding.Core"
         xmlns:views="clr-namespace:TelltaleModding.App.Views"
         x:Class="TelltaleModding.App.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
+        x:DataType="vm:ShellViewModel"
         Title="Telltale Modding Studio"
-        Width="1280" Height="800"
-        MinWidth="960" MinHeight="600"
+        Icon="/Assets/app.ico"
+        Width="1440" Height="900"
+        MinWidth="1100" MinHeight="680"
         WindowStartupLocation="CenterScreen">
 
-    <DockPanel Margin="12">
+    <Grid RowDefinitions="Auto,*,Auto">
 
-        <!-- Toolbar: game selection + engine status -->
-        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Telltale Modding Studio" FontSize="18" FontWeight="SemiBold"
-                           VerticalAlignment="Center" />
-                <ComboBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}"
-                          Width="320" VerticalAlignment="Center"
-                          PlaceholderText="Select a game…">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="games:GameEntry">
-                            <TextBlock Text="{Binding Name}" FontSize="12" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <TextBlock Text="{Binding GameKindDisplay}" Foreground="Gray" FontSize="11"
-                           VerticalAlignment="Center" />
-            </StackPanel>
-            <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
-                       Text="{Binding EngineStatus}" Foreground="Gray" FontSize="11"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                       MaxWidth="420" ToolTip.Tip="{Binding EngineStatus}" />
-        </DockPanel>
-
-        <!-- Collapsible output log -->
-        <Expander DockPanel.Dock="Bottom" Header="Output" Margin="0,8,0,0"
-                  IsExpanded="{Binding IsRunning, Mode=OneWay}">
-            <Grid RowDefinitions="Auto,140">
-                <StackPanel Grid.Row="0" HorizontalAlignment="Right"
-                            Orientation="Horizontal" Spacing="6" Margin="0,0,0,4">
-                    <ProgressBar IsIndeterminate="True" Width="120"
-                                 IsVisible="{Binding IsRunning}" />
-                    <Button Content="Cancel" Command="{Binding CancelRunCommand}" />
-                    <Button Content="Clear" Command="{Binding ClearLogCommand}" />
+        <!-- Header: brand · workspaces · open game -->
+        <Border Grid.Row="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
+                BorderThickness="0,0,0,1" Padding="16,10">
+            <Grid ColumnDefinitions="*,Auto,*">
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Image Source="/Assets/app.png" Width="28" Height="28" />
+                    <TextBlock Text="Telltale Modding Studio" FontWeight="SemiBold" FontSize="15"
+                               VerticalAlignment="Center" />
                 </StackPanel>
-                <TextBox Grid.Row="1" Text="{Binding Log, Mode=OneWay}" IsReadOnly="True"
-                         AcceptsReturn="True" TextWrapping="NoWrap"
-                         FontFamily="Consolas,Menlo,monospace" FontSize="11" />
-            </Grid>
-        </Expander>
 
-        <!-- Browse | Preview | Mod project -->
-        <Grid ColumnDefinitions="360,6,*,6,300">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                    <RadioButton Classes="nav" Content="Home"
+                                 Tag="{StaticResource IconHome}" IsChecked="{Binding IsHome}" />
+                    <RadioButton Classes="nav" Content="Characters"
+                                 Tag="{StaticResource IconPerson}" IsChecked="{Binding IsCharacters}" />
+                    <RadioButton Classes="nav" Content="Scenes"
+                                 Tag="{StaticResource IconLandscape}" IsChecked="{Binding IsScenes}" />
+                    <RadioButton Classes="nav" Content="Dialogue"
+                                 Tag="{StaticResource IconChat}" IsChecked="{Binding IsDialogue}" />
+                    <RadioButton Classes="nav" Content="Scripts"
+                                 Tag="{StaticResource IconCode}" IsChecked="{Binding IsScripts}" />
+                    <RadioButton Classes="nav" Content="Assets"
+                                 Tag="{StaticResource IconGrid}" IsChecked="{Binding IsAssets}" />
+                    <RadioButton Classes="nav" Content="Mod"
+                                 Tag="{StaticResource IconBuild}" IsChecked="{Binding IsMod}" />
+                </StackPanel>
 
-            <!-- Browse panel -->
-            <TabControl Grid.Column="0" Padding="0,4,0,0">
-                <TabItem Header="Archive">
-                    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,6,0,0">
-                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                            <Button DockPanel.Dock="Right" Content="Open…"
-                                    Command="{Binding OpenArchiveCommand}" Margin="6,0,0,0"
-                                    ToolTip.Tip="Open a .ttarch/.ttarch2 archive" />
-                            <TextBox Text="{Binding ArchivePath}" IsReadOnly="True"
-                                     Watermark="No archive selected" />
-                        </DockPanel>
-
-                        <DockPanel Grid.Row="1" Margin="0,0,0,6">
-                            <TextBlock DockPanel.Dock="Right" Text="{Binding ArchiveInfoDisplay}"
-                                       Foreground="Gray" FontSize="11" VerticalAlignment="Center"
-                                       Margin="6,0,0,0" />
-                            <TextBox Text="{Binding EntryFilter}"
-                                     Watermark="Filter (name or category)…" />
-                        </DockPanel>
-
-                        <ListBox Grid.Row="2" ItemsSource="{Binding Entries}"
-                                 SelectedItem="{Binding SelectedEntry}">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="vm:ArchiveEntryViewModel">
-                                    <Grid ColumnDefinitions="*,80,70">
-                                        <TextBlock Grid.Column="0" Text="{Binding Name}"
-                                                   TextTrimming="CharacterEllipsis" FontSize="12" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Category}"
-                                                   Foreground="Gray" FontSize="11" />
-                                        <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}"
-                                                   Foreground="Gray" FontSize="11"
-                                                   HorizontalAlignment="Right" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-
-                        <StackPanel Grid.Row="3" Spacing="6" Margin="0,6,0,0">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Button Content="List files" Command="{Binding ListArchiveCommand}" />
-                                <Button Content="Extract selected" Command="{Binding ExtractSelectedCommand}" />
-                                <Button Content="Extract all" Command="{Binding ExtractAllCommand}" />
-                            </StackPanel>
-                            <CheckBox Content="Decode textures/audio (-m)" IsChecked="{Binding MetaExtract}"
-                                      ToolTip.Tip="Extract DDS from D3DTX, OGG from AUD. Do not use for files you plan to rebuild into a patch." />
-                        </StackPanel>
-                    </Grid>
-                </TabItem>
-
-                <TabItem Header="Folder">
-                    <Grid RowDefinitions="Auto,Auto,*" Margin="0,6,0,0">
-                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                            <Button DockPanel.Dock="Right" Content="Open…"
-                                    Command="{Binding OpenFolderCommand}" Margin="6,0,0,0"
-                                    ToolTip.Tip="Browse a folder you extracted an archive into" />
-                            <TextBox Text="{Binding FolderPath}" IsReadOnly="True"
-                                     Watermark="No folder open" />
-                        </DockPanel>
-
-                        <TextBox Grid.Row="1" Margin="0,0,0,6" Text="{Binding FolderFilter}"
-                                 Watermark="Filter files (e.g. rhys, .skl, ColorA)…" />
-
-                        <TreeView Grid.Row="2" ItemsSource="{Binding FolderRoots}"
-                                  SelectedItem="{Binding SelectedFolderNode}">
-                            <TreeView.Styles>
-                                <Style Selector="TreeViewItem">
-                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" x:DataType="vm:FileNodeViewModel" />
-                                </Style>
-                            </TreeView.Styles>
-                            <TreeView.ItemTemplate>
-                                <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:FileNodeViewModel">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <TextBlock Text="{Binding Icon}" FontSize="12" />
-                                        <TextBlock Text="{Binding Name}" FontSize="12" />
-                                    </StackPanel>
-                                </TreeDataTemplate>
-                            </TreeView.ItemTemplate>
-                        </TreeView>
-                    </Grid>
-                </TabItem>
-            </TabControl>
-
-            <GridSplitter Grid.Column="1" Background="Transparent" ResizeDirection="Columns" />
-
-            <!-- Preview panel: the workspace centerpiece -->
-            <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto" Margin="4,0">
-                <DockPanel Grid.Row="0">
-                    <TextBlock Text="Preview" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                Orientation="Horizontal" Spacing="6">
-                        <Button Content="Export DDS…" FontSize="11" Padding="8,3"
-                                Command="{Binding ExportDdsCommand}"
-                                ToolTip.Tip="Convert the selected .d3dtx to a standard DDS file" />
-                        <Button Content="Open .dds…" FontSize="11" Padding="8,3"
-                                Command="{Binding PreviewFileCommand}" />
+                <StackPanel Grid.Column="2" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="4">
+                <Button Classes="ghost"
+                        Command="{Binding OpenHomeCommand}" ToolTip.Tip="Switch game">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource Success}"
+                                 IsVisible="{Binding ActiveGame, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <TextBlock Text="{Binding ActiveGameName}" Classes="muted" FontSize="13"
+                                   MaxWidth="360" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
-                </DockPanel>
-
-                <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1"
-                        CornerRadius="4" Margin="0,6">
-                    <Panel x:Name="ViewportHost" Background="Transparent">
-                        <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" Margin="8"
-                               IsVisible="{Binding !IsMeshPreview}" />
-                        <views:MeshViewport x:Name="Viewport"
-                                            IsVisible="{Binding IsMeshPreview}" />
-                    </Panel>
-                </Border>
-
-                <StackPanel Grid.Row="2" Spacing="2">
-                    <TextBlock Text="{Binding PreviewStatus}" Foreground="Gray" FontSize="11"
-                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PreviewStatus}" />
-                    <TextBlock Text="{Binding FolderInfo}" Foreground="Gray" FontSize="11"
-                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FolderInfo}" />
-                    <ItemsControl ItemsSource="{Binding ModelDetails}" MaxHeight="110"
-                                  IsVisible="{Binding IsMeshPreview}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="x:String">
-                                <TextBlock Text="{Binding}" Foreground="Gray" FontSize="10"
-                                           TextTrimming="CharacterEllipsis" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <!-- Animation playback UI removed for now: the compressed-pose
-                         decoder (TelltaleModding.Core CspkDecoder + the playback
-                         plumbing in the view model) stays in the repo, and the
-                         debug flags (double-dash preview-mesh / play-anim) still
-                         drive it for development, but faithful in-app playback
-                         needs the engine's runtime IK/layering, so the feature
-                         is shelved rather than shown half-right. -->
+                </Button>
+                <ToggleButton Classes="ghost" IsChecked="{Binding IsSettings, Mode=OneWay}" Command="{Binding OpenSettingsCommand}"
+                              Background="Transparent" BorderThickness="0" Width="34" Height="34" Padding="6"
+                              HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                              ToolTip.Tip="Settings" AutomationProperties.Name="Settings">
+                    <PathIcon Data="{StaticResource IconSettings}" />
+                </ToggleButton>
                 </StackPanel>
             </Grid>
+        </Border>
 
-            <GridSplitter Grid.Column="3" Background="Transparent" ResizeDirection="Columns" />
+        <!-- Workspaces stay alive while hidden so viewports keep their state. -->
+        <Panel Grid.Row="1">
+            <views:HomeView IsVisible="{Binding IsHome}" />
+            <Panel IsVisible="{Binding IsCharacters}">
+                <views:CharactersView DataContext="{Binding Characters}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsSettings}">
+                <views:SettingsView DataContext="{Binding Settings}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsScenes}">
+                <views:ScenesView DataContext="{Binding Scenes}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsDialogue}">
+                <views:DialogueView DataContext="{Binding Dialogue}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsScripts}">
+                <views:ScriptsView DataContext="{Binding Scripts}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsAssets}">
+                <views:AssetsView DataContext="{Binding Assets}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsMod}">
+                <views:ModView DataContext="{Binding Mod}" />
+            </Panel>
+        </Panel>
 
-            <!-- Mod project panel -->
-            <Grid Grid.Column="4" RowDefinitions="Auto,Auto,*,Auto,Auto">
-                <TextBlock Grid.Row="0" Text="Mod project" FontWeight="SemiBold" Margin="0,0,0,6" />
-
-                <DockPanel Grid.Row="1" Margin="0,0,0,6">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="6,0,0,0">
-                        <Button Content="Open" Command="{Binding LoadProjectCommand}" />
-                        <Button Content="Save" Command="{Binding SaveProjectCommand}" />
-                    </StackPanel>
-                    <TextBox Text="{Binding ProjectName}" Watermark="Mod name" />
-                </DockPanel>
-
-                <ListBox Grid.Row="2" ItemsSource="{Binding Swaps}"
-                         SelectedItem="{Binding SelectedSwap}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:SwapViewModel">
-                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
-                                <CheckBox Grid.Column="0" Grid.RowSpan="2"
-                                          IsChecked="{Binding Enabled}"
-                                          VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <TextBlock Grid.Column="1" Grid.Row="0"
-                                           Text="{Binding TargetAssetName}"
-                                           FontSize="12" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="1" Grid.Row="1"
-                                           Text="{Binding ReplacementFileName}"
-                                           Foreground="Gray" FontSize="11"
-                                           TextTrimming="CharacterEllipsis" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-
-                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="6" Margin="0,6,0,6">
-                    <Button Content="Add swap from selection"
-                            Command="{Binding AddSwapFromEntryCommand}"
-                            ToolTip.Tip="Pick a replacement for the file selected in the archive browser" />
-                    <Button Content="Remove" Command="{Binding RemoveSwapCommand}" />
-                </StackPanel>
-
-                <Button Grid.Row="4" Content="Build patch archive"
-                        Command="{Binding BuildPatchCommand}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center"
-                        FontWeight="SemiBold"
-                        ToolTip.Tip="Builds a minimal 0.ttarch/0.ttarch2 containing only your swapped files" />
+        <!-- Status bar -->
+        <Border Grid.Row="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
+                BorderThickness="0,1,0,0" Padding="16,6">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <ProgressBar Grid.Column="0" Width="140" Margin="0,0,12,0" VerticalAlignment="Center"
+                             IsVisible="{Binding IsBusy}" Value="{Binding ProgressValue}"
+                             IsIndeterminate="{Binding IsProgressIndeterminate}" />
+                <TextBlock Grid.Column="1" Text="{Binding StatusText}" Classes="faint" FontSize="12"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="2" Content="Cancel" Classes="ghost" FontSize="12" Padding="8,2"
+                        IsVisible="{Binding IsBusy}" Command="{Binding CancelOpenCommand}" />
             </Grid>
-        </Grid>
-    </DockPanel>
+        </Border>
+    </Grid>
 </Window>

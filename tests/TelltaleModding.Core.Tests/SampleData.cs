@@ -9,7 +9,23 @@ internal static class SampleData
     public static string SamplesDir => Path.Combine(RepoRoot, "samples");
     public static string EngineExe => Path.Combine(RepoRoot, "engine", "ttarchext", "ttarchext.exe");
 
-    public static string Sample(string fileName) => Path.Combine(SamplesDir, fileName);
+    /// <summary>
+    /// A sample's path. Only some samples are in the repository (the rest are game files kept
+    /// locally), so a test whose sample is missing is skipped rather than failed.
+    /// </summary>
+    public static string Sample(string fileName)
+    {
+        var path = Path.Combine(SamplesDir, fileName);
+        Require(fileName);
+        return path;
+    }
+
+    /// <summary>Skips the test unless every named file is in <c>samples/</c>.</summary>
+    public static void Require(params string[] fileNames)
+    {
+        var missing = fileNames.Where(n => !File.Exists(Path.Combine(SamplesDir, n))).ToList();
+        Skip.If(missing.Count > 0, $"Sample file(s) not present: {string.Join(", ", missing)}");
+    }
 
     public static string GameOfThrones => Sample("GameOfThrones_pc_GameOfThrones102_data.ttarch2");
     public static string TestArchive => Sample("test.ttarch2");

@@ -10,44 +10,30 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Hand the view-model a dialog service once the window exists.
         DataContextChanged += (_, _) =>
         {
-            if (DataContext is MainWindowViewModel vm)
-            {
+            if (DataContext is ShellViewModel vm)
                 vm.Dialogs = new DialogService(this);
-                vm.MeshPreviewReady += (geometry, textures, normalMaps) => Viewport.SetMesh(geometry, textures, normalMaps);
-                vm.DeformedFrameReady += (positions, normals) => Viewport.UpdateDeformedVertices(positions, normals);
-            }
         };
 
-        // The GL viewport is not reliably hit-testable, so its transparent host
-        // panel forwards pointer input (handlers no-op when the viewport handled it).
-        ViewportHost.PointerPressed += (_, e) => Viewport.HandlePointerPressed(e);
-        ViewportHost.PointerMoved += (_, e) => Viewport.HandlePointerMoved(e);
-        ViewportHost.PointerReleased += (_, e) => Viewport.HandlePointerReleased(e);
-        ViewportHost.PointerWheelChanged += (_, e) => Viewport.HandlePointerWheel(e);
-
-        // Debug hooks for automated screenshot verification:
-        //   --preview-mesh <path>  loads a mesh (opening its folder for asset lookup)
-        //   --play-anim <path>     starts an animation on the previewed mesh
-        Opened += (_, _) =>
+        // Debug hooks for automated verification with loose extracted files:
+        //   --preview-mesh <path> [<path>...]  shows the meshes as one model
+        //   --play-anim <path>                  plays an animation on it
+        // Otherwise the library is restored and the last game reopened.
+        Opened += async (_, _) =>
         {
-            var args = Environment.GetCommandLineArgs();
-            if (DataContext is not MainWindowViewModel vm)
+            if (DataContext is not ShellViewModel vm)
                 return;
+            var args = Environment.GetCommandLineArgs();
             int meshFlag = Array.IndexOf(args, "--preview-mesh");
             if (meshFlag >= 0 && meshFlag + 1 < args.Length)
             {
-                var meshPath = args[meshFlag + 1];
-                if (System.IO.Path.GetDirectoryName(meshPath) is { } dir)
-                    vm.OpenFolder(dir);
-                vm.ShowD3dMeshPreview(meshPath);
-
+                var meshPaths = args.Skip(meshFlag + 1).TakeWhile(a => !a.StartsWith("--")).ToList();
                 int animFlag = Array.IndexOf(args, "--play-anim");
-                if (animFlag >= 0 && animFlag + 1 < args.Length)
-                    vm.DebugPlayAnimation(args[animFlag + 1]);
+                vm.OpenLooseFiles(meshPaths, animFlag >= 0 && animFlag + 1 < args.Length ? args[animFlag + 1] : null);
+                return;
             }
+            await vm.InitializeAsync();
         };
     }
 }

@@ -4,7 +4,7 @@ namespace TelltaleModding.Core.Tests;
 
 public class ModProjectTests
 {
-    [Fact]
+    [SkippableFact]
     public void RoundTripsThroughJson()
     {
         var project = new ModProject
@@ -28,28 +28,28 @@ public class ModProjectTests
         Assert.Equal("pirate", reloaded.Swaps[0].Note);
     }
 
-    [Fact]
+    [SkippableFact]
     public void GameResolvesFromNumber()
     {
         var project = new ModProject { GameNum = 54 };
         Assert.Equal("The Wolf Among Us", project.Game?.Name);
     }
 
-    [Fact]
+    [SkippableFact]
     public void ValidateFlagsInvalidGame()
     {
         var project = new ModProject { GameNum = 999 };
         Assert.Contains(project.Validate(), i => i.Contains("not a valid game"));
     }
 
-    [Fact]
+    [SkippableFact]
     public void ValidateFlagsNoEnabledSwaps()
     {
         var project = new ModProject { GameNum = 24 };
         Assert.Contains(project.Validate(), i => i.Contains("no enabled swaps"));
     }
 
-    [Fact]
+    [SkippableFact]
     public void ValidateFlagsMissingReplacementFile()
     {
         var project = new ModProject
@@ -60,7 +60,7 @@ public class ModProjectTests
         Assert.Contains(project.Validate(), i => i.Contains("Replacement file not found"));
     }
 
-    [Fact]
+    [SkippableFact]
     public void ValidateFlagsDuplicateTargets()
     {
         using var tmp = new TempFile();
@@ -76,7 +76,7 @@ public class ModProjectTests
         Assert.Contains(project.Validate(), i => i.Contains("Duplicate target"));
     }
 
-    [Fact]
+    [SkippableFact]
     public void ValidatePassesForWellFormedProject()
     {
         using var tmp = new TempFile();

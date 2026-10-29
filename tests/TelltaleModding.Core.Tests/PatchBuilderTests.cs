@@ -5,14 +5,14 @@ namespace TelltaleModding.Core.Tests;
 
 public class PatchBuilderTests
 {
-    [Fact]
+    [SkippableFact]
     public void ResolveVersion_OverrideWins()
     {
         var project = new ModProject { GameNum = 24, BuildVersionOverride = 3 };
         Assert.Equal(3, PatchBuilder.ResolveBuildVersion(project, project.Game!));
     }
 
-    [Fact]
+    [SkippableFact]
     public void ResolveVersion_FromReferenceArchive()
     {
         // Real ECTT sample -> version 7.
@@ -20,7 +20,7 @@ public class PatchBuilderTests
         Assert.Equal(7, PatchBuilder.ResolveBuildVersion(project, project.Game!));
     }
 
-    [Fact]
+    [SkippableFact]
     public void ResolveVersion_DefaultsByKind()
     {
         var ttarch2 = new ModProject { GameNum = 54 }; // Wolf Among Us
@@ -30,7 +30,7 @@ public class PatchBuilderTests
         Assert.Equal(1, PatchBuilder.ResolveBuildVersion(classic, classic.Game!));
     }
 
-    [Fact]
+    [SkippableFact]
     public void Stage_CopiesEnabledSwapsUnderTargetNames()
     {
         using var staging = new TempDir();
@@ -54,7 +54,7 @@ public class PatchBuilderTests
         Assert.Equal(new byte[] { 1, 2, 3, 4 }, File.ReadAllBytes(Path.Combine(staging.Path, "adv_guybrush.d3dtx")));
     }
 
-    [Fact]
+    [SkippableFact]
     public void Stage_PreservesSubfolderTargetNames()
     {
         using var staging = new TempDir();
@@ -72,7 +72,7 @@ public class PatchBuilderTests
         Assert.True(File.Exists(expected));
     }
 
-    [Fact]
+    [SkippableFact]
     public void Stage_RejectsPathTraversal()
     {
         using var staging = new TempDir();
@@ -87,7 +87,7 @@ public class PatchBuilderTests
         Assert.Throws<InvalidOperationException>(() => PatchBuilder.Stage(project, staging.Path));
     }
 
-    [Fact]
+    [SkippableFact]
     public void ConventionalPatchName_MatchesKind()
     {
         Assert.Equal("0.ttarch2", PatchBuilder.ConventionalPatchName(ArchiveKind.Ttarch2));

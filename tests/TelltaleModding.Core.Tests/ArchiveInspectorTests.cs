@@ -6,7 +6,7 @@ namespace TelltaleModding.Core.Tests;
 
 public class ArchiveInspectorTests
 {
-    [Fact]
+    [SkippableFact]
     public void DetectsRealEcttSample_GameOfThrones()
     {
         var info = ArchiveInspector.Inspect(SampleData.GameOfThrones);
@@ -16,7 +16,7 @@ public class ArchiveInspectorTests
         Assert.False(info.OodleCompressed);
     }
 
-    [Fact]
+    [SkippableFact]
     public void DetectsRealNcttSample_TestArchive()
     {
         var info = ArchiveInspector.Inspect(SampleData.TestArchive);
@@ -25,7 +25,7 @@ public class ArchiveInspectorTests
         Assert.Equal(7, info.Version);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("ZCTT", ArchiveMagic.Zctt)]
     [InlineData("ECTT", ArchiveMagic.Ectt)]
     [InlineData("NCTT", ArchiveMagic.Nctt)]
@@ -40,7 +40,7 @@ public class ArchiveInspectorTests
         Assert.False(info.OodleCompressed);
     }
 
-    [Fact]
+    [SkippableFact]
     public void LowercaseFirstCharSignalsOodle()
     {
         // "zCTT" is the Oodle-compressed variant of ZCTT.
@@ -49,7 +49,7 @@ public class ArchiveInspectorTests
         Assert.True(info.OodleCompressed);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(1)]
     [InlineData(7)]
     [InlineData(9)]
@@ -62,14 +62,14 @@ public class ArchiveInspectorTests
         Assert.Equal(version, info.Version);
     }
 
-    [Fact]
+    [SkippableFact]
     public void UnrecognisedHeaderReportsUnknown()
     {
         var info = ArchiveInspector.Inspect(new MemoryStream(new byte[] { 0xFF, 0xEE, 0xDD, 0xCC }));
         Assert.Equal(ArchiveMagic.Unknown, info.Magic);
     }
 
-    [Fact]
+    [SkippableFact]
     public void TooShortReportsUnknown()
     {
         var info = ArchiveInspector.Inspect(new MemoryStream(new byte[] { 1, 2 }));

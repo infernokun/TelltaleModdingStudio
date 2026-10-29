@@ -7,7 +7,7 @@ namespace TelltaleModding.Core.Tests;
 /// (e.g. the native build produced by <c>make -C engine/ttarchext</c>). Skipped
 /// otherwise, so the unit suite stays green on hosts without a compiler.
 /// </summary>
-public sealed class EngineFactAttribute : FactAttribute
+public sealed class EngineFactAttribute : SkippableFactAttribute
 {
     public EngineFactAttribute()
     {

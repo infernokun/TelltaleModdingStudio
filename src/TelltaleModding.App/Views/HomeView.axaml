@@ -1,0 +1,146 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             x:Class="TelltaleModding.App.Views.HomeView"
+             x:DataType="vm:ShellViewModel"
+             x:Name="Root">
+
+    <UserControl.Styles>
+        <Style Selector="Border.gamecard">
+            <Setter Property="Width" Value="300" />
+            <Setter Property="Margin" Value="0,0,14,14" />
+        </Style>
+        <Style Selector="Border.gamecard:pointerover">
+            <Setter Property="Background" Value="{StaticResource CardHover}" />
+        </Style>
+        <Style Selector="Border.monogram">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Color="#F0545C" Offset="0" />
+                    <GradientStop Color="#8E2A52" Offset="1" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer>
+        <StackPanel MaxWidth="1180" Margin="40,36" Spacing="28">
+
+            <!-- Hero -->
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="6">
+                    <TextBlock Classes="h1" Text="Your Telltale library" />
+                    <TextBlock Classes="muted" FontSize="14"
+                               Text="Open a game to browse every character, dress them, and play their animations." />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Command="{Binding ScanForGamesCommand}" IsEnabled="{Binding !IsScanning}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon Data="{StaticResource IconRefresh}" />
+                            <TextBlock Text="Scan this PC" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="primary" Command="{Binding AddGameFolderCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon Data="{StaticResource IconFolderAdd}" Foreground="White" />
+                            <TextBlock Text="Add game folder…" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- Library -->
+            <StackPanel Spacing="12">
+                <TextBlock Classes="section" Text="LIBRARY" />
+                <Border Classes="card" IsVisible="{Binding !HasGames}" Padding="28">
+                    <StackPanel Spacing="6" HorizontalAlignment="Center">
+                        <TextBlock Classes="h2" Text="No games yet" HorizontalAlignment="Center" />
+                        <TextBlock Classes="muted" TextAlignment="Center" MaxWidth="520" TextWrapping="Wrap"
+                                   Text="Add a game's install folder (e.g. The Walking Dead: The Telltale Definitive Series or Tales from the Borderlands), or pick one found on this PC below." />
+                    </StackPanel>
+                </Border>
+                <ItemsControl ItemsSource="{Binding Games}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:GameCardViewModel">
+                            <Border Classes="card gamecard"
+                                    BorderBrush="{Binding IsActive, Converter={x:Static vm:Converters.ActiveBorder}}">
+                                <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto">
+                                    <Border Classes="monogram" Grid.RowSpan="2">
+                                        <TextBlock Text="{Binding Initials}" FontWeight="Bold" FontSize="16" Foreground="White"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Grid.RowSpan="2" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Status}" Classes="faint" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Classes="icon" VerticalAlignment="Top" ToolTip.Tip="Remove from library"
+                                            Command="{Binding #Root.((vm:ShellViewModel)DataContext).RemoveGameCommand}"
+                                            CommandParameter="{Binding}">
+                                        <PathIcon Data="{StaticResource IconClose}" Width="12" Height="12"
+                                                  Foreground="{StaticResource Faint}" />
+                                    </Button>
+                                    <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding Folder}" Classes="faint"
+                                               Margin="0,12,0,0" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Folder}" />
+                                    <Button Grid.Row="3" Grid.ColumnSpan="3" Classes="primary" Margin="0,12,0,0"
+                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                            IsEnabled="{Binding !IsBusy}"
+                                            Command="{Binding #Root.((vm:ShellViewModel)DataContext).OpenGameCommand}"
+                                            CommandParameter="{Binding}">
+                                        <TextBlock Text="{Binding IsBusy, Converter={x:Static vm:Converters.OpeningLabel}}" />
+                                    </Button>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Found on this PC -->
+            <StackPanel Spacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Classes="section" Text="FOUND ON THIS PC" VerticalAlignment="Center" />
+                    <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding IsScanning}" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Classes="muted" IsVisible="{Binding !Detected.Count}"
+                           Text="{Binding IsScanning, Converter={x:Static vm:Converters.ScanLabel}}" />
+                <ItemsControl ItemsSource="{Binding Detected}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:GameCardViewModel">
+                            <Border Classes="card gamecard" Padding="14">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <Border Classes="monogram" Width="36" Height="36" Opacity="0.75">
+                                        <TextBlock Text="{Binding Initials}" FontWeight="Bold" Foreground="White"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"
+                                                   MaxLines="2" TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding Folder}" />
+                                        <TextBlock Text="{Binding Status}" Classes="faint" />
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Content="Add" VerticalAlignment="Center"
+                                            Command="{Binding #Root.((vm:ShellViewModel)DataContext).AddDetectedCommand}"
+                                            CommandParameter="{Binding}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

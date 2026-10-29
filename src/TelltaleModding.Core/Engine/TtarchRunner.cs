@@ -131,7 +131,7 @@ public sealed class TtarchRunner
         }
         catch
         {
-            // Best effort — the process may have exited between the check and the kill.
+            // Best effort: the process may have exited between the check and the kill.
         }
     }
 }

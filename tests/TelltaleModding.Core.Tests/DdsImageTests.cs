@@ -5,7 +5,7 @@ namespace TelltaleModding.Core.Tests;
 
 public class DdsImageTests
 {
-    [Fact]
+    [SkippableFact]
     public void RejectsNonDds()
     {
         var ok = DdsImage.TryDecode(new byte[200], out _, out var error);
@@ -13,7 +13,7 @@ public class DdsImageTests
         Assert.NotNull(error);
     }
 
-    [Fact]
+    [SkippableFact]
     public void DecodesUncompressed32BitBgra()
     {
         // A8R8G8B8 masks; one red pixel (R=255,G=0,B=0,A=255).
@@ -30,7 +30,7 @@ public class DdsImageTests
         Assert.Equal(new byte[] { 255, 0, 0, 255 }, img.Rgba);
     }
 
-    [Fact]
+    [SkippableFact]
     public void DecodesDxt1SolidRedBlock()
     {
         var header = BuildHeader(4, 4, fourCc: "DXT1");
@@ -53,7 +53,28 @@ public class DdsImageTests
         }
     }
 
-    [Fact]
+    [SkippableTheory]
+    [InlineData("DXT1")]
+    [InlineData("DXT5")]
+    public void Interpolated_colors_weight_toward_their_nearer_endpoint(string fourCc)
+    {
+        // c0 = white, c1 = black; pixels use indices 0,1,2,3 in turn.
+        // Spec: color2 = (2·c0 + c1)/3 (light grey), color3 = (c0 + 2·c1)/3 (dark grey).
+        var color = new byte[8];
+        BinaryPrimitives.WriteUInt16LittleEndian(color.AsSpan(0), 0xFFFF);
+        BinaryPrimitives.WriteUInt16LittleEndian(color.AsSpan(2), 0x0000);
+        BinaryPrimitives.WriteUInt32LittleEndian(color.AsSpan(4), 0b11_10_01_00);
+        var block = fourCc == "DXT1" ? color : Concat(new byte[] { 255, 255, 0, 0, 0, 0, 0, 0 }, color);
+
+        var img = DdsImage.Decode(Concat(BuildHeader(4, 4, fourCc), block));
+
+        Assert.Equal(255, img.Rgba[0]);      // index 0 → c0
+        Assert.Equal(0, img.Rgba[4]);        // index 1 → c1
+        Assert.Equal(170, img.Rgba[8]);      // index 2 → (2·255 + 0)/3
+        Assert.Equal(85, img.Rgba[12]);      // index 3 → (255 + 0)/3
+    }
+
+    [SkippableFact]
     public void DecodesDxt5OpaqueBlock()
     {
         var header = BuildHeader(4, 4, fourCc: "DXT5");
@@ -77,7 +98,7 @@ public class DdsImageTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public void ReportsUnsupportedDx10Gracefully()
     {
         var header = BuildHeader(4, 4, fourCc: "DX10");
@@ -87,7 +108,7 @@ public class DdsImageTests
         Assert.Contains("DX10", error);
     }
 
-    [Fact]
+    [SkippableFact]
     public void ReportsTruncatedData()
     {
         var header = BuildHeader(64, 64, fourCc: "DXT1");
