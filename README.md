@@ -41,81 +41,26 @@ Click a picture for the full size.
   </tr>
 </table>
 
-## Workspaces
+## Features
 
-- **Home**: your game library. Add a game's install folder, or one found in your
-  Steam libraries. Opening a game indexes its archives once (a few seconds) and
-  caches the index under `%LOCALAPPDATA%\TelltaleModdingStudio\catalogs`.
-- **Characters**: every character the game defines. The default outfit comes from
-  the character's own `.prop` (its mesh list and per-mesh visibility); toggle parts
-  in the Outfit tab. Pick a clip in the Animations tab to play it, with scrubbing,
-  speed and looping. The Face tab poses the face over the playing clip (a
-  mood's expression, mouth shapes, head and face gestures, single facial bones)
-  and lip-syncs the character's voice lines. The skeleton button draws the bones inside the
-  model. Textures are matched through each mesh's materials (including materials
-  they inherit), and when a file exists in several archives the game's own
-  resource priorities decide which copy is used (patches over episodes over
-  seasons). **Export…** saves the
-  character as a `.glb` (glTF 2.0) for Blender and other tools: the dressed, textured
-  mesh, its skeleton and skin, and the clip that's playing.
-- **Scenes**: every location in the game, rebuilt from its `.scene` file: each
-  object placed with its transform, textured, in an orbit/fly-around viewport. Toggle
-  object kinds or single objects, and export what's shown to `.glb`.
-- **Dialogue**: every subtitle line in the game, matched to its voice recording.
-  Filter by episode, speaker or language, search what's said, click a line to hear
-  it (Continuous plays a scene through), and save lines as their original MP3/Ogg
-  or as WAV, or export the whole filtered list with a transcript. The speaker
-  appears beside the list in 3D, lip-synced: each line's phoneme track drives the
-  character's mouth poses, in the mood its direction tags name (e.g. *smugA*).
-  **Talks** shows each scene's conversations as the game's dialogue tree (lines,
-  choice menus and their options, branches and jumps) and can play a conversation
-  through, offering the choices as buttons. **In conversation** jumps from a line
-  to its place in the tree. **Music** lists the soundtrack by episode and music bank. The Characters
-  workspace links straight to a character's lines.
-- **Scripts**: the game's Lua scripts. Compiled scripts are decompiled to readable
-  Lua (or shown as an annotated instruction listing), with a function outline,
-  syntax highlighting and search (Ctrl+F). Search script names or what's inside
-  them, and save the decompiled source or the original file.
-- **Assets**: search every file in the game by name or episode (e.g.
-  `WalkingDead203 .d3dtx`), preview textures/models, play sound files (voice lines,
-  music, FMOD banks), export files (textures as PNG or DDS, sounds as WAV), or send
-  one to your mod as a replacement. **Export results…** saves every match at once,
-  converted to everyday formats (PNG, MP3/Ogg, decompiled Lua, subtitle transcripts)
-  unless *Convert* is off.
-- **Mod**: the files you replace and with what, saved as a `.ttmod` project.
-  **Build patch** stages *only* your swapped files into a tiny `0.ttarch` /
-  `0.ttarch2`; drop it in the game's archive folder and the game reads it as a
-  patch that overrides the originals.
-- **Settings** (the gear, top right): default look and camera speeds, background,
-  playback, dialogue and subtitle language, script view, export folder and
-  conversion, scene texture detail. Changes apply at once and are saved with the
-  library. It also clears the saved game indexes and opens the crash log
-  (`%LOCALAPPDATA%\TelltaleModdingStudio\crash.log`).
+- **Home**: add your installed Telltale games (or let it find them in Steam).
+- **Characters**: every character with their outfits, animations and facial
+  expressions. Export to `.glb` for Blender.
+- **Scenes**: walk around any location in the game, lit like the game.
+- **Dialogue**: read and hear every line, watch the character lip-sync it, and
+  follow conversations as dialogue trees. Includes the soundtrack.
+- **Scripts**: the game's Lua scripts, decompiled and readable.
+- **Assets**: browse, preview and export any file (PNG, WAV, MP3/Ogg, Lua).
+- **Mod**: swap in your own files and build a small patch the game loads.
 
-### 3D viewports
+**Viewport controls:** drag to orbit, middle-drag to pan, scroll to zoom, **F** to
+frame. Click the view and use **WASD/QE** to fly; hold right-click to look around.
 
-The Characters, Scenes and Dialogue viewports share their controls: drag to orbit,
-middle-drag (or Shift+drag) to pan, scroll to dolly, double-click or **F** to
-frame. Click the view, then **W/A/S/D** fly and **Q/E** lower and raise the camera;
-hold the right button to look around while flying (the wheel then sets the
-speed). The switch at the top picks how models are shaded, for every viewport at
-once:
+**Looks:** *Studio* for plain lighting, *Game* for each game's own art style, and
+*Graphic black* for solid black shadows in any game.
 
-- **Studio**: even, neutral lighting for inspecting textures.
-- **Game**: the open game's own look: its outlines, light model, ink lines and,
-  where the game uses it (the Definitive Series), graphic black. **Engine default
-  intensity** sets how far that game's black shadows reach.
-- **Graphic black**: the game's look with solid black shadows, for any game.
-  **Graphic black intensity** sets how far they reach (0% turns them off).
-
-Voice and sound files are FMOD sound banks holding MP3 or Vorbis audio. Vorbis
-banks omit their codec setup, which the app reads from the FMOD library the game
-installs next to its executable, so those games' sounds only play from an install
-folder.
-
-Playback poses the skeleton from the clip alone: the engine's runtime IK and
-layering are not reproduced, so foot-planted or layered clips can differ from
-the game.
+Audio plays on Windows only. Some games' sounds need the game installed, since
+the app reads their audio codec setup from the install folder.
 
 ## Repository layout
 
@@ -162,5 +107,28 @@ built patch. CI does this on every push.
   patch; decoded DDS/OGG files are not valid archive members.
 - If the game crashes loading a rebuilt v7+ archive, rebuild with ttarchext's
   compatibility mode (`-x`).
-- ttarchext is © Luigi Auriemma, GPL-2.0. Game archives and their contents belong
-  to their respective owners; mod responsibly.
+- Game archives and their contents belong to their respective owners; mod
+  responsibly.
+
+## Credits
+
+* The resource description cipher is ported from [ttarchext](https://aluigi.altervista.org/papers.htm#ttarchext) by Luigi Auriemma.
+* [ttarchext](https://aluigi.altervista.org/papers.htm#ttarchext) by Luigi Auriemma also builds patch archives and reads classic `.ttarch` archives.
+* File layouts (meshes, animations, property sets) follow [TelltaleToolLib](https://github.com/LucasSaragosa/TelltaleToolLib).
+* Built with [Avalonia](https://avaloniaui.net/), [AvaloniaEdit](https://github.com/AvaloniaUI/AvaloniaEdit) with TextMateSharp, [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet), [NAudio](https://github.com/naudio/NAudio), [NLayer](https://github.com/naudio/NLayer) and [NVorbis](https://github.com/NVorbis/NVorbis).
+* Oodle-compressed archives are read through the Oodle library each game ships (RAD Game Tools / Epic Games).
+
+All game assets (characters, models, textures, animations, audio, dialogue, scripts
+and scenes), names and trademarks belong to Telltale Games and the games' licensors
+(*The Walking Dead*, *Tales from the Borderlands*, *The Wolf Among Us*, *Game of
+Thrones* and their creators). The screenshots show game content only to demonstrate
+the app. This project is a fan-made tool, not affiliated with or endorsed by Telltale
+Games or any licensor. The app reads the games you have installed; the few game files
+under `samples/` are there only as test data.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+ttarchext (in `engine/ttarchext`) is © Luigi Auriemma and keeps its own GPL-2.0 license.
+
