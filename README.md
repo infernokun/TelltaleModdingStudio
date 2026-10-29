@@ -16,45 +16,30 @@ and run `TelltaleModding.App.exe`; keep the `engine` folder next to it.
 
 ## Screenshots
 
-**Characters.** Every character in the game, dressed in their default outfit, with
-outfit parts to toggle and the game's own look (Clementine, *The Walking Dead: The
-Telltale Definitive Series*).
+Click a picture for the full size.
 
-![Clementine in the character viewer](docs/screenshots/characters.png)
-
-| | |
-|---|---|
-| ![Fiona, Tales from the Borderlands](docs/screenshots/characters_tftb.png) | ![Asher, Game of Thrones](docs/screenshots/characters_got.png) |
-| Fiona, *Tales from the Borderlands* | Asher, *Game of Thrones* |
-| ![Bigby in the Graphic black look, The Wolf Among Us](docs/screenshots/characters_wau.png) | ![A walk clip playing on Clementine](docs/screenshots/animations.png) |
-| Bigby in the Graphic black look, *The Wolf Among Us* | Animations: any of the character's clips, played on the model |
-
-**Face.** Moods, mouth shapes, gestures and single facial bones, posed over the
-playing clip.
-
-![The Face tab posing an angry expression](docs/screenshots/face.png)
-
-**Scenes.** Locations rebuilt from their `.scene` files, with the scene's own lights.
-
-![The bell tower scene](docs/screenshots/scenes.png)
-
-**Dialogue.** Every subtitle line with its voice recording; the speaker lip-syncs
-the line in 3D. **Talks** shows a scene's conversations as the game's dialogue tree.
-
-![Rhys lip-syncing a line](docs/screenshots/dialogue.png)
-
-![A conversation tree from Tales from the Borderlands](docs/screenshots/conversation.png)
-
-**Scripts.** Compiled Lua decompiled to readable source, with a function outline.
-
-![A decompiled Lua script from Game of Thrones](docs/screenshots/scripts.png)
-
-**Assets** and **Home.** Every file in the game, previewed and exported; and the
-library of installed games.
-
-| | |
-|---|---|
-| ![The asset browser previewing a texture](docs/screenshots/assets.png) | ![The game library](docs/screenshots/home.png) |
+<table>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/characters.png"><img src="docs/screenshots/characters.png" width="280" alt="Characters: outfits and the game's look (Clementine)"></a><br><sub>Characters: outfits and the game's look (Clementine)</sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/animations.png"><img src="docs/screenshots/animations.png" width="280" alt="Animations played on the model"></a><br><sub>Animations played on the model</sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/face.png"><img src="docs/screenshots/face.png" width="280" alt="Face tab: moods, mouth shapes, gestures"></a><br><sub>Face tab: moods, mouth shapes, gestures</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/characters_tftb.png"><img src="docs/screenshots/characters_tftb.png" width="280" alt="Fiona, Tales from the Borderlands"></a><br><sub>Fiona, Tales from the Borderlands</sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/characters_got.png"><img src="docs/screenshots/characters_got.png" width="280" alt="Asher, Game of Thrones"></a><br><sub>Asher, Game of Thrones</sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/characters_wau.png"><img src="docs/screenshots/characters_wau.png" width="280" alt="Bigby in the Graphic black look"></a><br><sub>Bigby in the Graphic black look</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/dialogue.png"><img src="docs/screenshots/dialogue.png" width="280" alt="Dialogue with a lip-synced 3D speaker"></a><br><sub>Dialogue with a lip-synced 3D speaker</sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/conversation.png"><img src="docs/screenshots/conversation.png" width="280" alt="Conversation trees (Talks)"></a><br><sub>Conversation trees (Talks)</sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/scenes.png"><img src="docs/screenshots/scenes.png" width="280" alt="Scenes rebuilt with their own lights"></a><br><sub>Scenes rebuilt with their own lights</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/scripts.png"><img src="docs/screenshots/scripts.png" width="280" alt="Decompiled Lua scripts"></a><br><sub>Decompiled Lua scripts</sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/assets.png"><img src="docs/screenshots/assets.png" width="280" alt="Asset browser and texture preview"></a><br><sub>Asset browser and texture preview</sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/home.png"><img src="docs/screenshots/home.png" width="280" alt="Game library"></a><br><sub>Game library</sub></td>
+  </tr>
+</table>
 
 ## Workspaces
 
