@@ -20,3 +20,8 @@ artifacts/
 # Native engine build (produced by engine/ttarchext/Makefile)
 engine/ttarchext/ttarchext
 *.o
+.artifacts/
+
+# Game files used as test samples stay local; tests that need a missing one skip.
+# (Samples already committed stay tracked.)
+/samples/*

@@ -27,6 +27,7 @@ public sealed class DialogService : IDialogService
         {
             Title = title,
             AllowMultiple = false,
+            SuggestedStartLocation = await ExportFolderAsync(),
         });
         return results.Count > 0 ? results[0].TryGetLocalPath() : null;
     }
@@ -39,8 +40,18 @@ public sealed class DialogService : IDialogService
             Title = title,
             SuggestedFileName = suggestedName,
             FileTypeChoices = ToFileTypes(filters),
+            SuggestedStartLocation = await ExportFolderAsync(),
         });
         return result?.TryGetLocalPath();
+    }
+
+    // The export folder from Settings, when it exists.
+    private async Task<IStorageFolder?> ExportFolderAsync()
+    {
+        var folder = UserPreferences.Current.ExportFolder;
+        return string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)
+            ? null
+            : await _owner.StorageProvider.TryGetFolderFromPathAsync(folder);
     }
 
     private static List<FilePickerFileType>? ToFileTypes((string Name, string[] Patterns)[] filters) =>

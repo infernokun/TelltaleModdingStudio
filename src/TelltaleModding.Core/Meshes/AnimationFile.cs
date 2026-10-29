@@ -41,6 +41,7 @@ public readonly record struct AnimationChannel(ulong TypeHash, ulong TargetSymbo
 public static class KnownAnimationTypes
 {
     public static readonly ulong CompressedSkeletonPoseKeys = TelltaleCrc64.HashSymbol("CompressedSkeletonPoseKeys");
+    public static readonly ulong CompressedSkeletonPoseKeys2 = TelltaleCrc64.HashSymbol("CompressedSkeletonPoseKeys2");
     public static readonly ulong KeyframedTransform = TelltaleCrc64.HashSymbol("KeyframedValue<Transform>");
 
     /// <summary>
@@ -80,7 +81,7 @@ public static class KnownAnimationTypes
 ///
 /// Layout from TelltaleToolLib's Animation serializer, validated against a full
 /// game's animations. Skeletal animations carry one CompressedSkeletonPoseKeys
-/// channel whose payload embeds the rig's bone symbols — <see cref="FindBoneSymbols"/>
+/// channel whose payload embeds the rig's bone symbols; <see cref="FindBoneSymbols"/>
 /// recovers them for skeleton matching.
 /// </summary>
 public sealed class AnimationFile
@@ -93,6 +94,12 @@ public sealed class AnimationFile
     /// <summary>Raw payload of the CompressedSkeletonPoseKeys channel, if present.</summary>
     public byte[]? PoseKeysPayload { get; private init; }
 
+    /// <summary>
+    /// Raw payload of the CompressedSkeletonPoseKeys2 channel (The Walking Dead: The Telltale
+    /// Definitive Series and later), if present. Decode with <see cref="Cspk2Decoder"/>.
+    /// </summary>
+    public byte[]? PoseKeys2Payload { get; private init; }
+
     /// <summary>Decoded uncompressed transform tracks (KeyframedValue&lt;Transform&gt; channels).</summary>
     public IReadOnlyList<TransformTrack> TransformTracks { get; private init; } = Array.Empty<TransformTrack>();
 
@@ -100,9 +107,66 @@ public sealed class AnimationFile
     public bool BodiesFullyParsed { get; private init; }
 
     /// <summary>True if this animation drives a skeleton (has a pose-keys channel).</summary>
-    public bool IsSkeletal => PoseKeysPayload is not null;
+    public bool IsSkeletal => PoseKeysPayload is not null || PoseKeys2Payload is not null;
+
+    /// <summary>
+    /// True when some bone's rotation or translation changes over the clip; false for a clip
+    /// that holds one pose throughout. Facial phoneme poses are held poses by design, but so
+    /// are many of The Wolf Among Us' episode 2-5 re-exports of episode 1 gesture clips
+    /// (bigby_headGesture_nodYes and others): their pose keys keep only the original's first
+    /// frame, so the motion survives only in the overridden episode 1 copy.
+    /// </summary>
+    public bool HasMotion => _hasMotion ??= ComputeHasMotion();
+
+    private bool? _hasMotion;
+
+    // Below these a change is quantization noise: a held pose decodes to drift of a few
+    // hundredths of a degree.
+    private const float MotionAngleDegrees = 0.25f;
+    private const float MotionTranslation = 1e-3f;
 
     private AnimationFile() { }
+
+    private bool ComputeHasMotion()
+    {
+        foreach (var track in TransformTracks)
+            for (int k = 1; k < track.Keys.Count; k++)
+                if (Differs(track.Keys[0].Rotation, track.Keys[k].Rotation, track.Keys[0].Translation, track.Keys[k].Translation))
+                    return true;
+
+        bool additive = Channels.Any(c => c.TypeHash == KnownAnimationTypes.CompressedSkeletonPoseKeys
+                                          && (c.Flags & CspkDecoder.AdditiveFlag) != 0);
+        if (PoseKeysPayload is { } blob && CspkDecoder.TryDecode(blob, additive) is { } cspk)
+        {
+            for (int s = 0; s < cspk.BoneSymbols.Count; s++)
+                for (int i = 1; i < cspk.SampleCount && cspk.BoneSymbols[s] != 0; i++)
+                    if (Differs(cspk.Rotations[s][0], cspk.Rotations[s][i], cspk.Translations[s][0], cspk.Translations[s][i]))
+                        return true;
+        }
+
+        if (PoseKeys2Payload is { } blob2 && Cspk2Decoder.TryDecode(blob2) is { } pose2)
+        {
+            for (int s = 0; s < pose2.BoneSymbols.Count; s++)
+            {
+                var rotations = pose2.Rotations[s];
+                for (int k = 1; k < rotations.Length; k++)
+                    if (Differs(rotations[0].Value, rotations[k].Value, default, default))
+                        return true;
+                var translations = pose2.Translations[s];
+                for (int k = 1; k < translations.Length; k++)
+                    if (Differs(Quaternion.Identity, Quaternion.Identity, translations[0].Value, translations[k].Value))
+                        return true;
+            }
+        }
+        return false;
+
+        static bool Differs(Quaternion ra, Quaternion rb, Vector3 ta, Vector3 tb)
+        {
+            float dot = MathF.Min(1f, MathF.Abs(Quaternion.Dot(Quaternion.Normalize(ra), Quaternion.Normalize(rb))));
+            return 2f * MathF.Acos(dot) * (180f / MathF.PI) > MotionAngleDegrees
+                || (tb - ta).Length() > MotionTranslation;
+        }
+    }
 
     public string Describe() =>
         $"{Length:0.##}s · {Channels.Count} channel{(Channels.Count == 1 ? "" : "s")}" +
@@ -201,7 +265,7 @@ public sealed class AnimationFile
         // Channel bodies, sequential in type-table order. KeyframedValue<T> bodies are
         // self-describing (block-prefixed header/min/max/sample-array), so unknown T
         // skips cleanly; genuinely unknown types stop parsing (container info survives).
-        byte[]? poseBlob = null;
+        byte[]? poseBlob = null, pose2Blob = null;
         var tracks = new List<TransformTrack>();
         bool fullyParsed = true;
         ulong keyframedTransform = KnownAnimationTypes.KeyframedTransform;
@@ -218,6 +282,20 @@ public sealed class AnimationFile
                         throw new InvalidDataException("pose keys payload overruns trailer");
                     poseBlob = file[off..(off + size)];
                     off += size;
+                }
+                else if (hash == KnownAnimationTypes.CompressedSkeletonPoseKeys2)
+                {
+                    int size = (int)U32();
+                    if (size < 0 || off + size > trailerStart)
+                        throw new InvalidDataException("pose keys 2 payload overruns trailer");
+                    pose2Blob = file[off..(off + size)];
+                    off += size;
+                }
+                else if (KnownAnimationTypes.IsKeyframedValue(hash) && pose2Blob is not null)
+                {
+                    // Files with CompressedSkeletonPoseKeys2 are a newer container whose
+                    // KeyframedValue bodies are laid out differently; not read yet.
+                    fullyParsed = false;
                 }
                 else if (KnownAnimationTypes.IsKeyframedValue(hash))
                 {
@@ -283,6 +361,7 @@ public sealed class AnimationFile
             Length = length,
             Channels = channels,
             PoseKeysPayload = poseBlob,
+            PoseKeys2Payload = pose2Blob,
             TransformTracks = tracks,
             BodiesFullyParsed = fullyParsed,
         };
@@ -330,11 +409,29 @@ public sealed class AnimationFile
             ulong firstType = BinaryPrimitives.ReadUInt64LittleEndian(head.AsSpan(off));
             off += typeCount * 12;
 
-            // Pose-keys channels lead the body; their bone table is right here.
+            // Pose keys v2: [u32 size][blob]; slot count at blob+76, symbol table at
+            // blob + 0x60 + the u64 at blob+80. Usually within the first read too.
+            if (firstType == KnownAnimationTypes.CompressedSkeletonPoseKeys2 && off + 4 + 88 <= head.Length)
+            {
+                int blob = off + 4;
+                int slots = BinaryPrimitives.ReadUInt16LittleEndian(head.AsSpan(blob + 76));
+                long table = blob + 0x60 + (long)BinaryPrimitives.ReadUInt64LittleEndian(head.AsSpan(blob + 80));
+                if (slots == 0 || table + slots * 8L > head.Length)
+                    return null;
+                for (int s = 0; s < slots; s++)
+                {
+                    ulong sym = BinaryPrimitives.ReadUInt64LittleEndian(head.AsSpan((int)table + s * 8));
+                    if (sym != 0 && joints.Contains(sym))
+                        return (true, length);
+                }
+            }
+
+            // Pose-keys channels lead the body; their bone table is right here (blob + 0x80,
+            // slot count at blob + 96).
             if (firstType == KnownAnimationTypes.CompressedSkeletonPoseKeys
                 && off + 4 <= head.Length)
             {
-                int tableOff = off + 4 + 112;
+                int tableOff = off + 4 + 0x80;
                 if (tableOff + 4 <= head.Length)
                 {
                     int bones = BinaryPrimitives.ReadInt32LittleEndian(head.AsSpan(off + 4 + 96));
@@ -387,7 +484,7 @@ public sealed class AnimationFile
     public IReadOnlySet<ulong> FindBoneSymbols(IReadOnlySet<ulong> candidates)
     {
         var found = new HashSet<ulong>();
-        if (PoseKeysPayload is not { } blob)
+        if ((PoseKeysPayload ?? PoseKeys2Payload) is not { } blob)
             return found;
         for (int i = 0; i + 8 <= blob.Length; i++)
         {

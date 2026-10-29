@@ -10,7 +10,7 @@ public class D3dtxTextureTests
         return tex!;
     }
 
-    [Fact]
+    [SkippableFact]
     public void Parses_bc1_solid_color_texture()
     {
         var tex = Load(SampleData.Sample("color_EEE.d3dtx"));
@@ -20,7 +20,21 @@ public class D3dtxTextureTests
         Assert.Equal(T3SurfaceFormat.BC1, tex.SurfaceFormat);
     }
 
-    [Fact]
+    [SkippableFact]
+    public void Parses_and_decodes_definitive_series_v9_texture()
+    {
+        var tex = Load(SampleData.Sample("sk62_clementine400_head.d3dtx"));
+        Assert.Equal("sk62_clementine400_head.d3dtx", tex.Name);
+        Assert.Equal(1024, tex.Width);
+        Assert.Equal(1024, tex.Height);
+        Assert.Equal(9, tex.MipCount);
+        Assert.Equal(T3SurfaceFormat.BC1, tex.SurfaceFormat);
+
+        Assert.True(DdsImage.TryDecode(tex.ToDds(), out var image, out var error), error);
+        Assert.Equal(1024, image!.Width);
+    }
+
+    [SkippableFact]
     public void Converts_bc1_to_dds_that_decodes_to_its_solid_color()
     {
         var tex = Load(SampleData.Sample("color_EEE.d3dtx"));
@@ -42,7 +56,7 @@ public class D3dtxTextureTests
         Assert.Equal(original[^8..], dds[128..]);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Converts_mipmapped_bc3_normal_map()
     {
         var tex = Load(SampleData.Sample("BanditPsychoMask_Nrm.d3dtx"));
@@ -56,7 +70,7 @@ public class D3dtxTextureTests
         Assert.Equal(256, image!.Width);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Dds_mip_chain_is_largest_first()
     {
         var tex = Load(SampleData.Sample("BanditPsychoMask_Nrm.d3dtx"));
@@ -71,7 +85,7 @@ public class D3dtxTextureTests
         Assert.Equal(expected, dds[128..(128 + mip0.DataSize)]);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Converts_a8_texture_and_preview_decodes_it()
     {
         var tex = Load(SampleData.Sample("fx_flyWD.d3dtx"));
@@ -83,7 +97,7 @@ public class D3dtxTextureTests
         Assert.Equal(128, image!.Width);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Parses_headerless_v7_payload()
     {
         var tex = Load(SampleData.Sample("sk55_sasha_bodyLower_detail.d3dtx"));
@@ -93,14 +107,52 @@ public class D3dtxTextureTests
         Assert.True(DdsImage.TryDecode(dds!, out _, out var decodeError), decodeError);
     }
 
-    [Fact]
+    [SkippableTheory]
+    // The Wolf Among Us: version 4, region headers without a face index.
+    [InlineData("sk_sharedParts_eyeBrown.d3dtx", 256, 7, T3SurfaceFormat.BC1)]
+    [InlineData("sk54_bigby_head.d3dtx", 512, 8, T3SurfaceFormat.BC1)]
+    // Game of Thrones: version 5.
+    [InlineData("sk_gotSharedParts_eyesPupil.d3dtx", 128, 8, T3SurfaceFormat.A8)]
+    public void Parses_and_decodes_msv5_era_texture(string sample, int size, int mips, T3SurfaceFormat format)
+    {
+        var tex = Load(SampleData.Sample(sample));
+        Assert.Equal(sample, tex.Name);
+        Assert.Equal(size, tex.Width);
+        Assert.Equal(size, tex.Height);
+        Assert.Equal(mips, tex.MipCount);
+        Assert.Equal(format, tex.SurfaceFormat);
+        Assert.Equal(mips, tex.Regions.Count);
+        Assert.Equal(tex.MipCount - 1, tex.Regions[0].MipIndex);
+
+        Assert.True(DdsImage.TryDecode(tex.ToDds(), out var image, out var error), error);
+        Assert.Equal(size, image!.Width);
+    }
+
+    [SkippableFact]
+    public void Msv5_era_face_texture_decodes_to_skin_tones()
+    {
+        // A misplaced mip or misread header would decode to noise; Bigby's face texture
+        // averages to a warm skin colour (red > green > blue).
+        var tex = Load(SampleData.Sample("sk54_bigby_head.d3dtx"));
+        Assert.True(DdsImage.TryDecode(tex.ToDds(), out var image, out var error), error);
+        double r = 0, g = 0, b = 0;
+        for (int i = 0; i < image!.Rgba.Length; i += 4)
+        {
+            r += image.Rgba[i];
+            g += image.Rgba[i + 1];
+            b += image.Rgba[i + 2];
+        }
+        Assert.True(r > g && g > b, $"average colour {r} {g} {b}");
+    }
+
+    [SkippableFact]
     public void Rejects_garbage()
     {
         Assert.False(D3dtxTexture.TryLoad("certainly not a texture"u8.ToArray(), out _, out var error));
         Assert.NotNull(error);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Rejects_a_mesh_file()
     {
         Assert.False(D3dtxTexture.TryLoad(File.ReadAllBytes(SampleData.MeshSample), out _, out _));

@@ -1,0 +1,361 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             x:Class="TelltaleModding.App.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="Border.panel">
+            <Setter Property="Padding" Value="20,16,20,18" />
+        </Style>
+        <!-- One row: what it does on the left, the control on the right. -->
+        <Style Selector="Grid.row">
+            <Setter Property="Margin" Value="0,14,0,0" />
+        </Style>
+        <Style Selector="Grid.row > StackPanel">
+            <Setter Property="Margin" Value="0,0,24,0" />
+            <Setter Property="Spacing" Value="2" />
+        </Style>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBlock.hint">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{StaticResource Faint}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Slider">
+            <Setter Property="Width" Value="200" />
+            <Setter Property="Margin" Value="0,-12" />
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="MinWidth" Value="200" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel MaxWidth="820" Margin="24,18,24,32" Spacing="14">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                    <TextBlock Classes="h1" Text="Settings" />
+                    <TextBlock Classes="muted" Text="Changes apply right away and are saved for next time." />
+                </StackPanel>
+                <Button Grid.Column="1" VerticalAlignment="Center" Command="{Binding ResetDefaultsCommand}"
+                        Content="Reset to defaults" />
+            </Grid>
+
+            <!-- General -->
+            <Border Classes="panel">
+                <StackPanel>
+                    <TextBlock Classes="section" Text="GENERAL" />
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Reopen the last game on start" />
+                            <TextBlock Classes="hint" Text="Pick up where you left off instead of starting on Home." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.ReopenLastGame}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Open games in" />
+                            <TextBlock Classes="hint" Text="The workspace shown after a game finishes opening." />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding StartWorkspaces}"
+                                  SelectedItem="{Binding Preferences.StartWorkspace}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="{Binding CacheSize, StringFormat='Game index cache: {0}'}" />
+                            <TextBlock Classes="hint" Text="Saved indexes make games open in seconds. Clearing them only means the next open re-indexes; game files are never touched." />
+                        </StackPanel>
+                        <Button Grid.Column="1" VerticalAlignment="Center" Content="Clear cache" Command="{Binding ClearCacheCommand}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Crash log" />
+                            <TextBlock Classes="hint" Text="Unexpected errors are recorded with their details, newest last." />
+                        </StackPanel>
+                        <Button Grid.Column="1" VerticalAlignment="Center" Content="Open crash log" Command="{Binding OpenCrashLogCommand}"
+                                IsEnabled="{Binding HasCrashLog}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Viewport -->
+            <Border Classes="panel">
+                <StackPanel>
+                    <TextBlock Classes="section" Text="3D VIEWPORT" />
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Default look" />
+                            <TextBlock Classes="hint" Text="Studio is clean, even lighting for inspecting textures; Game recreates each game's outlines and shading; Graphic black adds solid black shadows to any game." />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                            <RadioButton Classes="nav" Content="Studio" IsChecked="{Binding Look.IsStudio, Mode=OneWay}"
+                                         Command="{Binding Look.ShowStudioCommand}" />
+                            <RadioButton Classes="nav" Content="Game" IsChecked="{Binding Look.IsGameLook, Mode=OneWay}"
+                                         Command="{Binding Look.ShowGameLookCommand}" />
+                            <RadioButton Classes="nav" Content="Graphic black" IsChecked="{Binding Look.IsGraphicBlack, Mode=OneWay}"
+                                         Command="{Binding Look.ShowGraphicBlackCommand}" />
+                        </StackPanel>
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto,48">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Engine default intensity" />
+                            <TextBlock Classes="hint" Text="How far the game's own black shadows reach in the Game look (games that use them, such as the Definitive Series); 0% turns them off." />
+                        </StackPanel>
+                        <Slider Grid.Column="1" Minimum="0" Maximum="2" SmallChange="0.05" Value="{Binding Preferences.EngineDefaultIntensity}" />
+                        <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Text="{Binding Preferences.EngineDefaultIntensity, StringFormat='{}{0:0%}'}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto,48">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Graphic black intensity" />
+                            <TextBlock Classes="hint" Text="How far solid black shadows reach in the Graphic black look; 0% turns them off." />
+                        </StackPanel>
+                        <Slider Grid.Column="1" Minimum="0" Maximum="2" SmallChange="0.05" Value="{Binding Preferences.GraphicBlackIntensity}" />
+                        <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Text="{Binding Preferences.GraphicBlackIntensity, StringFormat='{}{0:0%}'}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto,48">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Field of view" />
+                            <TextBlock Classes="hint" Text="Wider shows more around the model; narrower flattens it like a long lens." />
+                        </StackPanel>
+                        <Slider Grid.Column="1" Minimum="25" Maximum="80" Value="{Binding Preferences.FieldOfView}" />
+                        <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Text="{Binding Preferences.FieldOfView, StringFormat='{}{0:0}°'}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto,48">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Orbit and look speed" />
+                            <TextBlock Classes="hint" Text="How far the camera turns per pixel of left-drag (orbit) or right-drag (fly look)." />
+                        </StackPanel>
+                        <Slider Grid.Column="1" Minimum="0.25" Maximum="3" Value="{Binding Preferences.OrbitSpeed}" />
+                        <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Text="{Binding Preferences.OrbitSpeed, StringFormat='{}{0:0.0}×'}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto,48">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Scroll zoom speed" />
+                            <TextBlock Classes="hint" Text="How far each scroll step dollies the camera." />
+                        </StackPanel>
+                        <Slider Grid.Column="1" Minimum="0.25" Maximum="3" Value="{Binding Preferences.DollySpeed}" />
+                        <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Text="{Binding Preferences.DollySpeed, StringFormat='{}{0:0.0}×'}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto,48">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Fly speed" />
+                            <TextBlock Classes="hint" Text="Starting speed for right-drag + WASD flying (scroll while flying to change it)." />
+                        </StackPanel>
+                        <Slider Grid.Column="1" Minimum="0.1" Maximum="8" Value="{Binding Preferences.FlySpeed}" />
+                        <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Text="{Binding Preferences.FlySpeed, StringFormat='{}{0:0.0}×'}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Invert vertical look" />
+                            <TextBlock Classes="hint" Text="Moving the mouse up tilts the camera down." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.InvertLook}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Background" />
+                            <TextBlock Classes="hint" Text="The colour behind models and scenes." />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding Backgrounds}" SelectedItem="{Binding Preferences.Background}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Show the skeleton by default" />
+                            <TextBlock Classes="hint" Text="Start the Characters viewport with the skeleton overlay on." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.ShowSkeleton}" OnContent="" OffContent="" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Animation -->
+            <Border Classes="panel">
+                <StackPanel>
+                    <TextBlock Classes="section" Text="ANIMATION" />
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Loop clips" />
+                            <TextBlock Classes="hint" Text="Clips start over when they reach the end." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.LoopClips}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Playback speed" />
+                            <TextBlock Classes="hint" Text="The speed clips play at." />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding Speeds}" SelectedItem="{Binding Preferences.PlaybackSpeed}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="x:Double">
+                                    <TextBlock Text="{Binding StringFormat='{}{0}×'}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Dialogue & audio -->
+            <Border Classes="panel">
+                <StackPanel>
+                    <TextBlock Classes="section" Text="DIALOGUE &amp; AUDIO" />
+                    <Grid Classes="row" ColumnDefinitions="*,Auto,48">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Volume" />
+                            <TextBlock Classes="hint" Text="Voice lines, music and sound previews." />
+                        </StackPanel>
+                        <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Preferences.Volume}" />
+                        <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Text="{Binding Preferences.Volume, StringFormat='{}{0:0}%'}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Subtitle language" />
+                            <TextBlock Classes="hint" Text="Used when the game has it; otherwise English. Recordings are English either way." />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding Languages}" SelectedItem="{Binding Preferences.SubtitleLanguage}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Voiced lines only" />
+                            <TextBlock Classes="hint" Text="Hide lines that have no recording (menus, credits, choice labels)." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.VoicedOnly}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Continuous playback" />
+                            <TextBlock Classes="hint" Text="Play the next line (or track) when one ends." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.ContinuousPlayback}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Show the speaker" />
+                            <TextBlock Classes="hint" Text="The lip-synced 3D speaker beside the dialogue list." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.ShowSpeaker}" OnContent="" OffContent="" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Scripts -->
+            <Border Classes="panel">
+                <StackPanel>
+                    <TextBlock Classes="section" Text="SCRIPTS" />
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Show compiled scripts as decompiled Lua" />
+                            <TextBlock Classes="hint" Text="Off shows the annotated instruction listing instead." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.ScriptsDecompiled}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto,48">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Code font size" />
+                        </StackPanel>
+                        <Slider Grid.Column="1" Minimum="9" Maximum="22" TickFrequency="1" IsSnapToTickEnabled="True"
+                                Value="{Binding Preferences.CodeFontSize}" />
+                        <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Text="{Binding Preferences.CodeFontSize, StringFormat='{}{0:0} pt'}" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Wrap long lines" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.CodeWordWrap}" OnContent="" OffContent="" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Scenes -->
+            <Border Classes="panel">
+                <StackPanel>
+                    <TextBlock Classes="section" Text="SCENES" />
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Texture detail" />
+                            <TextBlock Classes="hint" Text="Higher looks sharper but uses more memory on big locations. Applies to the next scene you open." />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding SceneTextureSizes}" SelectedItem="{Binding SelectedSceneTextureSize}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SceneTextureOption">
+                                    <TextBlock Text="{Binding Label}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Use the scene's own lighting" />
+                            <TextBlock Classes="hint" Text="Light locations with their lights from the game; off uses the studio lights." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.SceneLighting}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Baked lightmaps" />
+                            <TextBlock Classes="hint" Text="Use the light and shadow baked into locations where the game has them (Tales from the Borderlands)." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.SceneLightmaps}" OnContent="" OffContent="" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Export -->
+            <Border Classes="panel">
+                <StackPanel>
+                    <TextBlock Classes="section" Text="EXPORT" />
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Export folder" />
+                            <TextBlock Classes="hint" Text="Save and export dialogs start here." />
+                            <TextBlock Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"
+                                       Text="{Binding Preferences.ExportFolder, TargetNullValue='(system default)', FallbackValue='(system default)'}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button Content="Choose…" Command="{Binding BrowseExportFolderCommand}" />
+                            <Button Classes="ghost" Content="Clear" Command="{Binding ClearExportFolderCommand}" />
+                        </StackPanel>
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Convert when exporting results" />
+                            <TextBlock Classes="hint" Text="Assets › Export results saves textures as PNG, sounds as MP3/Ogg, scripts as Lua and subtitles as transcripts." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.ConvertOnExport}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="glTF animation frame rate" />
+                            <TextBlock Classes="hint" Text="Keys per second when baking a clip into a .glb." />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding FrameRates}" SelectedItem="{Binding Preferences.GltfFramesPerSecond}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="x:Int32">
+                                    <TextBlock Text="{Binding StringFormat='{}{0} fps'}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="label" Text="Include normal maps in glTF" />
+                            <TextBlock Classes="hint" Text="Bigger files, more surface detail in Blender and other tools." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.GltfNormalMaps}" OnContent="" OffContent="" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

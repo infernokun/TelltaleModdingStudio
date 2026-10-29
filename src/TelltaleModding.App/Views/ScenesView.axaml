@@ -1,0 +1,200 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             xmlns:views="clr-namespace:TelltaleModding.App.Views"
+             x:Class="TelltaleModding.App.Views.ScenesView"
+             x:DataType="vm:ScenesViewModel">
+
+    <Grid ColumnDefinitions="300,*,340" Margin="12">
+
+        <!-- Scene list -->
+        <Border Grid.Column="0" Classes="panel" Padding="12">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+                <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,10">
+                    <TextBlock Classes="h2" Text="Scenes" />
+                    <TextBlock Grid.Column="1" Classes="faint" Text="{Binding SceneSummary}" VerticalAlignment="Center" />
+                </Grid>
+                <TextBox Grid.Row="1" Classes="search" Text="{Binding Filter}" IsEnabled="{Binding HasSource}"
+                         Watermark="Search locations…" Margin="0,0,0,8" />
+                <ComboBox Grid.Row="2" ItemsSource="{Binding Episodes}" SelectedItem="{Binding SelectedEpisode}"
+                          HorizontalAlignment="Stretch" Margin="0,0,0,6" IsEnabled="{Binding HasSource}" />
+                <CheckBox Grid.Row="3" Content="Include menus and other scenes" IsChecked="{Binding IncludeOtherScenes}"
+                          IsEnabled="{Binding HasSource}" Margin="2,0,0,6" FontSize="12" />
+                <ListBox Grid.Row="4" ItemsSource="{Binding Scenes}" SelectedItem="{Binding SelectedScene}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SceneRowViewModel">
+                            <StackPanel Spacing="1" ToolTip.Tip="{Binding FileName}">
+                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="{Binding Episode}" Classes="faint" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1" Text="{Binding SizeText}" Classes="faint" Margin="8,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Grid.Row="4" Classes="muted" TextWrapping="Wrap" Margin="4,8"
+                           IsVisible="{Binding !HasSource}"
+                           Text="Open a game from Home to browse its locations." />
+            </Grid>
+        </Border>
+
+        <!-- Viewer -->
+        <Border Grid.Column="1" Classes="panel" ClipToBounds="True" CornerRadius="12" Margin="12,0">
+            <Panel>
+                <Panel x:Name="ViewportHost" Background="Transparent">
+                    <views:MeshViewport x:Name="Viewport" IsVisible="{Binding HasScene}" />
+                </Panel>
+
+                <!-- Title overlay -->
+                <StackPanel Margin="20,16" HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="2"
+                            IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Classes="h1" Text="{Binding Title}" />
+                    <TextBlock Classes="muted" Text="{Binding Subtitle}" />
+                    <TextBlock Classes="faint" Text="{Binding Stats}" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <!-- View tools -->
+                <StackPanel Margin="12" HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal"
+                            IsVisible="{Binding HasScene}">
+                    <views:LookToggle DataContext="{Binding Look}" Margin="0,0,8,0" />
+                    <Button Classes="icon" Command="{Binding ResetViewCommand}"
+                            ToolTip.Tip="Reset view (or double-click the scene)" AutomationProperties.Name="Reset view">
+                        <PathIcon Data="{StaticResource IconRecenter}" />
+                    </Button>
+                    <Button Classes="icon" Command="{Binding ExportGltfCommand}"
+                            ToolTip.Tip="Export the shown agents… (glTF .glb)" AutomationProperties.Name="Export">
+                        <PathIcon Data="{StaticResource IconExport}" />
+                    </Button>
+                </StackPanel>
+
+                <TextBlock Classes="faint" Margin="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           IsVisible="{Binding HasScene}"
+                           Text="Drag to orbit · middle-drag to pan · WASD / QE to fly · right-drag to look · scroll to dolly · F to frame" />
+
+                <!-- Empty state -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
+                            IsVisible="{Binding !HasScene}">
+                    <PathIcon Data="{StaticResource IconGrid}" Width="44" Height="44"
+                              Foreground="{StaticResource Line}" HorizontalAlignment="Center"
+                              IsVisible="{Binding !IsLoading}" />
+                    <TextBlock Classes="muted" HorizontalAlignment="Center" IsVisible="{Binding !IsLoading}"
+                               Text="Pick a scene to assemble its environment." />
+                </StackPanel>
+
+                <!-- Loading -->
+                <Border HorizontalAlignment="Center" VerticalAlignment="Center" Classes="card"
+                        Padding="20,14" IsVisible="{Binding IsLoading}">
+                    <StackPanel Spacing="10" Width="260">
+                        <TextBlock Text="{Binding LoadingText}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <ProgressBar IsIndeterminate="{Binding IsProgressIndeterminate}" Minimum="0" Maximum="100"
+                                     Value="{Binding LoadingProgress}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Problems -->
+                <Border Margin="16" HorizontalAlignment="Left" VerticalAlignment="Bottom" Classes="card"
+                        Padding="12,8" BorderBrush="{StaticResource Warn}"
+                        IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Text="{Binding Error}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" MaxWidth="480" />
+                </Border>
+            </Panel>
+        </Border>
+
+        <!-- Agents -->
+        <Border Grid.Column="2" Classes="panel" Padding="12">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,3*,Auto,Auto,Auto,Auto,2*">
+                <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,8">
+                    <TextBlock Classes="h2" Text="Agents" />
+                    <Button Grid.Column="1" Command="{Binding ShowDefaultCommand}" FontSize="12" Padding="10,4"
+                            Content="Default" ToolTip.Tip="Show what the scene shows at the start" />
+                </Grid>
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding Kinds}" Margin="0,0,0,8">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SceneKindViewModel">
+                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsOn}" FontSize="12" Margin="0,0,10,0" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBox Grid.Row="2" Classes="search" Text="{Binding AgentFilter}" Watermark="Filter agents…"
+                         Margin="0,0,0,6" IsEnabled="{Binding HasScene}" />
+                <CheckBox Grid.Row="3" Content="Only agents with meshes" IsChecked="{Binding OnlyAgentsWithMeshes}"
+                          FontSize="12" Margin="2,0,0,4" />
+                <TextBlock Grid.Row="4" Classes="faint" Text="{Binding AgentSummary}" Margin="4,0,0,6" />
+                <ListBox Grid.Row="5" ItemsSource="{Binding Agents}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SceneAgentRowViewModel">
+                            <Grid ColumnDefinitions="Auto,*" ToolTip.Tip="{Binding ToolTip}">
+                                <CheckBox IsChecked="{Binding IsOn}" IsEnabled="{Binding CanToggle}" MinWidth="0"
+                                          VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                        <Border Grid.Column="1" Classes="chip" Padding="6,0" Margin="6,0,0,0">
+                                            <TextBlock Text="{Binding KindLabel}" Classes="faint" />
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Text="{Binding Detail}" Classes="faint" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <ItemsControl Grid.Row="6" ItemsSource="{Binding Problems}" MaxHeight="90" Margin="0,8,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" FontSize="11" Foreground="{StaticResource Warn}"
+                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Lights -->
+                <Grid Grid.Row="7" ColumnDefinitions="*,Auto" Margin="2,14,2,6">
+                    <TextBlock Classes="h2" Text="Lights" />
+                    <Button Grid.Column="1" Command="{Binding DefaultLightsCommand}" FontSize="12" Padding="10,4"
+                            Content="Default" IsEnabled="{Binding HasLights}"
+                            ToolTip.Tip="Switch on the lights the scene starts with" />
+                </Grid>
+                <!-- Radios group by their shared panel. A GroupName would be process-wide for views
+                     outside a window, so a closed view's pair would fight a new one's forever. -->
+                <StackPanel Grid.Row="8" Orientation="Horizontal" Spacing="12" Margin="2,0,0,4">
+                    <RadioButton Content="Scene lighting" FontSize="12"
+                                 IsChecked="{Binding UseSceneLighting}" IsEnabled="{Binding HasLights}"
+                                 ToolTip.Tip="Light the location with its own lights (the brightest eight are drawn)" />
+                    <RadioButton Content="Studio lighting" FontSize="12"
+                                 IsChecked="{Binding UseStudioLighting}"
+                                 ToolTip.Tip="Light the location with the neutral studio rig" />
+                </StackPanel>
+                <Grid Grid.Row="9" ColumnDefinitions="*,Auto" Margin="2,0,0,6">
+                    <TextBlock Classes="faint" Text="{Binding LightSummary}" VerticalAlignment="Center" Margin="2,0,0,0" />
+                    <CheckBox Grid.Column="1" Content="All lights" IsChecked="{Binding ShowAllLights}" FontSize="12"
+                              ToolTip.Tip="Also list character rig, effect, sky dome and foliage lights" />
+                </Grid>
+                <ListBox Grid.Row="10" ItemsSource="{Binding Lights}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SceneLightRowViewModel">
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto" ToolTip.Tip="{Binding ToolTip}">
+                                <CheckBox IsChecked="{Binding IsOn}" MinWidth="0" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <Border Grid.Column="1" Width="12" Height="12" CornerRadius="3" Margin="0,0,8,0"
+                                        Background="{Binding Swatch}" BorderBrush="{StaticResource Line}" BorderThickness="1"
+                                        VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Detail}" Classes="faint" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="3" Text="{Binding IntensityText}" Classes="faint"
+                                           VerticalAlignment="Center" Margin="6,0,0,0" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

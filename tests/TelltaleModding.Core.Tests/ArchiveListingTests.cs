@@ -24,14 +24,14 @@ public class ArchiveListingTests
         "- done",
     };
 
-    [Fact]
+    [SkippableFact]
     public void ParsesOnlyFileLines()
     {
         var listing = ArchiveListing.Parse(SampleOutput);
         Assert.Equal(5, listing.Count);
     }
 
-    [Fact]
+    [SkippableFact]
     public void ParsesOffsetSizeAndName()
     {
         var listing = ArchiveListing.Parse(SampleOutput);
@@ -41,14 +41,14 @@ public class ArchiveListingTests
         Assert.Equal(512, first.Size);
     }
 
-    [Fact]
+    [SkippableFact]
     public void PreservesNamesContainingSpaces()
     {
         var listing = ArchiveListing.Parse(SampleOutput);
         Assert.Contains(listing.Files, f => f.Name == "my folder/has spaces.d3dtx");
     }
 
-    [Fact]
+    [SkippableFact]
     public void ClassifiesAssetsByExtension()
     {
         var listing = ArchiveListing.Parse(SampleOutput);
@@ -58,7 +58,7 @@ public class ArchiveListingTests
         Assert.Equal(2, listing.InCategory(AssetCategory.Texture).Count()); // .font + .d3dtx
     }
 
-    [Fact]
+    [SkippableFact]
     public void IgnoresVerboseDumpLinesThatAreNotFileEntries()
     {
         var listing = ArchiveListing.Parse(SampleOutput);

@@ -11,12 +11,19 @@ public readonly record struct D3dtxRegion(
     int FaceIndex, int MipIndex, int MipCount, int DataSize, int Pitch, int DataOffset);
 
 /// <summary>
-/// A parsed Telltale .d3dtx texture (D3DTX version 7 — the Game of Thrones era) with
-/// conversion to standard DDS. Handles both the usual MSV6-wrapped form and bare
-/// payloads without the meta-stream header (as produced by some extraction paths).
+/// A parsed Telltale .d3dtx texture (D3DTX version 4 for The Wolf Among Us and Walking Dead
+/// Season Two, version 5 for Game of Thrones, version 7 for the Michonne / Tales from
+/// the Borderlands era, and version 9 for Walking Dead: The Telltale Definitive Series)
+/// with conversion to standard DDS. Handles both the usual meta-stream-wrapped form
+/// (MSV5 or MSV6) and bare V7 payloads without the meta-stream header (as produced by
+/// some extraction paths).
 ///
-/// V7 field layout ported from Telltale-Modding-Group's texture tool and verified
-/// against real files: every mip region's size must sum exactly to the pixel payload.
+/// V7 field layout ported from Telltale-Modding-Group's texture tool, V9 additions
+/// from TelltaleToolLib's T3Texture metaclass. V5 is V7 without the swizzle fields
+/// and with an import specular power; V4 additionally lacks the import specular power,
+/// layout, gamma and one shading float, and its region headers have no face index.
+/// All verified against real files: every mip region's size must sum exactly to the
+/// pixel payload.
 /// </summary>
 public sealed class D3dtxTexture
 {
@@ -54,7 +61,7 @@ public sealed class D3dtxTexture
             else if (data.Length >= 4 && BinaryPrimitives.ReadUInt32LittleEndian(data) == 7)
             {
                 // Bare V7 payload with no meta-stream wrapper; pixel data follows the
-                // fields — its start is only known after parsing, marked by -1 here.
+                // fields; its start is only known after parsing, marked by -1 here.
                 payloadStart = 0;
                 payloadLength = data.Length;
                 pixelsStart = -1;
@@ -66,7 +73,7 @@ public sealed class D3dtxTexture
                 return false;
             }
 
-            texture = ParseV7(data, payloadStart, payloadLength, pixelsStart, pixelsLength);
+            texture = Parse(data, payloadStart, payloadLength, pixelsStart, pixelsLength);
             error = null;
             return true;
         }
@@ -77,7 +84,7 @@ public sealed class D3dtxTexture
         }
     }
 
-    private static D3dtxTexture ParseV7(
+    private static D3dtxTexture Parse(
         byte[] file, int payloadStart, int payloadLength, int pixelsStart, int pixelsLength)
     {
         int off = payloadStart;
@@ -99,8 +106,12 @@ public sealed class D3dtxTexture
         }
 
         uint version = U32();
-        if (version != 7)
-            throw new InvalidDataException($"D3DTX version {version} is not supported (only version 7, the GoT era).");
+        if (version is not (4 or 5 or 7 or 9))
+            throw new InvalidDataException(
+                $"D3DTX version {version} is not supported (only 4, 5, 7 and 9).");
+        bool v4 = version == 4;
+        bool v5 = version == 5;
+        bool v9 = version == 9;
 
         U32(); U32();       // mSamplerState block size + value
         U32(); U32();       // mPlatform block size + value
@@ -109,21 +120,48 @@ public sealed class D3dtxTexture
         U32();              // mImportName block size
         string importName = Str();
         off += 4;           // mImportScale
+        if (v5)
+            off += 4;       // mImportSpecularPower
 
         // Telltale serializes bools as ASCII '0'/'1'.
         byte hasProps = file[off++];
         if (hasProps != (byte)'0')
-            throw new InvalidDataException("texture carries tool properties — unsupported");
+            throw new InvalidDataException("texture carries tool properties (unsupported)");
 
         int mips = I32();
         int width = I32();
         int height = I32();
+        if (v9)
+            off += 4 * 2;   // mDepth, mArraySize
         var format = (T3SurfaceFormat)I32();
-        off += 4 * 5;       // mTextureLayout, mSurfaceGamma, mResourceUsage, mType, mSwizzleSize
-        off += 4;           // mSwizzle
-        off += 4 * 3;       // mSpecularGlossExponent, mHDRLightmapScale, mToonGradientCutoff
-        off += 4 * 2;       // mAlphaMode, mColorMode
-        off += 4 * 4;       // mUVOffset, mUVScale
+        if (v4 || v5)
+        {
+            // The MSV5 games have no swizzle; V4 also lacks layout, gamma and one of
+            // the three shading floats.
+            if (v5)
+                off += 4 * 2;   // mTextureLayout, mSurfaceGamma
+            off += 4 * 3;       // mResourceUsage, mType, mNormalMapFormat
+            off += 4 * (v5 ? 3 : 2); // shading floats (specular gloss, HDR lightmap scale, toon cutoff)
+            off += 4 * 2;       // mAlphaMode, mColorMode
+            off += 4 * 4;       // mUVOffset, mUVScale
+        }
+        else
+        {
+            off += 4 * 2;   // mTextureLayout, mSurfaceGamma
+            if (v9)
+                off += 4;   // mSurfaceMultisample
+            off += 4 * 3;   // mResourceUsage, mType, mSwizzleSize
+            off += 4;       // mSwizzle
+            off += 4 * 3;   // mSpecularGlossExponent, mHDRLightmapScale, mToonGradientCutoff
+            off += 4 * 2;   // mAlphaMode, mColorMode
+            off += 4 * 4;   // mUVOffset, mUVScale
+        }
+
+        if (v9)
+        {
+            int frameNamesStart = off;
+            off = frameNamesStart + I32(); // mArrayFrameNames block (counts itself)
+        }
 
         off += 4;           // toon regions array capacity
         int toonCount = I32();
@@ -132,14 +170,17 @@ public sealed class D3dtxTexture
         int regionCount = I32();
         int auxCount = I32();
         if (auxCount != 0)
-            throw new InvalidDataException($"texture has {auxCount} aux data blocks — unsupported");
+            throw new InvalidDataException($"texture has {auxCount} aux data blocks (unsupported)");
         int totalDataSize = I32();
 
         var regions = new D3dtxRegion[regionCount];
         int dataOffset = 0;
         for (int i = 0; i < regionCount; i++)
         {
-            int face = I32(), mip = I32(), mipCount = I32(), size = I32(), pitch = I32();
+            int face = v4 ? 0 : I32();   // V4 regions carry no face index
+            int mip = I32(), mipCount = I32(), size = I32(), pitch = I32();
+            if (v9)
+                I32();      // slice pitch
             regions[i] = new D3dtxRegion(face, mip, mipCount, size, pitch, dataOffset);
             dataOffset += size;
         }

@@ -5,10 +5,10 @@ namespace TelltaleModding.Core.Meta;
 /// <summary>Which container generation a Telltale asset file uses.</summary>
 public enum MetaStreamFormat
 {
-    /// <summary>"5VSM" — Meta Stream Version 5.</summary>
+    /// <summary>"5VSM": Meta Stream Version 5.</summary>
     Msv5,
 
-    /// <summary>"6VSM" — Meta Stream Version 6 (GoT / Michonne / TTDS era).</summary>
+    /// <summary>"6VSM": Meta Stream Version 6 (GoT / Michonne / TTDS era).</summary>
     Msv6,
 }
 
@@ -22,7 +22,7 @@ public readonly record struct MetaClassRecord(ulong TypeHash, uint VersionCrc)
 }
 
 /// <summary>
-/// Parsed header of an MSV5/MSV6 meta stream — the container wrapping every Telltale
+/// Parsed header of an MSV5/MSV6 meta stream, the container wrapping every Telltale
 /// asset (.d3dmesh, .d3dtx, .skl, ...). The header is followed by three sections:
 /// "default" (the serialized object tree), "debug" (usually empty), and "async"
 /// (bulk payload: vertex/index buffers for meshes, pixel data for textures).
@@ -43,7 +43,7 @@ public sealed class MetaStreamHeader
     public int DebugSectionOffset => HeaderSize + DefaultSectionSize;
     public int AsyncSectionOffset => HeaderSize + DefaultSectionSize + DebugSectionSize;
 
-    /// <summary>Header plus all three sections — must equal the file size.</summary>
+    /// <summary>Header plus all three sections; it must equal the file size.</summary>
     public long TotalSize => (long)HeaderSize + DefaultSectionSize + DebugSectionSize + AsyncSectionSize;
 
     private MetaStreamHeader(

@@ -1,0 +1,138 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             xmlns:views="clr-namespace:TelltaleModding.App.Views"
+             xmlns:audio="clr-namespace:TelltaleModding.Core.Audio;assembly=TelltaleModding.Core"
+             x:Class="TelltaleModding.App.Views.AssetsView"
+             x:DataType="vm:AssetsViewModel">
+
+    <Grid ColumnDefinitions="*,460" Margin="12">
+
+        <!-- Search + results -->
+        <Border Classes="panel" Padding="12">
+            <Grid RowDefinitions="Auto,Auto,Auto,*">
+                <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,10">
+                    <TextBlock Classes="h2" Text="Assets" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <CheckBox IsChecked="{Binding ConvertOnExport}" FontSize="12" Content="Convert"
+                              ToolTip.Tip="Textures → PNG, sounds → MP3/Ogg, scripts → decompiled Lua, subtitles → transcript" />
+                    <Button Command="{Binding ExportResultsCommand}" FontSize="12" Padding="10,4"
+                            ToolTip.Tip="Export every file in the results to a folder">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconExport}" Width="13" Height="13" />
+                            <TextBlock Text="Export results…" />
+                        </StackPanel>
+                    </Button>
+                    </StackPanel>
+                </Grid>
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                    <TextBox Classes="search" Text="{Binding Query}" IsEnabled="{Binding HasSource}"
+                             Watermark="Search every file in the game by name or episode (e.g. clementine400 head, WalkingDead203 .d3dtx)…" />
+                    <ComboBox Grid.Column="1" Margin="8,0,0,0" MinWidth="160" VerticalAlignment="Stretch"
+                              ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}"
+                              IsEnabled="{Binding HasSource}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CategoryOption">
+                                <TextBlock Text="{Binding Label}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </Grid>
+                <TextBlock Grid.Row="2" Classes="faint" Text="{Binding ResultSummary}" Margin="4,0,0,6" />
+                <ListBox Grid.Row="3" ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AssetRowViewModel">
+                            <Grid ColumnDefinitions="*,96,72">
+                                <StackPanel Spacing="1">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" FontSize="13" />
+                                    <TextBlock Text="{Binding ArchiveName}" Classes="faint" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Classes="chip" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Kind}" Classes="faint" />
+                                </Border>
+                                <TextBlock Grid.Column="2" Text="{Binding SizeText}" Classes="faint"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Grid.Row="3" Classes="muted" Margin="4,8" IsVisible="{Binding !HasSource}"
+                           Text="Open a game from Home to browse its files." />
+            </Grid>
+        </Border>
+
+        <!-- Preview -->
+        <Border Grid.Column="1" Classes="panel" Margin="12,0,0,0" Padding="14">
+            <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+                <TextBlock Classes="h2" Text="{Binding PreviewTitle}" TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding PreviewTitle}" />
+                <TextBlock Grid.Row="1" Classes="muted" Text="{Binding PreviewInfo}" TextWrapping="Wrap" Margin="0,4,0,10" />
+
+                <Border Grid.Row="2" CornerRadius="10" ClipToBounds="True" Background="{StaticResource Bg}"
+                        BorderBrush="{StaticResource Line}" BorderThickness="1">
+                    <Panel>
+                        <Image Source="{Binding PreviewImage}" Stretch="Uniform" Margin="10"
+                               IsVisible="{Binding !IsMeshPreview}" />
+                        <StackPanel IsVisible="{Binding IsAudioPreview}" VerticalAlignment="Center" Margin="16" Spacing="14">
+                            <PathIcon Data="{StaticResource IconVolume}" Width="56" Height="56"
+                                      Foreground="{StaticResource Line}" HorizontalAlignment="Center" />
+                            <ComboBox ItemsSource="{Binding PreviewClips}" SelectedItem="{Binding SelectedClip}"
+                                      HorizontalAlignment="Stretch" IsVisible="{Binding HasSeveralClips}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="audio:AudioClip">
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <views:AudioPlayerBar DataContext="{Binding Player}" />
+                            <TextBlock Text="{Binding Player.Error}" Foreground="{StaticResource Warn}" TextWrapping="Wrap"
+                                       IsVisible="{Binding Player.Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        </StackPanel>
+                        <Panel x:Name="ViewportHost" Background="Transparent" IsVisible="{Binding IsMeshPreview}">
+                            <views:MeshViewport x:Name="Viewport" />
+                        </Panel>
+                        <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsVisible="{Binding !HasPreview}" Text="Select a file to preview it." />
+                    </Panel>
+                </Border>
+
+                <ItemsControl Grid.Row="3" ItemsSource="{Binding PreviewDetails}" MaxHeight="140" Margin="0,10,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace" FontSize="11"
+                                       Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <WrapPanel Grid.Row="4" Margin="0,12,0,0">
+                    <Button Command="{Binding ExportSelectedCommand}" Margin="0,0,8,8">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconExport}" Width="14" Height="14" />
+                            <TextBlock Text="Export file…" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ExportAsPngCommand}" Margin="0,0,8,8" Content="Export as PNG…"
+                            IsVisible="{Binding !IsAudioPreview}" />
+                    <Button Command="{Binding ExportAsDdsCommand}" Margin="0,0,8,8" Content="Export as DDS…"
+                            IsVisible="{Binding !IsAudioPreview}" />
+                    <Button Command="{Binding ExportAsWavCommand}" Margin="0,0,8,8" Content="Export as WAV…"
+                            IsVisible="{Binding IsAudioPreview}" />
+                    <Button Command="{Binding OpenScriptCommand}" Margin="0,0,8,8" IsVisible="{Binding IsScriptPreview}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconCode}" Width="14" Height="14" />
+                            <TextBlock Text="Open in Scripts" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ReplaceInModCommand}" Margin="0,0,8,8"
+                            ToolTip.Tip="Replace this file with your own in the mod project">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconSwap}" Width="14" Height="14" />
+                            <TextBlock Text="Replace in mod…" />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

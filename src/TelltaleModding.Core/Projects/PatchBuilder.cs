@@ -8,7 +8,7 @@ namespace TelltaleModding.Core.Projects;
 /// <param name="OutputArchivePath">Full path of the patch archive to write (e.g. <c>0.ttarch2</c>).</param>
 /// <param name="StagingDirectory">
 /// Folder to assemble the swapped files in. If null, a temp folder is used. It is
-/// (re)created fresh so it contains ONLY the swapped assets — that is what keeps the
+/// (re)created fresh so it contains ONLY the swapped assets; that is what keeps the
 /// patch minimal.
 /// </param>
 /// <param name="CompatibilityMode">Pass ttarchext's <c>-x</c> for v7+ archives that crash otherwise.</param>
@@ -67,7 +67,7 @@ public sealed class PatchBuilder
     /// Copies each enabled swap's replacement file into <paramref name="stagingDir"/> at
     /// its target name, and returns the staged relative names. The directory is created
     /// if missing; existing contents are left untouched (callers that want a clean build
-    /// should clear it first — <see cref="BuildAsync"/> does).
+    /// should clear it first; <see cref="BuildAsync"/> does).
     /// </summary>
     public static IReadOnlyList<string> Stage(ModProject project, string stagingDir)
     {

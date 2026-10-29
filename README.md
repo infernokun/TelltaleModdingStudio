@@ -1,41 +1,147 @@
 # Telltale Modding Studio
 
-A modern desktop app for modding Telltale games: browse the contents of `.ttarch` /
-`.ttarch2` archives, extract just the assets you want, swap in replacements
-(character models, textures, animations…), and build a minimal patch archive the
-game loads over its originals — no full rebuild needed.
+A desktop app for exploring and modding Telltale games. Point it at an installed
+game (e.g. *The Walking Dead: The Telltale Definitive Series* or *Tales from the
+Borderlands*) and it inventories the whole game: every character with their
+outfit parts, textures and animations, and every file in its archives. Swap in
+replacements and build a minimal patch archive the game loads over its originals.
 
-Built on [ttarchext](https://aluigi.altervista.org/papers.htm#ttarchext) by Luigi
-Auriemma, which does the actual byte-level extraction/rebuilding (for learning
-purposes only). This project wraps it in a workflow that makes asset swapping
-practical.
+Archives are read natively (`.ttarch2`: chunked zlib/Oodle, Blowfish-encrypted or
+plain). [ttarchext](https://aluigi.altervista.org/papers.htm#ttarchext) by Luigi
+Auriemma (for learning purposes only) is still used to build patches, to decrypt
+the games' resource descriptions, and to read classic `.ttarch` archives.
 
-## How the swap workflow works
+**Download:** the Windows build is on the [Releases](../../releases) page. Unzip it
+and run `TelltaleModding.App.exe`; keep the `engine` folder next to it.
 
-1. **Pick your game** — this selects the per-game encryption key ttarchext uses.
-2. **Open an archive** — the app sniffs the header (`ECTT`/`ZCTT`/`NCTT`/`3ATT` vs
-   classic version numbers) and auto-detects the right format version, then lists
-   the contents *without* extracting anything.
-3. **Find your asset** — filter by name or category (Model, Skeleton, Animation,
-   Texture, …) and extract just that file if you want to inspect or edit it.
-4. **Add swaps** — point each target asset at your replacement file. Save the whole
-   set as a `.ttmod` project you can reopen later.
-5. **Build patch** — the app stages *only* your swapped files and builds a tiny
-   `0.ttarch` / `0.ttarch2`. Drop it in the game's archive folder; the game reads
-   it as a patch that overrides the originals.
+## Screenshots
 
-Plus: in-app DDS texture preview (DXT1/3/5 and 32-bit RGBA) so you can eyeball a
-texture before you ship it.
+**Characters.** Every character in the game, dressed in their default outfit, with
+outfit parts to toggle and the game's own look (Clementine, *The Walking Dead: The
+Telltale Definitive Series*).
+
+![Clementine in the character viewer](docs/screenshots/characters.png)
+
+| | |
+|---|---|
+| ![Fiona, Tales from the Borderlands](docs/screenshots/characters_tftb.png) | ![Asher, Game of Thrones](docs/screenshots/characters_got.png) |
+| Fiona, *Tales from the Borderlands* | Asher, *Game of Thrones* |
+| ![Bigby in the Graphic black look, The Wolf Among Us](docs/screenshots/characters_wau.png) | ![A walk clip playing on Clementine](docs/screenshots/animations.png) |
+| Bigby in the Graphic black look, *The Wolf Among Us* | Animations: any of the character's clips, played on the model |
+
+**Face.** Moods, mouth shapes, gestures and single facial bones, posed over the
+playing clip.
+
+![The Face tab posing an angry expression](docs/screenshots/face.png)
+
+**Scenes.** Locations rebuilt from their `.scene` files, with the scene's own lights.
+
+![The bell tower scene](docs/screenshots/scenes.png)
+
+**Dialogue.** Every subtitle line with its voice recording; the speaker lip-syncs
+the line in 3D. **Talks** shows a scene's conversations as the game's dialogue tree.
+
+![Rhys lip-syncing a line](docs/screenshots/dialogue.png)
+
+![A conversation tree from Tales from the Borderlands](docs/screenshots/conversation.png)
+
+**Scripts.** Compiled Lua decompiled to readable source, with a function outline.
+
+![A decompiled Lua script from Game of Thrones](docs/screenshots/scripts.png)
+
+**Assets** and **Home.** Every file in the game, previewed and exported; and the
+library of installed games.
+
+| | |
+|---|---|
+| ![The asset browser previewing a texture](docs/screenshots/assets.png) | ![The game library](docs/screenshots/home.png) |
+
+## Workspaces
+
+- **Home**: your game library. Add a game's install folder, or one found in your
+  Steam libraries. Opening a game indexes its archives once (a few seconds) and
+  caches the index under `%LOCALAPPDATA%\TelltaleModdingStudio\catalogs`.
+- **Characters**: every character the game defines. The default outfit comes from
+  the character's own `.prop` (its mesh list and per-mesh visibility); toggle parts
+  in the Outfit tab. Pick a clip in the Animations tab to play it, with scrubbing,
+  speed and looping. The Face tab poses the face over the playing clip (a
+  mood's expression, mouth shapes, head and face gestures, single facial bones)
+  and lip-syncs the character's voice lines. The skeleton button draws the bones inside the
+  model. Textures are matched through each mesh's materials (including materials
+  they inherit), and when a file exists in several archives the game's own
+  resource priorities decide which copy is used (patches over episodes over
+  seasons). **Export…** saves the
+  character as a `.glb` (glTF 2.0) for Blender and other tools: the dressed, textured
+  mesh, its skeleton and skin, and the clip that's playing.
+- **Scenes**: every location in the game, rebuilt from its `.scene` file: each
+  object placed with its transform, textured, in an orbit/fly-around viewport. Toggle
+  object kinds or single objects, and export what's shown to `.glb`.
+- **Dialogue**: every subtitle line in the game, matched to its voice recording.
+  Filter by episode, speaker or language, search what's said, click a line to hear
+  it (Continuous plays a scene through), and save lines as their original MP3/Ogg
+  or as WAV, or export the whole filtered list with a transcript. The speaker
+  appears beside the list in 3D, lip-synced: each line's phoneme track drives the
+  character's mouth poses, in the mood its direction tags name (e.g. *smugA*).
+  **Talks** shows each scene's conversations as the game's dialogue tree (lines,
+  choice menus and their options, branches and jumps) and can play a conversation
+  through, offering the choices as buttons. **In conversation** jumps from a line
+  to its place in the tree. **Music** lists the soundtrack by episode and music bank. The Characters
+  workspace links straight to a character's lines.
+- **Scripts**: the game's Lua scripts. Compiled scripts are decompiled to readable
+  Lua (or shown as an annotated instruction listing), with a function outline,
+  syntax highlighting and search (Ctrl+F). Search script names or what's inside
+  them, and save the decompiled source or the original file.
+- **Assets**: search every file in the game by name or episode (e.g.
+  `WalkingDead203 .d3dtx`), preview textures/models, play sound files (voice lines,
+  music, FMOD banks), export files (textures as PNG or DDS, sounds as WAV), or send
+  one to your mod as a replacement. **Export results…** saves every match at once,
+  converted to everyday formats (PNG, MP3/Ogg, decompiled Lua, subtitle transcripts)
+  unless *Convert* is off.
+- **Mod**: the files you replace and with what, saved as a `.ttmod` project.
+  **Build patch** stages *only* your swapped files into a tiny `0.ttarch` /
+  `0.ttarch2`; drop it in the game's archive folder and the game reads it as a
+  patch that overrides the originals.
+- **Settings** (the gear, top right): default look and camera speeds, background,
+  playback, dialogue and subtitle language, script view, export folder and
+  conversion, scene texture detail. Changes apply at once and are saved with the
+  library. It also clears the saved game indexes and opens the crash log
+  (`%LOCALAPPDATA%\TelltaleModdingStudio\crash.log`).
+
+### 3D viewports
+
+The Characters, Scenes and Dialogue viewports share their controls: drag to orbit,
+middle-drag (or Shift+drag) to pan, scroll to dolly, double-click or **F** to
+frame. Click the view, then **W/A/S/D** fly and **Q/E** lower and raise the camera;
+hold the right button to look around while flying (the wheel then sets the
+speed). The switch at the top picks how models are shaded, for every viewport at
+once:
+
+- **Studio**: even, neutral lighting for inspecting textures.
+- **Game**: the open game's own look: its outlines, light model, ink lines and,
+  where the game uses it (the Definitive Series), graphic black. **Engine default
+  intensity** sets how far that game's black shadows reach.
+- **Graphic black**: the game's look with solid black shadows, for any game.
+  **Graphic black intensity** sets how far they reach (0% turns them off).
+
+Voice and sound files are FMOD sound banks holding MP3 or Vorbis audio. Vorbis
+banks omit their codec setup, which the app reads from the FMOD library the game
+installs next to its executable, so those games' sounds only play from an install
+folder.
+
+Playback poses the skeleton from the clip alone: the engine's runtime IK and
+layering are not reproduced, so foot-planted or layered clips can differ from
+the game.
 
 ## Repository layout
 
 | Path | What it is |
 |---|---|
-| `src/TelltaleModding.Core` | Cross-platform .NET 8 library: game database, archive header detection, async ttarchext wrapper, listing parser, mod-project model, minimal-patch builder, DDS decoder |
+| `src/TelltaleModding.Core` | Cross-platform .NET 8 library: native `.ttarch2` reader (`Archives`), game inventory: install detection, archive priorities, characters, outfits, animations (`Catalog`), mesh/skeleton/animation/texture decoders (`Meshes`, `Textures`), model assembly, animation playback, face rig and lip sync (`Scene`), glTF export (`Export`), FMOD sound decoding (`Audio`), subtitle databases and their voice lines (`Dialogue`), Lua bytecode decompiler (`Scripts`), ttarchext wrapper, mod-project model, minimal-patch builder |
 | `src/TelltaleModding.App` | Avalonia 11 desktop UI (MVVM) |
-| `tests/TelltaleModding.Core.Tests` | xUnit suite, including detection against real sample archives |
-| `engine/ttarchext` | The ttarchext CLI (source + Windows exe) — the extraction/build engine |
-| `samples/` | Real `.ttarch2` archives used by the tests |
+| `tests/TelltaleModding.Core.Tests` | xUnit suite, including tests against real sample files and (when present) installed games |
+| `tests/TelltaleModding.App.Tests` | Headless UI tests: render every workspace to PNG, and drive the app end-to-end against installed games |
+| `engine/ttarchext` | The ttarchext CLI (source + Windows exe), the extraction/build engine |
+| `samples/` | Game files the tests read (archives, meshes, textures, skeletons, animations, props, resource descriptions). Only a few are in the repository; tests whose sample is missing are skipped |
 | `legacy/winforms` | The original WinForms GUI, kept for reference |
 
 ## Building
@@ -48,10 +154,10 @@ dotnet run --project src/TelltaleModding.App
 
 Everything builds and runs cross-platform. The engine comes in two flavours:
 
-- **`ttarchext.exe`** (shipped) — the Windows binary. Required for
+- **`ttarchext.exe`** (shipped): the Windows binary. Required for
   Oodle-compressed archives (lowercase `zCTT`/`eCTT` tags), because Oodle
   decompression works by loading the game's own `oo2core` DLL.
-- **Native build** — `make -C engine/ttarchext` (needs `zlib1g-dev`) produces a
+- **Native build**: `make -C engine/ttarchext` (needs `zlib1g-dev`) produces a
   Linux/macOS `ttarchext` that handles encrypted, zlib-compressed, and plain
   archives. This repo carries a small portability fix for it (the original
   Blowfish code assumed 32-bit `unsigned long`).
@@ -68,7 +174,7 @@ built patch. CI does this on every push.
 ## Notes
 
 - Don't enable the "-m" meta decode option for files you plan to rebuild into a
-  patch — decoded DDS/OGG files are not valid archive members.
+  patch; decoded DDS/OGG files are not valid archive members.
 - If the game crashes loading a rebuilt v7+ archive, rebuild with ttarchext's
   compatibility mode (`-x`).
 - ttarchext is © Luigi Auriemma, GPL-2.0. Game archives and their contents belong

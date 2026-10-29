@@ -1,0 +1,200 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             x:Class="TelltaleModding.App.Views.ConversationView"
+             x:DataType="vm:ConversationViewModel">
+
+    <Grid ColumnDefinitions="300,*">
+
+        <!-- Scene and its conversations -->
+        <Border Classes="panel" Padding="12">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+                <TextBlock Classes="h2" Text="Conversations" Margin="2,0,0,10" />
+                <ComboBox Grid.Row="1" HorizontalAlignment="Stretch" Margin="0,0,0,8" IsTextSearchEnabled="True"
+                          ItemsSource="{Binding Scenes}" SelectedItem="{Binding SelectedScene}"
+                          IsEnabled="{Binding HasSource}" PlaceholderText="Pick a scene's dialog"
+                          ToolTip.Tip="The scene's .dlog file" />
+                <ToggleSwitch Grid.Row="2" IsChecked="{Binding OnlyWithLines}" OnContent="With dialogue only"
+                              OffContent="All entry points" Margin="2,0,0,4"
+                              ToolTip.Tip="Hide entry points that never say anything" />
+                <TextBlock Grid.Row="3" Classes="faint" Text="{Binding Status}" TextWrapping="Wrap" Margin="2,0,0,6" />
+                <ListBox Grid.Row="4" ItemsSource="{Binding Conversations}" SelectedItem="{Binding SelectedConversation}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ConversationItemViewModel">
+                            <StackPanel Spacing="1" Margin="0,2">
+                                <TextBlock Text="{Binding Title}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Preview}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis"
+                                           IsVisible="{Binding HasPreview}" />
+                                <TextBlock Text="{Binding Subtitle}" Classes="faint" FontSize="11" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <ProgressBar Grid.Row="4" IsIndeterminate="True" VerticalAlignment="Top" Margin="0,8"
+                             IsVisible="{Binding IsLoading}" />
+                <TextBlock Grid.Row="4" Classes="muted" Margin="4,8" IsVisible="{Binding !HasSource}"
+                           Text="Open a game to browse its conversations." TextWrapping="Wrap" />
+            </Grid>
+        </Border>
+
+        <!-- The selected conversation -->
+        <Border Grid.Column="1" Classes="panel" Margin="12,0,0,0" Padding="12">
+            <Grid RowDefinitions="Auto,*">
+                <Grid ColumnDefinitions="*,Auto" Margin="2,0,0,6">
+                    <TextBlock Classes="h2" Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="primary" Command="{Binding StartPlayThroughCommand}"
+                            IsEnabled="{Binding HasConversation}" ToolTip.Tip="Play the conversation from the top, choosing as you go">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconPlay}" Width="13" Height="13" />
+                            <TextBlock Text="Play through" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <TabControl Grid.Row="1" SelectedIndex="{Binding ModeIndex}" Padding="0,6,0,0">
+
+                    <!-- Tree -->
+                    <TabItem Header="Tree" FontSize="14">
+                        <Grid RowDefinitions="Auto,*">
+                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                                <Button Classes="ghost" FontSize="12" Content="Expand all" Command="{Binding ExpandAllCommand}" />
+                                <Button Classes="ghost" FontSize="12" Content="Collapse all" Command="{Binding CollapseAllCommand}" />
+                                <ToggleSwitch IsChecked="{Binding ShowLogic}" OnContent="Logic shown" OffContent="Logic hidden"
+                                              ToolTip.Tip="Show start, logic, script, wait and idle nodes" />
+                                <Button Classes="ghost" FontSize="12" Command="{Binding PlayFromHereCommand}"
+                                        IsEnabled="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                        ToolTip.Tip="Click through from the selected item">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <PathIcon Data="{StaticResource IconPlay}" Width="12" Height="12" />
+                                        <TextBlock Text="Play from here" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                            <TreeView Grid.Row="1" x:Name="NodeTree" ItemsSource="{Binding Tree}" SelectedItem="{Binding SelectedNode}"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <TreeView.Styles>
+                                    <Style Selector="TreeViewItem" x:DataType="vm:ConversationNodeViewModel">
+                                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                    </Style>
+                                </TreeView.Styles>
+                                <TreeView.ItemTemplate>
+                                    <TreeDataTemplate x:DataType="vm:ConversationNodeViewModel" ItemsSource="{Binding Children}">
+                                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,2">
+                                            <Border Classes="chip" Background="{Binding BadgeBrush}" VerticalAlignment="Top" Margin="0,1,8,0"
+                                                    MinWidth="54">
+                                                <TextBlock Text="{Binding Badge}" FontSize="10" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center" />
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding Speaker}" FontWeight="SemiBold" FontSize="13"
+                                                       Margin="0,0,8,0" IsVisible="{Binding HasSpeaker}" />
+                                            <StackPanel Grid.Column="2" Spacing="1">
+                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13"
+                                                           Classes.muted="{Binding IsMuted}" />
+                                                <TextBlock Text="{Binding Detail}" Classes="faint" FontStyle="Italic" FontSize="11"
+                                                           IsVisible="{Binding HasDetail}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Top">
+                                                <Button Classes="icon" Width="28" Height="24" Padding="4" Command="{Binding PlayCommand}"
+                                                        IsVisible="{Binding CanPlay}" ToolTip.Tip="Play this line">
+                                                    <PathIcon Data="{StaticResource IconVolume}" Width="13" Height="13" />
+                                                </Button>
+                                                <Button Classes="ghost" FontSize="12" Padding="8,2" Command="{Binding GoToCommand}"
+                                                        IsVisible="{Binding IsLink}" Foreground="{StaticResource Accent}"
+                                                        ToolTip.Tip="Show where this continues" Content="Go ›" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </TreeDataTemplate>
+                                </TreeView.ItemTemplate>
+                            </TreeView>
+                            <TextBlock Grid.Row="1" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Text="Pick a conversation." IsVisible="{Binding !HasConversation}" />
+                        </Grid>
+                    </TabItem>
+
+                    <!-- Click-through -->
+                    <TabItem Header="Play through" FontSize="14">
+                        <Grid RowDefinitions="*,Auto,Auto">
+                            <ScrollViewer x:Name="TranscriptScroll" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding Transcript}" Margin="0,0,8,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PlayStepViewModel">
+                                            <Grid ColumnDefinitions="140,*,Auto" Margin="0,3">
+                                                <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" FontSize="13"
+                                                           TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" FontSize="13"
+                                                           Foreground="{Binding Foreground}"
+                                                           FontStyle="{Binding IsInfo, Converter={x:Static vm:ConversationConverters.InfoStyle}}" />
+                                                <Button Grid.Column="2" Classes="icon" Width="28" Height="24" Padding="4"
+                                                        Command="{Binding $parent[ItemsControl].((vm:ConversationViewModel)DataContext).ReplayStepCommand}"
+                                                        CommandParameter="{Binding}" IsVisible="{Binding CanReplay}" ToolTip.Tip="Hear it again">
+                                                    <PathIcon Data="{StaticResource IconVolume}" Width="13" Height="13" />
+                                                </Button>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                                       Text="Press Play through to hear the conversation; at each choice, pick a reply."
+                                       IsVisible="{Binding !HasTranscript}" />
+
+                            <!-- Options waiting for a pick -->
+                            <Border Grid.Row="1" Classes="card" Padding="10" Margin="0,8,0,0" IsVisible="{Binding HasPendingOptions}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="section" Text="{Binding PlayState}" />
+                                    <ItemsControl ItemsSource="{Binding PendingOptions}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Spacing="4" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PlayOptionViewModel">
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                                        Command="{Binding $parent[ItemsControl].((vm:ConversationViewModel)DataContext).ChooseCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <StackPanel Spacing="1">
+                                                        <TextBlock Text="{Binding Label}" TextWrapping="Wrap" FontSize="13"
+                                                                   Classes.muted="{Binding IsMuted}" />
+                                                        <TextBlock Text="{Binding Detail}" Classes="faint" FontSize="11" TextWrapping="Wrap"
+                                                                   IsVisible="{Binding HasDetail}" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Controls -->
+                            <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Button Command="{Binding StartPlayThroughCommand}" FontSize="12" ToolTip.Tip="Start again from the top">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <PathIcon Data="{StaticResource IconRefresh}" Width="13" Height="13" />
+                                            <TextBlock Text="Restart" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding AdvanceCommand}" FontSize="12" ToolTip.Tip="Next line">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <PathIcon Data="{StaticResource IconNext}" Width="13" Height="13" />
+                                            <TextBlock Text="Next" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Classes="faint" Text="{Binding PlayState}" VerticalAlignment="Center"
+                                           Margin="12,0" TextTrimming="CharacterEllipsis" IsVisible="{Binding !HasPendingOptions}" />
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                                    <ToggleSwitch IsChecked="{Binding SpeakLines}" OnContent="Voice on" OffContent="Voice off"
+                                                  ToolTip.Tip="Play each line's recording as it is reached" />
+                                    <ToggleSwitch IsChecked="{Binding AutoAdvance}" OnContent="Auto" OffContent="Manual"
+                                                  ToolTip.Tip="Move on when a line finishes" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

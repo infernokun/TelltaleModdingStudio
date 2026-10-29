@@ -37,6 +37,10 @@ public static class KnownTypeNames
         "T3MeshTexture", "T3MeshMaterial", "T3MeshTexCoordTransform",
         "GFXPlatformAttributeParams",
 
+        // Confirmed as material/prop property value types (Definitive Series and earlier).
+        "int32", "T3MaterialEnlightenPrecomputeParams", "EnumT3MaterialNormalSpaceType",
+        "BlendMode", "EnumT3MaterialLightModelType",
+
         // Confirmed in real .d3dtx headers.
         "T3Texture", "T3SamplerStateBlock", "EnumPlatformType",
         "RenderSwizzleParams", "T3Texture::RegionStreamHeader",

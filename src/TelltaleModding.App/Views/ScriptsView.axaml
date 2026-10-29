@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             xmlns:ae="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
+             x:Class="TelltaleModding.App.Views.ScriptsView"
+             x:DataType="vm:ScriptsViewModel">
+
+    <Grid ColumnDefinitions="320,*,220" Margin="12">
+
+        <!-- Script list -->
+        <Border Classes="panel" Padding="12">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+                <TextBlock Classes="h2" Text="Scripts" Margin="2,0,0,10" />
+                <TextBox Grid.Row="1" Classes="search" Text="{Binding Query}" IsEnabled="{Binding HasSource}"
+                         Watermark="Find a script (e.g. achievement, menu)…" Margin="0,0,0,6" />
+                <CheckBox Grid.Row="2" IsChecked="{Binding SearchContents}" Margin="2,0,0,4" FontSize="12"
+                          Content="Also search inside scripts (strings, functions)" />
+                <TextBlock Grid.Row="3" Classes="faint" Text="{Binding Summary}" Margin="4,0,0,6" />
+                <ListBox Grid.Row="4" ItemsSource="{Binding Scripts}" SelectedItem="{Binding Selected}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ScriptRowViewModel">
+                            <StackPanel Spacing="1">
+                                <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Detail}" Classes="faint" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Grid.Row="4" Classes="muted" Margin="4,8" IsVisible="{Binding !HasSource}"
+                           Text="Open a game from Home to read its scripts." TextWrapping="Wrap" />
+            </Grid>
+        </Border>
+
+        <!-- Code -->
+        <Border Grid.Column="1" Classes="panel" Margin="12,0,0,0" Padding="14">
+            <Grid RowDefinitions="Auto,Auto,*">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="h2" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasScript}">
+                        <StackPanel Orientation="Horizontal" IsVisible="{Binding HasDisassembly}">
+                            <RadioButton Classes="nav" Content="Decompiled"
+                                         Tag="{StaticResource IconCode}" IsChecked="{Binding IsDecompiledView}" />
+                            <RadioButton Classes="nav" Content="Listing"
+                                         Tag="{StaticResource IconGrid}" IsChecked="{Binding IsDisassemblyView}" />
+                        </StackPanel>
+                        <Button Command="{Binding SaveDecompiledCommand}" FontSize="12"
+                                ToolTip.Tip="Save the readable Lua source">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon Data="{StaticResource IconExport}" Width="13" Height="13" />
+                                <TextBlock Text="Save .lua…" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding SaveOriginalCommand}" FontSize="12" Content="Save original…"
+                                ToolTip.Tip="Save the script exactly as the game stores it (decrypted)" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Grid.Row="1" Classes="muted" Text="{Binding Info}" Margin="0,4,0,10" TextWrapping="Wrap" />
+                <Border Grid.Row="2" CornerRadius="8" ClipToBounds="True" Background="{StaticResource Bg}"
+                        BorderBrush="{StaticResource Line}" BorderThickness="1">
+                    <Panel>
+                        <ae:TextEditor x:Name="Editor" IsReadOnly="True" ShowLineNumbers="True"
+                                       FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="13"
+                                       Background="Transparent" Padding="6,4" IsVisible="{Binding HasScript}"
+                                       HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
+                        <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsVisible="{Binding !HasScript}" Text="Pick a script to read it." />
+                        <ProgressBar IsIndeterminate="True" Width="160" VerticalAlignment="Top" Margin="0,12"
+                                     IsVisible="{Binding IsLoading}" />
+                    </Panel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Outline -->
+        <Border Grid.Column="2" Classes="panel" Margin="12,0,0,0" Padding="12">
+            <Grid RowDefinitions="Auto,*">
+                <TextBlock Classes="section" Text="FUNCTIONS" Margin="2,0,0,8" />
+                <ListBox Grid.Row="1" x:Name="OutlineList" ItemsSource="{Binding Outline}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12"
+                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

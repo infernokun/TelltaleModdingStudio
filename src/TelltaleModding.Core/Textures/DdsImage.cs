@@ -5,7 +5,7 @@ namespace TelltaleModding.Core.Textures;
 /// <summary>
 /// A decoded DDS texture as a top-down, tightly-packed RGBA8888 pixel buffer, suitable
 /// for handing to any UI toolkit's bitmap. Supports the block formats Telltale textures
-/// most commonly use (BC1/DXT1, BC2/DXT3, BC3/DXT5) plus uncompressed 32-bit.
+/// most commonly use (BC1/DXT1, BC2/DXT3, BC3/DXT5, BC4/ATI1, BC5/ATI2) plus uncompressed 32-bit.
 /// </summary>
 public sealed class DdsImage
 {
@@ -15,11 +15,15 @@ public sealed class DdsImage
     /// <summary>Pixels in RGBA order, row-major, top-down. Length is Width*Height*4.</summary>
     public byte[] Rgba { get; }
 
-    private DdsImage(int width, int height, byte[] rgba)
+    /// <summary>The stored pixel format the image was decoded from.</summary>
+    public DdsPixelFormat Format { get; }
+
+    private DdsImage(int width, int height, byte[] rgba, DdsPixelFormat format = DdsPixelFormat.Rgba32)
     {
         Width = width;
         Height = height;
         Rgba = rgba;
+        Format = format;
     }
 
     private const uint MagicDds = 0x20534444; // "DDS "
@@ -78,13 +82,26 @@ public sealed class DdsImage
             switch (FourCcString(fourCc))
             {
                 case "DXT1":
-                    return DecodeBlocks(body, width, height, 8, DecodeDxt1Block, rgba, out image, out error);
+                    return DecodeBlocks(body, width, height, 8, DecodeDxt1Block, rgba, DdsPixelFormat.Bc1, out image, out error);
                 case "DXT3":
-                    return DecodeBlocks(body, width, height, 16, DecodeDxt3Block, rgba, out image, out error);
+                    return DecodeBlocks(body, width, height, 16, DecodeDxt3Block, rgba, DdsPixelFormat.Bc2, out image, out error);
                 case "DXT5":
-                    return DecodeBlocks(body, width, height, 16, DecodeDxt5Block, rgba, out image, out error);
+                    return DecodeBlocks(body, width, height, 16, DecodeDxt5Block, rgba, DdsPixelFormat.Bc3, out image, out error);
+                case "ATI1" or "BC4U":
+                    return DecodeBlocks(body, width, height, 8, DecodeBc4Block, rgba, DdsPixelFormat.Bc4, out image, out error);
+                case "ATI2" or "BC5U":
+                    return DecodeBlocks(body, width, height, 16, DecodeBc5Block, rgba, DdsPixelFormat.Bc5, out image, out error);
                 case "DX10":
-                    error = "DX10-header DDS (e.g. BC7) is not supported yet — extract and view externally.";
+                    if (data.Length >= 148)
+                    {
+                        uint dxgi = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(128));
+                        var dx10Body = data.AsSpan(148);
+                        if (dxgi is 79 or 80)
+                            return DecodeBlocks(dx10Body, width, height, 8, DecodeBc4Block, rgba, DdsPixelFormat.Bc4, out image, out error);
+                        if (dxgi is 82 or 83)
+                            return DecodeBlocks(dx10Body, width, height, 16, DecodeBc5Block, rgba, DdsPixelFormat.Bc5, out image, out error);
+                    }
+                    error = "DX10-header DDS (e.g. BC7) is not supported yet. Extract it and view it externally.";
                     return false;
                 default:
                     error = $"Unsupported DDS FourCC '{FourCcString(fourCc)}'.";
@@ -118,11 +135,11 @@ public sealed class DdsImage
                 byte v = body[i];
                 rgba[i * 4] = v; rgba[i * 4 + 1] = v; rgba[i * 4 + 2] = v; rgba[i * 4 + 3] = 255;
             }
-            image = new DdsImage(width, height, rgba);
+            image = new DdsImage(width, height, rgba, DdsPixelFormat.Luminance8);
             return true;
         }
 
-        error = "Unsupported DDS pixel format (only DXT1/3/5, 32-bit RGB/RGBA, and 8-bit alpha/luminance are decoded).";
+        error = "Unsupported DDS pixel format (only DXT1/3/5, BC4/BC5, 32-bit RGB/RGBA, and 8-bit alpha/luminance are decoded).";
         return false;
     }
 
@@ -130,7 +147,7 @@ public sealed class DdsImage
 
     private static bool DecodeBlocks(
         ReadOnlySpan<byte> body, int width, int height, int blockBytes,
-        BlockDecoder decoder, byte[] rgba, out DdsImage? image, out string? error)
+        BlockDecoder decoder, byte[] rgba, DdsPixelFormat format, out DdsImage? image, out string? error)
     {
         image = null;
         error = null;
@@ -169,7 +186,7 @@ public sealed class DdsImage
             }
         }
 
-        image = new DdsImage(width, height, rgba);
+        image = new DdsImage(width, height, rgba, format);
         return true;
     }
 
@@ -197,8 +214,9 @@ public sealed class DdsImage
 
         if (c0 > c1)
         {
-            pal[2] = Lerp(pal[0], pal[1], 1, 2);
-            pal[3] = Lerp(pal[0], pal[1], 2, 1);
+            // color2 = (2·c0 + c1)/3, color3 = (c0 + 2·c1)/3.
+            pal[2] = Lerp(pal[0], pal[1], 2, 1);
+            pal[3] = Lerp(pal[0], pal[1], 1, 2);
         }
         else
         {
@@ -227,6 +245,54 @@ public sealed class DdsImage
             alpha[i] = (byte)(nib * 17); // 0..15 -> 0..255
         }
         DecodeColorInto(block[8..], alpha, outPixels);
+    }
+
+    /// <summary>BC4: one interpolated channel, shown as opaque grey.</summary>
+    private static void DecodeBc4Block(ReadOnlySpan<byte> block, Span<uint> outPixels)
+    {
+        Span<byte> v = stackalloc byte[16];
+        DecodeInterpolatedChannel(block, v);
+        for (int i = 0; i < 16; i++)
+            outPixels[i] = Pack(v[i], v[i], v[i], 255);
+    }
+
+    /// <summary>
+    /// BC5: two interpolated channels (red, green), a normal map's X and Y. Blue is the
+    /// reconstructed Z so the image previews as a familiar normal map.
+    /// </summary>
+    private static void DecodeBc5Block(ReadOnlySpan<byte> block, Span<uint> outPixels)
+    {
+        Span<byte> r = stackalloc byte[16];
+        Span<byte> g = stackalloc byte[16];
+        DecodeInterpolatedChannel(block, r);
+        DecodeInterpolatedChannel(block[8..], g);
+        for (int i = 0; i < 16; i++)
+        {
+            float x = r[i] / 127.5f - 1f, y = g[i] / 127.5f - 1f;
+            float z = MathF.Sqrt(MathF.Max(0f, 1f - x * x - y * y));
+            outPixels[i] = Pack(r[i], g[i], (byte)MathF.Round((z * 0.5f + 0.5f) * 255f), 255);
+        }
+    }
+
+    /// <summary>Decodes an 8-byte BC4-style block (two endpoints, 3-bit indices) into 16 values.</summary>
+    private static void DecodeInterpolatedChannel(ReadOnlySpan<byte> block, Span<byte> values)
+    {
+        Span<byte> pal = stackalloc byte[8];
+        byte e0 = block[0], e1 = block[1];
+        pal[0] = e0;
+        pal[1] = e1;
+        if (e0 > e1)
+            for (int i = 1; i <= 6; i++) pal[i + 1] = (byte)(((7 - i) * e0 + i * e1 + 3) / 7);
+        else
+        {
+            for (int i = 1; i <= 4; i++) pal[i + 1] = (byte)(((5 - i) * e0 + i * e1 + 2) / 5);
+            pal[6] = 0;
+            pal[7] = 255;
+        }
+        ulong bits = 0;
+        for (int i = 0; i < 6; i++) bits |= (ulong)block[2 + i] << (i * 8);
+        for (int i = 0; i < 16; i++)
+            values[i] = pal[(int)((bits >> (i * 3)) & 0x7)];
     }
 
     private static void DecodeDxt5Block(ReadOnlySpan<byte> block, Span<uint> outPixels)
@@ -262,9 +328,10 @@ public sealed class DdsImage
     {
         Span<(byte r, byte g, byte b)> pal = stackalloc (byte, byte, byte)[4];
         UnpackColors(colorBlock, out _, out _, pal);
-        // In DXT3/5 the color block is always treated as 4-color mode.
-        pal[2] = Lerp(pal[0], pal[1], 1, 2);
-        pal[3] = Lerp(pal[0], pal[1], 2, 1);
+        // In DXT3/5 the color block is always treated as 4-color mode:
+        // color2 = (2·c0 + c1)/3, color3 = (c0 + 2·c1)/3.
+        pal[2] = Lerp(pal[0], pal[1], 2, 1);
+        pal[3] = Lerp(pal[0], pal[1], 1, 2);
 
         uint indices = BinaryPrimitives.ReadUInt32LittleEndian(colorBlock[4..]);
         for (int i = 0; i < 16; i++)
@@ -330,4 +397,18 @@ public sealed class DdsImage
         (char)((fourCc >> 16) & 0xFF),
         (char)((fourCc >> 24) & 0xFF),
     });
+}
+
+/// <summary>The stored pixel format a <see cref="DdsImage"/> was decoded from.</summary>
+public enum DdsPixelFormat
+{
+    Rgba32,
+    Luminance8,
+    Bc1,
+    Bc2,
+    Bc3,
+    /// <summary>One channel (decoded to grey).</summary>
+    Bc4,
+    /// <summary>Two channels, normal X in red, Y in green (blue holds the reconstructed Z).</summary>
+    Bc5,
 }

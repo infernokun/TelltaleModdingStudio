@@ -8,7 +8,7 @@ namespace TelltaleModding.Core.Tests;
 /// <summary>
 /// End-to-end tests that drive a real ttarchext binary against the real sample
 /// archives. The Game of Thrones sample is ECTT (Blowfish-encrypted + zlib), the
-/// test sample is NCTT (plain) — together they exercise both container paths.
+/// test sample is NCTT (plain); together they exercise both container paths.
 /// </summary>
 public class EngineIntegrationTests
 {

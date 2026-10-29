@@ -4,7 +4,7 @@ namespace TelltaleModding.Core.Tests;
 
 public class TtarchArgumentsTests
 {
-    [Fact]
+    [SkippableFact]
     public void Extract_ProducesGamenumArchiveOutputInOrder()
     {
         var args = TtarchArguments.Extract(24, @"C:\games\mi.ttarch", @"C:\out");
@@ -12,7 +12,7 @@ public class TtarchArgumentsTests
         Assert.Equal(new[] { "-o", "24", @"C:\games\mi.ttarch", @"C:\out" }, args);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Extract_PathsWithSpacesRemainSingleTokens()
     {
         var args = TtarchArguments.Extract(24, @"C:\my games\a.ttarch", @"C:\new folder");
@@ -21,7 +21,7 @@ public class TtarchArgumentsTests
         Assert.Contains(@"C:\new folder", args);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Extract_ListFilterMetaAndVersionEmitFlags()
     {
         var args = TtarchArguments.Extract(1, "a", "b", new ExtractOptions
@@ -44,7 +44,7 @@ public class TtarchArgumentsTests
         Assert.True(vi >= 0 && args[vi + 1] == "7");
     }
 
-    [Fact]
+    [SkippableFact]
     public void Build_EmitsRebuildAndVersionWithOutputBeforeInput()
     {
         var args = TtarchArguments.Build(57, @"C:\mods\0.ttarch2", @"C:\mods\staging",
@@ -59,7 +59,7 @@ public class TtarchArgumentsTests
         Assert.Equal(new[] { "57", @"C:\mods\0.ttarch2", @"C:\mods\staging" }, tail);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Build_CompatibilityModeAddsXFlag()
     {
         var args = TtarchArguments.Build(57, "o", "i", new BuildOptions { CompatibilityMode = true });

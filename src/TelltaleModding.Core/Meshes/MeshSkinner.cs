@@ -6,7 +6,7 @@ namespace TelltaleModding.Core.Meshes;
 /// CPU skinning of a mesh against a skeleton pose. Mesh vertices are authored in
 /// model space at the skeleton's bind pose, so skinning applies
 /// inverse-bind × posed-world per influencing bone: with the rest pose in, the
-/// output equals the input (verified in tests — this pins down the palette
+/// output equals the input (verified in tests; this pins down the palette
 /// mapping and the bind-pose source).
 /// </summary>
 public sealed class MeshSkinner
@@ -30,30 +30,52 @@ public sealed class MeshSkinner
         for (int i = 0; i < bind.Length; i++)
             Matrix4x4.Invert(bind[i], out _inverseBind[i]);
 
-        // Resolve each vertex's palette-relative blend indices to skeleton bones.
-        // Batches carry the palette index; vertices are covered via batch vertex ranges.
-        _vertexBones = new int[geometry.Positions.Length * 4];
-        Array.Fill(_vertexBones, -1);
+        _vertexBones = ResolveVertexBones(geometry, skeleton);
+    }
+
+    /// <summary>
+    /// Each vertex's palette-relative blend indices resolved into skeleton bone indices
+    /// (4 per vertex, -1 = none), through the palette of the batch that draws the vertex.
+    /// </summary>
+    public static int[] ResolveVertexBones(MeshGeometry geometry, SkeletonFile skeleton)
+    {
+        var bones = new int[geometry.Positions.Length * 4];
+        Array.Fill(bones, -1);
+        if (geometry.BlendIndices is null || geometry.BonePalettes is null)
+            return bones;
         var bySymbol = skeleton.BoneIndexBySymbol;
+        var vertexPalettes = geometry.VertexPaletteIndices();
         Span<byte> src = stackalloc byte[4];
-        foreach (var batch in geometry.Batches)
+        for (int v = 0; v < vertexPalettes.Length; v++)
         {
-            if (batch.BonePaletteIndex < 0 || batch.BonePaletteIndex >= geometry.BonePalettes.Count)
+            if (vertexPalettes[v] < 0)
                 continue;
-            var palette = geometry.BonePalettes[batch.BonePaletteIndex];
-            int lo = Math.Max(0, batch.MinVertex);
-            int hi = Math.Min(geometry.Positions.Length - 1, batch.MaxVertex);
-            for (int v = lo; v <= hi; v++)
+            var palette = geometry.BonePalettes[vertexPalettes[v]];
+            (src[0], src[1], src[2], src[3]) = geometry.BlendIndices[v];
+            for (int k = 0; k < 4; k++)
             {
-                (src[0], src[1], src[2], src[3]) = geometry.BlendIndices![v];
-                for (int k = 0; k < 4; k++)
-                {
-                    _vertexBones[v * 4 + k] =
-                        src[k] < palette.Count && bySymbol.TryGetValue(palette[src[k]], out int boneIndex)
-                            ? boneIndex : -1;
-                }
+                bones[v * 4 + k] =
+                    src[k] < palette.Count && bySymbol.TryGetValue(palette[src[k]], out int boneIndex)
+                        ? boneIndex : -1;
             }
         }
+        return bones;
+    }
+
+    /// <summary>Each vertex's skeleton bone indices (4 per vertex, -1 = none), as <see cref="ResolveVertexBones"/> gives them.</summary>
+    public IReadOnlyList<int> VertexBones => _vertexBones;
+
+    /// <summary>
+    /// The per-bone skinning matrices (inverse bind × posed world) for the given posed world
+    /// transforms; a vertex's position is the weighted sum of its bones' matrices applied to
+    /// its rest position (row-vector convention), divided by the sum of its weights.
+    /// </summary>
+    public Matrix4x4[] SkinMatrices(Matrix4x4[] posedWorld)
+    {
+        var skin = new Matrix4x4[_inverseBind.Length];
+        for (int i = 0; i < skin.Length; i++)
+            skin[i] = _inverseBind[i] * posedWorld[i];
+        return skin;
     }
 
     /// <summary>
@@ -62,9 +84,7 @@ public sealed class MeshSkinner
     /// </summary>
     public void Skin(Matrix4x4[] posedWorld, Vector3[] outPositions, Vector3[] outNormals)
     {
-        var skin = new Matrix4x4[_inverseBind.Length];
-        for (int i = 0; i < skin.Length; i++)
-            skin[i] = _inverseBind[i] * posedWorld[i];
+        var skin = SkinMatrices(posedWorld);
 
         var positions = _geometry.Positions;
         var normals = _geometry.Normals;

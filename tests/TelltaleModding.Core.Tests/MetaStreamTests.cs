@@ -5,7 +5,7 @@ namespace TelltaleModding.Core.Tests;
 public class TelltaleCrc64Tests
 {
     // Known-answer vectors taken from real MSV6 file headers.
-    [Theory]
+    [SkippableTheory]
     [InlineData("D3DMesh", 0x98A19836CF4CCB7DUL)]
     [InlineData("T3Texture", 0x3E249E7E6F38CCE2UL)]
     [InlineData("Symbol", 0x004F023463D89FB0UL)]
@@ -14,14 +14,14 @@ public class TelltaleCrc64Tests
     public void HashSymbol_matches_real_file_hashes(string name, ulong expected) =>
         Assert.Equal(expected, TelltaleCrc64.HashSymbol(name));
 
-    [Fact]
+    [SkippableFact]
     public void HashSymbol_is_case_insensitive() =>
         Assert.Equal(TelltaleCrc64.HashSymbol("d3dmesh"), TelltaleCrc64.HashSymbol("D3DMesh"));
 }
 
 public class MetaStreamHeaderTests
 {
-    [Fact]
+    [SkippableFact]
     public void Parses_real_mesh_file()
     {
         var data = File.ReadAllBytes(SampleData.MeshSample);
@@ -35,7 +35,7 @@ public class MetaStreamHeaderTests
         Assert.True(header.AsyncSectionSize > 0, "mesh should carry GPU buffers in the async section");
     }
 
-    [Fact]
+    [SkippableFact]
     public void Parses_real_texture_file()
     {
         var data = File.ReadAllBytes(SampleData.TinyTextureSample);
@@ -46,7 +46,7 @@ public class MetaStreamHeaderTests
         Assert.Equal(data.Length, header.TotalSize);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Parses_tiny_mesh_file()
     {
         var data = File.ReadAllBytes(SampleData.TinyMeshSample);
@@ -55,7 +55,7 @@ public class MetaStreamHeaderTests
         Assert.Equal(data.Length, header.TotalSize);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Header_only_parse_works_without_full_file()
     {
         var data = File.ReadAllBytes(SampleData.MeshSample);
@@ -66,7 +66,7 @@ public class MetaStreamHeaderTests
         Assert.Equal(28, header!.Classes.Count);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Describe_names_root_class_and_sections()
     {
         var header = MetaStreamHeader.Parse(File.ReadAllBytes(SampleData.MeshSample));
@@ -76,21 +76,21 @@ public class MetaStreamHeaderTests
         Assert.Contains("28 class versions", summary);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Rejects_non_telltale_data()
     {
         Assert.False(MetaStreamHeader.TryParse("not a mesh file at all!!"u8, out _, out var error));
         Assert.Contains("magic", error);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Reports_legacy_containers_distinctly()
     {
         Assert.False(MetaStreamHeader.TryParse("ERTM\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"u8, out _, out var error));
         Assert.Contains("Unsupported container", error);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Rejects_size_mismatch()
     {
         var data = File.ReadAllBytes(SampleData.MeshSample);

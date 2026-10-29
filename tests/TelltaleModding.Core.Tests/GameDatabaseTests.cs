@@ -4,20 +4,20 @@ namespace TelltaleModding.Core.Tests;
 
 public class GameDatabaseTests
 {
-    [Fact]
+    [SkippableFact]
     public void LoadsAllSixtyEightGames()
     {
         Assert.Equal(68, GameDatabase.Games.Length);
     }
 
-    [Fact]
+    [SkippableFact]
     public void GameNumbersAreContiguousFromZero()
     {
         for (int i = 0; i < GameDatabase.Games.Length; i++)
             Assert.Equal(i, GameDatabase.Games[i].GameNum);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(0, "Wallace & Gromit: Episode 1: Fright of the Bumblebees", ArchiveKind.Ttarch)]
     [InlineData(24, "Tales of Monkey Island 101: Launch of the Screaming Narwhal", ArchiveKind.Ttarch)]
     [InlineData(54, "The Wolf Among Us", ArchiveKind.Ttarch2)]
@@ -31,14 +31,14 @@ public class GameDatabaseTests
         Assert.Equal(kind, game.Kind);
     }
 
-    [Fact]
+    [SkippableFact]
     public void ByNumberReturnsNullOutOfRange()
     {
         Assert.Null(GameDatabase.ByNumber(-1));
         Assert.Null(GameDatabase.ByNumber(68));
     }
 
-    [Fact]
+    [SkippableFact]
     public void SearchIsCaseInsensitiveSubstring()
     {
         var results = GameDatabase.Search("wolf").ToList();
@@ -46,7 +46,7 @@ public class GameDatabaseTests
         Assert.Equal(54, results[0].GameNum);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Ttarch2GamesAreTheModernTitles()
     {
         // Everything from The Wolf Among Us (54) onward is ttarch2 except the two

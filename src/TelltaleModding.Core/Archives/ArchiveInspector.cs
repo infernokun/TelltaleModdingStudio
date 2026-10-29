@@ -12,19 +12,19 @@ public enum ArchiveMagic
     /// <summary>Classic .ttarch, header begins with a small version integer (1-9).</summary>
     Classic,
 
-    /// <summary>"ZCTT" — zlib-compressed .ttarch2 container.</summary>
+    /// <summary>"ZCTT": zlib-compressed .ttarch2 container.</summary>
     Zctt,
 
-    /// <summary>"ECTT" — encrypted+compressed .ttarch2 container.</summary>
+    /// <summary>"ECTT": encrypted+compressed .ttarch2 container.</summary>
     Ectt,
 
-    /// <summary>"NCTT" — uncompressed .ttarch2 container.</summary>
+    /// <summary>"NCTT": uncompressed .ttarch2 container.</summary>
     Nctt,
 
-    /// <summary>"3ATT" — version-3 ATT container.</summary>
+    /// <summary>"3ATT": version-3 ATT container.</summary>
     Att3,
 
-    /// <summary>"4ATT" — version-4 ATT container.</summary>
+    /// <summary>"4ATT": version-4 ATT container.</summary>
     Att4,
 }
 
@@ -40,7 +40,7 @@ public enum ArchiveMagic
 /// </param>
 /// <param name="OodleCompressed">
 /// True when the container used the lowercase (<c>zCTT</c>/<c>eCTT</c>) variant that
-/// signals Oodle compression — the game's own oo2core DLL is required to decode it.
+/// signals Oodle compression; the game's own oo2core DLL is required to decode it.
 /// </param>
 /// <param name="Description">Short human-readable summary for the UI.</param>
 public sealed record ArchiveInfo(

@@ -1,0 +1,240 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             xmlns:views="clr-namespace:TelltaleModding.App.Views"
+             x:Class="TelltaleModding.App.Views.DialogueView"
+             x:DataType="vm:DialogueViewModel">
+
+    <Grid ColumnDefinitions="280,*,Auto" RowDefinitions="*,Auto" Margin="12">
+
+        <!-- Filters: language, episode, speakers -->
+        <Border Grid.RowSpan="2" Classes="panel" Padding="12">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+                <TextBlock Classes="h2" Text="Dialogue" Margin="2,0,0,10" />
+                <UniformGrid Grid.Row="1" Columns="3" Margin="0,0,0,12">
+                    <RadioButton Classes="nav" Content="Lines" HorizontalAlignment="Stretch"
+                                 Tag="{StaticResource IconChat}" IsChecked="{Binding IsLinesMode}" />
+                    <RadioButton Classes="nav" Content="Talks" HorizontalAlignment="Stretch"
+                                 Tag="{StaticResource IconSwap}" IsChecked="{Binding IsConversationsMode}"
+                                 ToolTip.Tip="Conversations: each scene's dialogue tree and choices" />
+                    <RadioButton Classes="nav" Content="Music" HorizontalAlignment="Stretch"
+                                 Tag="{StaticResource IconVolume}" IsChecked="{Binding IsMusicMode}" />
+                </UniformGrid>
+
+                <!-- Episode narrows lines, conversations and music alike. -->
+                <ComboBox Grid.Row="2" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                          ItemsSource="{Binding Episodes}" SelectedItem="{Binding SelectedEpisode}"
+                          ToolTip.Tip="Episode: narrows lines, conversations and music" />
+
+                <!-- Subtitle language (lines and conversations) · voiced lines only -->
+                <Grid Grid.Row="3" ColumnDefinitions="*,8,*" Margin="0,0,0,12" IsVisible="{Binding !IsMusicMode}">
+                    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Languages}"
+                              SelectedItem="{Binding SelectedLanguage}" IsEnabled="{Binding !IsIndexing}"
+                              ToolTip.Tip="Subtitle language" />
+                    <ToggleSwitch Grid.Column="2" IsChecked="{Binding VoicedOnly}" OnContent="Voiced"
+                                  OffContent="All lines" ToolTip.Tip="Only show lines with a recording"
+                                  IsVisible="{Binding IsLinesMode}" />
+                </Grid>
+
+                <!-- Lines: speakers -->
+                <Grid Grid.Row="4" RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsLinesMode}">
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,0,0,4">
+                        <TextBlock Classes="section" Text="SPEAKERS" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Classes="ghost" FontSize="12" Padding="6,2" Content="Show all"
+                                Command="{Binding ClearSpeakerCommand}" IsVisible="{Binding HasSpeakerFilter}" />
+                    </Grid>
+                    <TextBlock Grid.Row="1" Classes="faint" Text="{Binding IndexStatus}" TextWrapping="Wrap" Margin="2,0,0,6" />
+                    <ListBox Grid.Row="2" ItemsSource="{Binding Speakers}" SelectedItem="{Binding SelectedSpeaker}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SpeakerOption">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" FontSize="13" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Lines, StringFormat={}{0:N0}}" Classes="faint"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Grid.Row="2" Classes="muted" Margin="4,8" IsVisible="{Binding !HasSource}"
+                               Text="Open a game from Home to hear its dialogue." TextWrapping="Wrap" />
+                </Grid>
+
+                <!-- Talks: what the episode leaves -->
+                <StackPanel Grid.Row="4" Spacing="6" Margin="2,0,0,0" IsVisible="{Binding IsConversationsMode}">
+                    <TextBlock Classes="section" Text="CONVERSATIONS" />
+                    <TextBlock Classes="faint" Text="{Binding Conversations.Status}" TextWrapping="Wrap" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               Text="Pick a scene on the right; the episode above narrows the list." />
+                </StackPanel>
+
+                <!-- Music: albums -->
+                <Grid Grid.Row="3" Grid.RowSpan="2" RowDefinitions="Auto,*" IsVisible="{Binding IsMusicMode}">
+                    <TextBlock Classes="section" Text="ALBUMS" Margin="2,0,0,6" />
+                    <ListBox Grid.Row="1" ItemsSource="{Binding Music.Albums}" SelectedItem="{Binding Music.SelectedAlbum}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MusicAlbumViewModel">
+                                <StackPanel Spacing="1">
+                                    <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Detail}" Classes="faint" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- Lines · conversations · music -->
+        <Border Grid.Column="1" Classes="panel" Margin="12,0,0,0" Padding="12">
+            <Panel>
+            <views:ConversationView DataContext="{Binding Conversations}" IsVisible="{Binding $parent[UserControl].((vm:DialogueViewModel)DataContext).IsConversationsMode}" />
+            <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsMusicMode}">
+                <Grid ColumnDefinitions="*,Auto" Margin="4,0,0,8">
+                    <TextBlock Classes="h2" Text="{Binding Music.SelectedAlbum.Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Classes="faint" Text="{Binding Music.Summary}" VerticalAlignment="Center" />
+                </Grid>
+                <ListBox Grid.Row="1" ItemsSource="{Binding Music.Tracks}" SelectedItem="{Binding Music.SelectedTrack}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MusicTrackViewModel">
+                            <Grid ColumnDefinitions="28,*,Auto" Margin="0,2">
+                                <PathIcon Data="{StaticResource IconVolume}" Width="14" Height="14"
+                                          Foreground="{StaticResource Accent}" IsVisible="{Binding IsCurrent}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="2" Text="{Binding Detail}" Classes="faint" VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <ProgressBar Grid.Row="1" IsIndeterminate="True" Width="200" VerticalAlignment="Center"
+                             IsVisible="{Binding Music.IsLoadingAlbum}" />
+            </Grid>
+            <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsLinesMode}">
+                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                    <TextBox Classes="search" Text="{Binding Query}" IsEnabled="{Binding HasSource}"
+                             Watermark="Search what's said, who says it, or the scene (e.g. airlock, rhys vasquez)…" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+                    <Button Command="{Binding ShowInConversationCommand}" FontSize="12" VerticalAlignment="Stretch"
+                            ToolTip.Tip="Open the selected line in its scene's conversation tree">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconSwap}" Width="13" Height="13" />
+                            <TextBlock Text="In conversation" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ExportVisibleCommand}" FontSize="12"
+                            VerticalAlignment="Stretch" ToolTip.Tip="Export every voiced line in the list, with a transcript">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconExport}" Width="13" Height="13" />
+                            <TextBlock Text="Export list…" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    </StackPanel>
+                </Grid>
+                <TextBlock Grid.Row="1" Classes="faint" Text="{Binding Summary}" Margin="4,0,0,6" />
+                <ListBox Grid.Row="2" x:Name="LineList" ItemsSource="{Binding Lines}" SelectedItem="{Binding SelectedLine}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DialogueLineViewModel">
+                            <Grid ColumnDefinitions="28,140,*" Margin="0,2">
+                                <Panel VerticalAlignment="Top" Margin="0,2,0,0">
+                                    <PathIcon Data="{StaticResource IconVolume}" Width="14" Height="14"
+                                              Foreground="{StaticResource Accent}" IsVisible="{Binding IsCurrent}" />
+                                    <PathIcon Data="{StaticResource IconMute}" Width="13" Height="13"
+                                              Foreground="{StaticResource Faint}" IsVisible="{Binding !HasAudio}"
+                                              ToolTip.Tip="No recording" />
+                                </Panel>
+                                <TextBlock Grid.Column="1" Text="{Binding Speaker}" FontWeight="SemiBold" FontSize="13"
+                                           TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
+                                <StackPanel Grid.Column="2" Spacing="2">
+                                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Directions}" Classes="faint" FontStyle="Italic"
+                                                   IsVisible="{Binding HasDirections}" />
+                                        <TextBlock Text="{Binding Where}" Classes="faint" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
+                            IsVisible="{Binding IsIndexing}">
+                    <ProgressBar IsIndeterminate="True" Width="200" />
+                    <TextBlock Classes="muted" Text="{Binding IndexStatus}" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+            </Panel>
+        </Border>
+
+        <!-- Speaker, lip-synced -->
+        <Border Grid.Column="2" Classes="panel" Margin="12,0,0,0" Padding="0" Width="400"
+                IsVisible="{Binding IsSpeakerVisible}" ClipToBounds="True">
+            <Panel>
+                <Panel x:Name="SpeakerHost" Background="Transparent">
+                    <views:MeshViewport x:Name="SpeakerViewport" IsVisible="{Binding Speaker.HasModel}" />
+                </Panel>
+                <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                           Margin="24" TextAlignment="Center" IsVisible="{Binding !Speaker.HasModel}"
+                           Text="The speaker appears here, lip-synced to the line." />
+                <ProgressBar IsIndeterminate="True" Width="140" VerticalAlignment="Top" Margin="0,14"
+                             IsVisible="{Binding Speaker.IsLoading}" />
+                <Panel Margin="10" HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding Speaker.HasModel}">
+                    <views:LookToggle DataContext="{Binding Look}" />
+                </Panel>
+                <Border VerticalAlignment="Bottom" Background="#99000000" Padding="12,6"
+                        IsVisible="{Binding Speaker.Caption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Text="{Binding Speaker.Caption}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" />
+                </Border>
+            </Panel>
+        </Border>
+
+        <!-- Now playing -->
+        <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Classes="panel" Margin="12,12,0,0" Padding="14,10">
+            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                    <Button Classes="icon" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous line">
+                        <PathIcon Data="{StaticResource IconPrevious}" />
+                    </Button>
+                    <Button Classes="icon" Command="{Binding NextCommand}" ToolTip.Tip="Next line" Margin="0,0,8,0">
+                        <PathIcon Data="{StaticResource IconNext}" />
+                    </Button>
+                </StackPanel>
+                <views:AudioPlayerBar Grid.Column="1" DataContext="{Binding Player}" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <ToggleButton IsChecked="{Binding ShowSpeaker}" Classes="ghost" ToolTip.Tip="Show the speaker, lip-synced">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconFace}" Width="14" Height="14" />
+                            <TextBlock Text="Speaker" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton IsChecked="{Binding AutoPlayNext}" Classes="ghost" ToolTip.Tip="Keep playing the next line">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconLoop}" Width="14" Height="14" />
+                            <TextBlock Text="Continuous" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <Button Command="{Binding ExportAudioCommand}" FontSize="12" ToolTip.Tip="Save the original recording (MP3 or Ogg)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconExport}" Width="13" Height="13" />
+                            <TextBlock Text="Save audio…" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ExportWavCommand}" FontSize="12" Content="Save as WAV…" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="4,8,0,0" Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsMusicMode}">
+                        <TextBlock Text="♪" Foreground="{StaticResource Accent}" />
+                        <TextBlock Text="{Binding Music.NowPlaying.Title}" TextTrimming="CharacterEllipsis" MaxWidth="900" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !IsMusicMode}">
+                        <TextBlock Text="{Binding NowPlaying.Speaker}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
+                        <TextBlock Text="{Binding NowPlaying.Text}" TextTrimming="CharacterEllipsis" MaxWidth="900" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Player.Error}" Foreground="{StaticResource Warn}" TextWrapping="Wrap"
+                               IsVisible="{Binding Player.Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <TextBlock Classes="faint" Text="Pick a line to hear it. Enter replays; Continuous plays the scene through."
+                               IsVisible="{Binding IsLinesMode}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

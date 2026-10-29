@@ -1,0 +1,444 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             xmlns:views="clr-namespace:TelltaleModding.App.Views"
+             x:Class="TelltaleModding.App.Views.CharactersView"
+             x:DataType="vm:CharactersViewModel">
+
+    <Grid ColumnDefinitions="290,*,340" Margin="12">
+
+        <!-- Character list -->
+        <Border Grid.Column="0" Classes="panel" Padding="12">
+            <Grid RowDefinitions="Auto,Auto,*">
+                <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,10">
+                    <TextBlock Classes="h2" Text="Characters" />
+                    <TextBlock Grid.Column="1" Classes="faint" Text="{Binding CharacterSummary}" VerticalAlignment="Center" />
+                </Grid>
+                <TextBox Grid.Row="1" Classes="search" Text="{Binding CharacterFilter}"
+                         Watermark="Search characters…" Margin="0,0,0,8" IsEnabled="{Binding HasSource}" />
+                <ListBox Grid.Row="2" ItemsSource="{Binding Characters}" SelectedItem="{Binding SelectedCharacter}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CharacterItemViewModel">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <Border Width="34" Height="34" CornerRadius="17" Background="{StaticResource CardHover}">
+                                    <TextBlock Text="{Binding Initials}" FontWeight="SemiBold" FontSize="12"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Spacing="1">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <Border Classes="chip" IsVisible="{Binding HasVariant}" Padding="6,0">
+                                            <TextBlock Text="{Binding Variant}" Classes="faint" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding PartsText}" Classes="faint" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Grid.Row="2" Classes="muted" TextWrapping="Wrap" Margin="4,8"
+                           IsVisible="{Binding !HasSource}"
+                           Text="Open a game from Home to see its characters." />
+            </Grid>
+        </Border>
+
+        <!-- Viewer -->
+        <Grid Grid.Column="1" RowDefinitions="*,Auto" Margin="12,0">
+            <Border Classes="panel" ClipToBounds="True" CornerRadius="12">
+                <Panel>
+                    <Panel x:Name="ViewportHost" Background="Transparent">
+                        <views:MeshViewport x:Name="Viewport" IsVisible="{Binding HasModel}" />
+                    </Panel>
+
+                    <!-- Title overlay -->
+                    <StackPanel Margin="20,16" HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="2"
+                                IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Classes="h1" Text="{Binding Title}" />
+                        <TextBlock Classes="muted" Text="{Binding Subtitle}" />
+                        <TextBlock Classes="faint" Text="{Binding Stats}" Margin="0,4,0,0" />
+                    </StackPanel>
+
+                    <!-- View tools -->
+                    <StackPanel Margin="12" HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal"
+                                IsVisible="{Binding HasModel}">
+                        <views:LookToggle DataContext="{Binding Look}" Margin="0,0,8,0" />
+                        <Button Classes="icon" Command="{Binding ShowLinesCommand}"
+                                ToolTip.Tip="Hear their lines" AutomationProperties.Name="Hear their lines">
+                            <PathIcon Data="{StaticResource IconChat}" />
+                        </Button>
+                        <ToggleButton x:Name="SkeletonToggle" Background="Transparent" BorderThickness="0" Padding="6"
+                                      Width="34" Height="34" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                      ToolTip.Tip="Show the skeleton" AutomationProperties.Name="Show skeleton">
+                            <PathIcon Data="{StaticResource IconSkeleton}" />
+                        </ToggleButton>
+                        <Button Classes="icon" Command="{Binding FaceViewCommand}"
+                                ToolTip.Tip="Face close-up" AutomationProperties.Name="Face close-up">
+                            <PathIcon Data="{StaticResource IconFace}" />
+                        </Button>
+                        <Button Classes="icon" Command="{Binding ResetViewCommand}"
+                                ToolTip.Tip="Reset view (or double-click the model)" AutomationProperties.Name="Reset view">
+                            <PathIcon Data="{StaticResource IconRecenter}" />
+                        </Button>
+                        <Button Classes="icon" Command="{Binding ExportGltfCommand}"
+                                ToolTip.Tip="Export… (glTF .glb with skeleton and the playing clip)" AutomationProperties.Name="Export">
+                            <PathIcon Data="{StaticResource IconExport}" />
+                        </Button>
+                    </StackPanel>
+
+                    <TextBlock Classes="faint" Margin="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                               IsVisible="{Binding HasModel}"
+                               Text="Drag to orbit · middle-drag to pan · WASD / QE to fly · right-drag to look · scroll to dolly · F to frame" />
+
+                    <!-- Empty state -->
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
+                                IsVisible="{Binding !HasModel}">
+                        <PathIcon Data="{StaticResource IconPerson}" Width="44" Height="44"
+                                  Foreground="{StaticResource Line}" HorizontalAlignment="Center"
+                                  IsVisible="{Binding !IsLoading}" />
+                        <TextBlock Classes="muted" HorizontalAlignment="Center" IsVisible="{Binding !IsLoading}"
+                                   Text="{Binding HasSource, Converter={x:Static vm:Converters.EmptyViewer}}" />
+                    </StackPanel>
+
+                    <!-- Loading -->
+                    <Border HorizontalAlignment="Center" VerticalAlignment="Center" Classes="card"
+                            Padding="20,14" IsVisible="{Binding IsLoading}">
+                        <StackPanel Spacing="10" Width="220">
+                            <TextBlock Text="{Binding LoadingText}" HorizontalAlignment="Center" />
+                            <ProgressBar IsIndeterminate="True" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Problems -->
+                    <Border Margin="16" HorizontalAlignment="Left" VerticalAlignment="Bottom" Classes="card"
+                            Padding="12,8" BorderBrush="{StaticResource Warn}"
+                            IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding Error}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" MaxWidth="480" />
+                    </Border>
+                </Panel>
+            </Border>
+
+            <!-- Playback bar -->
+            <Border Grid.Row="1" Classes="panel" Margin="0,12,0,0" Padding="12,10" IsEnabled="{Binding HasClip}">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+                    <Button Classes="primary round" Width="38" Height="38" Padding="0"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                            Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play / pause">
+                        <Panel>
+                            <PathIcon Data="{StaticResource IconPlay}" Foreground="White" IsVisible="{Binding !IsPlaying}" />
+                            <PathIcon Data="{StaticResource IconPause}" Foreground="White" IsVisible="{Binding IsPlaying}" />
+                        </Panel>
+                    </Button>
+                    <Button Grid.Column="1" Classes="icon" Margin="6,0,0,0" Command="{Binding StopCommand}"
+                            ToolTip.Tip="Stop and return to the rest pose">
+                        <PathIcon Data="{StaticResource IconStop}" />
+                    </Button>
+                    <StackPanel Grid.Column="2" Margin="12,0" VerticalAlignment="Center" Spacing="0">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding ClipName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" Text="{Binding TimeText}" Classes="faint" Margin="8,0,0,0" />
+                        </Grid>
+                        <Slider Minimum="0" Maximum="{Binding Duration}" Value="{Binding CurrentTime}"
+                                Margin="0,-6,0,-10" />
+                    </StackPanel>
+                    <ComboBox Grid.Column="3" ItemsSource="{Binding Speeds}" SelectedItem="{Binding Speed}"
+                              VerticalAlignment="Center" MinWidth="78" ToolTip.Tip="Playback speed">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="x:Double">
+                                <TextBlock Text="{Binding Converter={x:Static vm:Converters.SpeedLabel}}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <ToggleButton Grid.Column="4" Margin="6,0,0,0" IsChecked="{Binding Loop}" Padding="8"
+                                  VerticalAlignment="Center" ToolTip.Tip="Loop">
+                        <PathIcon Data="{StaticResource IconLoop}" />
+                    </ToggleButton>
+                    <TextBlock Grid.Column="5" Text="{Binding ClipInfo}" Classes="faint" Margin="12,0,0,0"
+                               VerticalAlignment="Center" MaxWidth="220" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding ClipInfo}" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Inspector -->
+        <Border Grid.Column="2" Classes="panel" Padding="8,4,8,8">
+            <TabControl Classes="inspector">
+                <TabItem Header="Outfit">
+                    <Grid RowDefinitions="Auto,*" Margin="4,8,4,0">
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                            <TextBlock Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap"
+                                       Text="Toggle the pieces this character wears." />
+                            <Button Grid.Column="1" Content="Default outfit" FontSize="12" Padding="10,4"
+                                    Command="{Binding DefaultOutfitCommand}" />
+                        </Grid>
+                        <ScrollViewer Grid.Row="1">
+                            <ItemsControl ItemsSource="{Binding Outfit}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:OutfitSlotViewModel">
+                                        <StackPanel Margin="0,6,0,6" Spacing="2">
+                                            <TextBlock Classes="section" Text="{Binding Slot}" Margin="2,0,0,4" />
+                                            <ItemsControl ItemsSource="{Binding Parts}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:OutfitPartViewModel">
+                                                        <CheckBox IsChecked="{Binding IsOn}" ToolTip.Tip="{Binding MeshName}">
+                                                            <TextBlock Text="{Binding Name}" />
+                                                        </CheckBox>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+
+                <TabItem Header="Animations">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="4,8,4,0">
+                        <TextBox Classes="search" Text="{Binding AnimationFilter}" Watermark="Search clips (walk, idle aj…)" />
+                        <CheckBox Grid.Row="1" Margin="0,6,0,0" IsChecked="{Binding OnlyCharacterClips}"
+                                  Content="Only clips made for this character" />
+                        <TextBlock Grid.Row="2" Classes="faint" Text="{Binding AnimationSummary}" Margin="2,4,0,6" />
+                        <ListBox Grid.Row="3" ItemsSource="{Binding Animations}" SelectedItem="{Binding SelectedAnimation}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AnimationItemViewModel">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" FontSize="12"
+                                               ToolTip.Tip="{Binding FileName}" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </TabItem>
+
+                <TabItem Header="Face">
+                    <Panel DataContext="{Binding Face}" x:DataType="vm:FaceViewModel">
+                        <Panel.Resources>
+                            <!-- Expanders in the app's card colours rather than the theme's near-black. -->
+                            <StaticResource x:Key="ExpanderHeaderBackground" ResourceKey="Card" />
+                            <StaticResource x:Key="ExpanderHeaderBackgroundPointerOver" ResourceKey="CardHover" />
+                            <StaticResource x:Key="ExpanderHeaderBackgroundPressed" ResourceKey="CardHover" />
+                            <StaticResource x:Key="ExpanderHeaderBorderBrush" ResourceKey="Line" />
+                            <StaticResource x:Key="ExpanderHeaderBorderBrushPointerOver" ResourceKey="Line" />
+                            <StaticResource x:Key="ExpanderHeaderBorderBrushPressed" ResourceKey="Line" />
+                            <StaticResource x:Key="ExpanderContentBackground" ResourceKey="Surface" />
+                            <StaticResource x:Key="ExpanderContentBorderBrush" ResourceKey="Line" />
+                        </Panel.Resources>
+                        <TextBlock Classes="muted" TextWrapping="Wrap" Margin="4,12" IsVisible="{Binding !HasRig}"
+                                   Text="Load a character with a skeleton to pose their face." />
+                        <ScrollViewer IsVisible="{Binding HasRig}" Margin="0,8,0,0">
+                            <StackPanel Spacing="16" Margin="4,0,8,8">
+                                <!-- Header -->
+                                <Grid ColumnDefinitions="*,Auto,Auto">
+                                    <TextBlock Classes="faint" Text="{Binding Summary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Classes="icon" Command="{Binding FrameFaceCommand}"
+                                            ToolTip.Tip="Frame the face" AutomationProperties.Name="Frame face">
+                                        <PathIcon Data="{StaticResource IconFace}" />
+                                    </Button>
+                                    <Button Grid.Column="2" Classes="icon" Command="{Binding ResetAllCommand}"
+                                            ToolTip.Tip="Reset the face to the body clip's" AutomationProperties.Name="Reset face">
+                                        <PathIcon Data="{StaticResource IconRefresh}" />
+                                    </Button>
+                                </Grid>
+
+                                <Border Classes="card" Padding="12,10" IsVisible="{Binding !HasFaceClips}">
+                                    <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding EmptyText}" />
+                                </Border>
+
+                                <!-- Expression -->
+                                <StackPanel Spacing="6" IsVisible="{Binding HasFaceClips}">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="section" Text="EXPRESSION" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="Neutral" FontSize="11" Padding="8,2"
+                                                Command="{Binding NeutralCommand}" ToolTip.Tip="Back to the body clip's own face" />
+                                    </Grid>
+                                    <ListBox ItemsSource="{Binding Moods}" SelectedItem="{Binding SelectedMood}"
+                                             ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             AutomationProperties.Name="Moods">
+                                        <ListBox.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ListBox.ItemsPanel>
+                                        <ListBox.Styles>
+                                            <Style Selector="ListBoxItem">
+                                                <Setter Property="Padding" Value="9,3" />
+                                                <Setter Property="Margin" Value="0,0,4,4" />
+                                                <Setter Property="MinHeight" Value="0" />
+                                                <Setter Property="CornerRadius" Value="999" />
+                                                <Setter Property="Background" Value="{StaticResource Card}" />
+                                            </Style>
+                                        </ListBox.Styles>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:FaceMoodViewModel">
+                                                <TextBlock Text="{Binding Label}" FontSize="11" ToolTip.Tip="{Binding Tip}" />
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <TextBlock Classes="muted" Text="Strength" VerticalAlignment="Center" />
+                                        <Slider Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Strength}"
+                                                Margin="10,-8,10,-8" AutomationProperties.Name="Expression strength" />
+                                        <TextBlock Grid.Column="2" Classes="faint" VerticalAlignment="Center" Width="30"
+                                                   Text="{Binding Strength, StringFormat={}{0:P0}}" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Mouth -->
+                                <StackPanel Spacing="2" IsVisible="{Binding HasFaceClips}">
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,2">
+                                        <TextBlock Classes="section" Text="MOUTH" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="Clear" FontSize="11" Padding="8,2"
+                                                Command="{Binding ClearMouthCommand}" />
+                                    </Grid>
+                                    <TextBlock Classes="faint" Text="{Binding MouthNote}" TextWrapping="Wrap" Margin="0,0,0,2" />
+                                    <ItemsControl ItemsSource="{Binding Shapes}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:FaceShapeViewModel">
+                                                <Grid ColumnDefinitions="44,*,32" Height="26">
+                                                    <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center" />
+                                                    <Slider Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Value}"
+                                                            Margin="4,-8,8,-8" VerticalAlignment="Center"
+                                                            AutomationProperties.Name="{Binding Name}" />
+                                                    <TextBlock Grid.Column="2" Classes="faint" Text="{Binding ValueText}"
+                                                               VerticalAlignment="Center" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <!-- Gesture -->
+                                <StackPanel Spacing="6" IsVisible="{Binding HasGestures}">
+                                    <TextBlock Classes="section" Text="GESTURE" />
+                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                        <ComboBox ItemsSource="{Binding Gestures}" SelectedItem="{Binding SelectedGesture}"
+                                                  HorizontalAlignment="Stretch" AutomationProperties.Name="Gesture">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:FaceGestureViewModel">
+                                                    <TextBlock Text="{Binding Label}" FontSize="12" ToolTip.Tip="{Binding Tip}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <Button Grid.Column="1" Classes="icon" Margin="4,0,0,0" Command="{Binding ToggleGestureCommand}"
+                                                ToolTip.Tip="Play / stop the gesture" AutomationProperties.Name="Play gesture">
+                                            <Panel>
+                                                <PathIcon Data="{StaticResource IconPlay}" IsVisible="{Binding !IsGesturePlaying}" />
+                                                <PathIcon Data="{StaticResource IconStop}" IsVisible="{Binding IsGesturePlaying}" />
+                                            </Panel>
+                                        </Button>
+                                        <ToggleButton Grid.Column="2" Margin="2,0,0,0" Padding="8" IsChecked="{Binding GestureLoop}"
+                                                      ToolTip.Tip="Loop the gesture" VerticalAlignment="Center">
+                                            <PathIcon Data="{StaticResource IconLoop}" />
+                                        </ToggleButton>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Say a line -->
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="section" Text="SAY A LINE" />
+                                    <TextBox Classes="search" Text="{Binding LineFilter}" Watermark="Search their lines…"
+                                             AutomationProperties.Name="Search lines" />
+                                    <ListBox ItemsSource="{Binding Lines}" SelectedItem="{Binding SelectedLine}" Height="170"
+                                             AutomationProperties.Name="Voice lines">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:FaceLineViewModel">
+                                                <StackPanel Spacing="1">
+                                                    <TextBlock Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" MaxHeight="34"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Meta}" Classes="faint" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <Grid ColumnDefinitions="Auto,Auto,*">
+                                        <Button Classes="primary" Command="{Binding PlayLineCommand}" Padding="12,5"
+                                                AutomationProperties.Name="Say line">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <PathIcon Data="{StaticResource IconChat}" Foreground="White" Width="14" Height="14" />
+                                                <TextBlock Text="Say it" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Column="1" Classes="icon" Margin="4,0,0,0" Command="{Binding StopLineCommand}"
+                                                ToolTip.Tip="Stop" AutomationProperties.Name="Stop line">
+                                            <PathIcon Data="{StaticResource IconStop}" />
+                                        </Button>
+                                        <TextBlock Grid.Column="2" Classes="faint" Text="{Binding LineStatus}" Margin="8,0,0,0"
+                                                   VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Fine controls -->
+                                <Expander Header="Fine controls" IsVisible="{Binding HasFaceBones}" HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch" Padding="8" AutomationProperties.Name="Fine controls">
+                                    <ItemsControl ItemsSource="{Binding BoneGroups}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:FaceBoneGroupViewModel">
+                                                <Expander Header="{Binding Label}" HorizontalAlignment="Stretch"
+                                                          HorizontalContentAlignment="Stretch" Margin="0,0,0,6" Padding="6,4">
+                                                    <StackPanel>
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Classes="faint" Text="{Binding CountText}" VerticalAlignment="Center" />
+                                                        <Button Grid.Column="1" Content="Reset group" FontSize="11" Padding="8,2"
+                                                                Command="{Binding ResetCommand}" />
+                                                    </Grid>
+                                                    <ItemsControl ItemsSource="{Binding Bones}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:FaceBoneViewModel">
+                                                                <StackPanel Margin="0,4,0,6">
+                                                                    <Grid ColumnDefinitions="*,Auto">
+                                                                        <TextBlock Text="{Binding Label}" FontSize="12" ToolTip.Tip="{Binding Tip}"
+                                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                                        <Button Grid.Column="1" Classes="icon" Width="24" Height="24" Padding="4"
+                                                                                Command="{Binding ResetCommand}" IsVisible="{Binding IsModified}"
+                                                                                ToolTip.Tip="Reset this bone">
+                                                                            <PathIcon Data="{StaticResource IconRefresh}" Width="11" Height="11" />
+                                                                        </Button>
+                                                                    </Grid>
+                                                                    <Grid ColumnDefinitions="40,*" RowDefinitions="24,24,24">
+                                                                        <TextBlock Classes="faint" Text="Pitch" VerticalAlignment="Center" />
+                                                                        <Slider Grid.Column="1" Minimum="-30" Maximum="30" Value="{Binding Pitch}" AutomationProperties.Name="Pitch"
+                                                                                Margin="0,-8" VerticalAlignment="Center" />
+                                                                        <TextBlock Grid.Row="1" Classes="faint" Text="Yaw" VerticalAlignment="Center" />
+                                                                        <Slider Grid.Row="1" Grid.Column="1" Minimum="-30" Maximum="30" Value="{Binding Yaw}" AutomationProperties.Name="Yaw"
+                                                                                Margin="0,-8" VerticalAlignment="Center" />
+                                                                        <TextBlock Grid.Row="2" Classes="faint" Text="Roll" VerticalAlignment="Center" />
+                                                                        <Slider Grid.Row="2" Grid.Column="1" Minimum="-30" Maximum="30" Value="{Binding Roll}" AutomationProperties.Name="Roll"
+                                                                                Margin="0,-8" VerticalAlignment="Center" />
+                                                                    </Grid>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    </StackPanel>
+                                                </Expander>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Panel>
+                </TabItem>
+
+                <TabItem Header="Details">
+                    <ScrollViewer Margin="4,8,4,0">
+                        <StackPanel Spacing="10">
+                            <TextBlock Classes="muted" Text="{Binding Stats}" TextWrapping="Wrap" />
+                            <ItemsControl ItemsSource="{Binding Details}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace" FontSize="11"
+                                                   Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,1" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+        </Border>
+    </Grid>
+</UserControl>

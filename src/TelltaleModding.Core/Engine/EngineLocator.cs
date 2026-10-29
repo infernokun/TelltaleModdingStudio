@@ -38,7 +38,7 @@ public static class EngineLocator
                 return Path.GetFullPath(candidate);
             fallback ??= Path.GetFullPath(candidate);
         }
-        // Nothing runnable — return whatever exists so callers can explain why.
+        // Nothing runnable: return whatever exists so callers can explain why.
         return fallback;
     }
 

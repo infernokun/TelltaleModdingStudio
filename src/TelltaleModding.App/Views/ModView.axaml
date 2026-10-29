@@ -1,0 +1,107 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+             xmlns:games="clr-namespace:TelltaleModding.Core.Games;assembly=TelltaleModding.Core"
+             x:Class="TelltaleModding.App.Views.ModView"
+             x:DataType="vm:ModToolsViewModel">
+
+    <Grid ColumnDefinitions="*,400" Margin="12">
+
+        <!-- Project + swaps -->
+        <Border Classes="panel" Padding="16">
+            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Text="{Binding ProjectName}" FontSize="18" FontWeight="SemiBold"
+                             Background="Transparent" BorderThickness="0" Padding="0,4" Watermark="Mod name" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <Button Content="New" Command="{Binding NewProjectCommand}" />
+                        <Button Content="Open…" Command="{Binding OpenProjectCommand}" />
+                        <Button Content="Save…" Command="{Binding SaveProjectCommand}" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Grid.Row="1" Classes="muted" TextWrapping="Wrap" Margin="0,6,0,14"
+                           Text="A mod replaces game files with your own. Pick files in Assets and choose “Replace in mod…”, or type a file name below. Building creates a small patch archive the game loads over its originals." />
+
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+                    <TextBox Text="{Binding NewTargetName}"
+                             Watermark="File to replace, e.g. sk62_clementine400_head.d3dtx" />
+                    <Button Grid.Column="1" Margin="8,0,0,0" Command="{Binding AddSwapCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconSwap}" Width="14" Height="14" />
+                            <TextBlock Text="Choose replacement…" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <Panel Grid.Row="3">
+                    <ListBox ItemsSource="{Binding Swaps}" SelectedItem="{Binding SelectedSwap}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SwapViewModel">
+                                <Grid ColumnDefinitions="Auto,*,Auto,*">
+                                    <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding TargetAssetName}" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <PathIcon Grid.Column="2" Data="{StaticResource IconSwap}" Margin="12,0"
+                                              Foreground="{StaticResource Faint}" Width="14" Height="14" />
+                                    <TextBlock Grid.Column="3" Text="{Binding ReplacementFileName}" Classes="muted"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding ReplacementFilePath}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"
+                                IsVisible="{Binding !HasSwaps}">
+                        <PathIcon Data="{StaticResource IconSwap}" Width="36" Height="36"
+                                  Foreground="{StaticResource Line}" HorizontalAlignment="Center" />
+                        <TextBlock Classes="muted" Text="No replacements yet." HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Panel>
+
+                <Button Grid.Row="4" Content="Remove selected" HorizontalAlignment="Left" Margin="0,10,0,0"
+                        Command="{Binding RemoveSwapCommand}" />
+            </Grid>
+        </Border>
+
+        <!-- Build -->
+        <Border Grid.Column="1" Classes="panel" Margin="12,0,0,0" Padding="16">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*">
+                <TextBlock Classes="h2" Text="Build patch" />
+                <TextBlock Grid.Row="1" Classes="section" Text="TARGET GAME" Margin="0,16,0,6" />
+                <ComboBox Grid.Row="2" ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}"
+                          HorizontalAlignment="Stretch" PlaceholderText="Select a game…">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="games:GameEntry">
+                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Grid.Row="3" Classes="faint" Margin="2,6,0,0" TextWrapping="Wrap"
+                           Text="{Binding ReferenceArchivePath, StringFormat='Format matched to {0}'}"
+                           IsVisible="{Binding ReferenceArchivePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <StackPanel Grid.Row="4" Spacing="8" Margin="0,16,0,0">
+                    <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Command="{Binding BuildPatchCommand}" Padding="12,9">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon Data="{StaticResource IconBuild}" Foreground="White" />
+                            <TextBlock Text="Build patch archive…" />
+                        </StackPanel>
+                    </Button>
+                    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsRunning}" />
+                    <Button Content="Cancel" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Command="{Binding CancelBuildCommand}" IsVisible="{Binding IsRunning}" />
+                </StackPanel>
+                <TextBlock Grid.Row="5" Classes="faint" Text="{Binding EngineStatus}" Margin="2,8,0,0" TextWrapping="Wrap" />
+                <Grid Grid.Row="6" RowDefinitions="Auto,*" Margin="0,16,0,0">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="section" Text="LOG" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Classes="ghost" Content="Clear" FontSize="12" Padding="6,2"
+                                Command="{Binding ClearLogCommand}" />
+                    </Grid>
+                    <TextBox Grid.Row="1" Margin="0,6,0,0" Text="{Binding Log, Mode=OneWay}" IsReadOnly="True"
+                             AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" FontSize="11" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

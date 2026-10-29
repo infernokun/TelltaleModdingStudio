@@ -16,7 +16,7 @@ public enum ArchiveKind
 
 /// <summary>
 /// One entry from ttarchext's game table. The <see cref="GameNum"/> is the exact
-/// index passed to ttarchext on the command line — it selects the Blowfish key.
+/// index passed to ttarchext on the command line; it selects the Blowfish key.
 /// </summary>
 /// <param name="GameNum">Index passed to ttarchext (the <c>gamenum</c> argument).</param>
 /// <param name="Name">Human-readable game/episode name.</param>
