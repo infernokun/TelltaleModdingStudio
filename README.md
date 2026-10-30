@@ -59,10 +59,12 @@ Click a picture for the full size.
 - **Characters**: every character with their outfits, animations and facial
   expressions. Export to `.glb` for Blender.
 - **Scenes**: walk around any location in the game, lit like the game.
-- **Dialogue**: read and hear every line, watch the character lip-sync it, and
-  follow conversations as dialogue trees. Includes the soundtrack.
+- **Dialogue**: read and hear every line, watch the character lip-sync it with
+  the body language the game plays with it, and follow conversations as dialogue
+  trees. Includes the soundtrack.
 - **Scripts**: the game's Lua scripts, decompiled and readable.
-- **Assets**: browse, preview and export any file (PNG, WAV, MP3/Ogg, Lua).
+- **Assets**: browse, preview and export any file (PNG, WAV, MP3/Ogg, Lua), and
+  read chores (the game's cutscene and dialogue timelines) per character.
 - **Mod**: swap in your own files and build a small patch the game loads.
 
 **Viewport controls:** drag to orbit, middle-drag to pan, scroll to zoom, **F** to
@@ -70,6 +72,9 @@ frame. Click the view and use **WASD/QE** to fly; hold right-click to look aroun
 
 **Looks:** _Studio_ for plain lighting, _Game_ for each game's own art style, and
 _Graphic black_ for solid black shadows in any game.
+
+The app checks GitHub for a newer version when it starts (this can be turned off
+in Settings) and from **Check for updates** in the status bar.
 
 Audio plays on Windows, and on Linux through PulseAudio or PipeWire. Some games'
 sounds need the game installed, since the app reads their audio codec setup from the

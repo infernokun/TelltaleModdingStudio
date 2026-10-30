@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.3.0 (2026-10-30)
+
+### Dialogue
+
+- **In-game performances:** with **Performance** on (next to **Speaker** in the player bar), the speaker plays the body language the game's chore plays with each line: turns, poses, gestures, glances and blinks, in time with the recording. Lines without one keep the idle, and the caption under the speaker says which you are seeing. Root motion is left out so the speaker stays in frame.
+- Each line's chore is found through the scene's dialog file (the chore each exchange plays, whatever it is named), chores named after the scene, and chores embedded in other chores. Lines that reuse another line's recording are found by that recording. Between 63% (Tales from the Borderlands) and 90% (The Walking Dead Definitive Series) of voiced lines are placed in a chore; most of the rest were cut from the game or play without one.
+- Speakers named by a short name in the subtitles ("JACK") are matched to their full name (Handsome Jack), and the version of a character made for the line's episode is preferred.
+
+### Characters
+
+- **Hologram Handsome Jack** (Tales from the Borderlands) is drawn as the game does: a character's `.prop` can tint, light and fade all of its meshes, so his grey textures become a blue, self-lit, see-through hologram. The plain Jack, whose textures the game never shipped, borrows them from a version of him with the same UV layout.
+- A color set on an ordinary character only grades it for one scene's lighting, so it is left out (Carver and Clementine in Season Two episodes 3 and 4 look as before).
+- Outlines take a material's own outline color where it sets one (hologram Jack's cyan), on characters and in scenes. Every other material keeps the look's outline color.
+
+### Scenes
+
+- Characters and objects placed in a scene follow the same settings as on their own: hologram Jack is blue, self-lit and see-through in Gortys Core Silo. Glowing signs and screens, see-through glass and decals in scenes follow their settings too, and invisible helper objects are left out.
+- A scene where nothing shows at the start now displays the characters you switch on, instead of staying on "This scene places no visible meshes".
+
+### Assets
+
+- **Chores** (`.chore`) are shown as a timeline per character: when each animation, gesture, chore and voice line plays, with the line's text, and a bar showing where it falls in the chore. Chores from all the supported games are read.
+- Data a chore carries itself is named for what it is: "look at Clementine (eyes)", "style idle", "eye movement", "camera blend" and so on.
+- **Export results** with Convert on writes each chore as a readable text timeline (`.txt`), per character, with voice lines' text.
+
+### Window and layout
+
+- **Updates:** the app checks GitHub for a newer release when it starts (can be turned off in Settings) and from **Check for updates** in the status bar, and offers it in a popup.
+- **Title bar:** minimize, maximize and close sit in the app's header, which is also the title bar (drag to move, double-click to maximize).
+- **Status bar:** the version and update status on the left, the open game in the middle (click it to switch games), Check for updates on the right.
+- Panels can be resized by dragging the gap between them on every page with side panels: Characters, Scenes, Dialogue (speaker, conversation list), Scripts and Assets (preview). Side panels share the width with the window, so nothing is cut off at the smallest window size.
+- At small window sizes the viewport title shortens instead of sliding under the view tools, the app name no longer runs under the Home tab, and Dialogue's player sits on its own row so the seek bar keeps its width.
+- Text-only tabs (Settings' look buttons, Dialogue's Lines/Talks/Music, Scripts) keep their labels centered in the highlight. The conversation tree's toolbar wraps instead of cutting off.
+- The header's left, centre and right sections are aligned, and the open game is no longer repeated in the header.
+
+### Performance
+
+- Model, texture and scene caches are capped by size, so browsing many characters no longer keeps growing memory (Definitive Series characters: about 24 GB before, about 1.3 GB now).
+- Hidden progress bars no longer redraw the window, which brings idle CPU use from about 15% to 2-4%.
+
+### Fixes
+
+- A green and blue haze on several Season 4 characters (packed specular maps read the wrong way) is gone.
+
 ## 1.2.0 (2026-10-30)
 
 - New logo and app icon: round badges with lowercase letters, and a maroon badge with a wrench breaking out of its ring. The window, taskbar and header use the new badge.
