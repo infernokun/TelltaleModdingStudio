@@ -5,7 +5,15 @@
              x:Class="TelltaleModding.App.Views.ScenesView"
              x:DataType="vm:ScenesViewModel">
 
-    <Grid ColumnDefinitions="300,*,340" Margin="12">
+    <Grid Margin="12">
+        <!-- The gaps between the panels are drag handles; the viewport takes what is left. -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="0.39*" MinWidth="240" MaxWidth="480" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="*" MinWidth="420" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="0.45*" MinWidth="300" MaxWidth="600" />
+        </Grid.ColumnDefinitions>
 
         <!-- Scene list -->
         <Border Grid.Column="0" Classes="panel" Padding="12">
@@ -39,37 +47,40 @@
             </Grid>
         </Border>
 
+        <GridSplitter Grid.Column="1" Classes="gap" ResizeDirection="Columns" ToolTip.Tip="Drag to resize" />
+
         <!-- Viewer -->
-        <Border Grid.Column="1" Classes="panel" ClipToBounds="True" CornerRadius="12" Margin="12,0">
+        <Border Grid.Column="2" Classes="panel" ClipToBounds="True" CornerRadius="12">
             <Panel>
                 <Panel x:Name="ViewportHost" Background="Transparent">
                     <views:MeshViewport x:Name="Viewport" IsVisible="{Binding HasScene}" />
                 </Panel>
 
-                <!-- Title overlay -->
-                <StackPanel Margin="20,16" HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="2"
-                            IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                    <TextBlock Classes="h1" Text="{Binding Title}" />
-                    <TextBlock Classes="muted" Text="{Binding Subtitle}" />
-                    <TextBlock Classes="faint" Text="{Binding Stats}" Margin="0,4,0,0" />
-                </StackPanel>
+                <!-- Title overlay and view tools; a narrow viewport shortens the title rather than covering it. -->
+                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Top">
+                    <StackPanel Margin="20,16,8,16" Spacing="2"
+                                IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="muted" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="faint" Text="{Binding Stats}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
 
-                <!-- View tools -->
-                <StackPanel Margin="12" HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal"
-                            IsVisible="{Binding HasScene}">
-                    <views:LookToggle DataContext="{Binding Look}" Margin="0,0,8,0" />
-                    <Button Classes="icon" Command="{Binding ResetViewCommand}"
-                            ToolTip.Tip="Reset view (or double-click the scene)" AutomationProperties.Name="Reset view">
-                        <PathIcon Data="{StaticResource IconRecenter}" />
-                    </Button>
-                    <Button Classes="icon" Command="{Binding ExportGltfCommand}"
-                            ToolTip.Tip="Export the shown agents… (glTF .glb)" AutomationProperties.Name="Export">
-                        <PathIcon Data="{StaticResource IconExport}" />
-                    </Button>
-                </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="12" VerticalAlignment="Top" Orientation="Horizontal"
+                                IsVisible="{Binding HasScene}">
+                        <views:LookToggle DataContext="{Binding Look}" Margin="0,0,8,0" />
+                        <Button Classes="icon" Command="{Binding ResetViewCommand}"
+                                ToolTip.Tip="Reset view (or double-click the scene)" AutomationProperties.Name="Reset view">
+                            <PathIcon Data="{StaticResource IconRecenter}" />
+                        </Button>
+                        <Button Classes="icon" Command="{Binding ExportGltfCommand}"
+                                ToolTip.Tip="Export the shown agents… (glTF .glb)" AutomationProperties.Name="Export">
+                            <PathIcon Data="{StaticResource IconExport}" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
 
                 <TextBlock Classes="faint" Margin="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                           IsVisible="{Binding HasScene}"
+                           IsVisible="{Binding HasScene}" TextWrapping="Wrap" TextAlignment="Right"
                            Text="Drag to orbit · middle-drag to pan · WASD / QE to fly · right-drag to look · scroll to dolly · F to frame" />
 
                 <!-- Empty state -->
@@ -87,8 +98,14 @@
                         Padding="20,14" IsVisible="{Binding IsLoading}">
                     <StackPanel Spacing="10" Width="260">
                         <TextBlock Text="{Binding LoadingText}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        <ProgressBar IsIndeterminate="{Binding IsProgressIndeterminate}" Minimum="0" Maximum="100"
-                                     Value="{Binding LoadingProgress}" />
+                        <ProgressBar Minimum="0" Maximum="100" Value="{Binding LoadingProgress}">
+                            <ProgressBar.IsIndeterminate>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsLoading" />
+                                    <Binding Path="IsProgressIndeterminate" />
+                                </MultiBinding>
+                            </ProgressBar.IsIndeterminate>
+                        </ProgressBar>
                     </StackPanel>
                 </Border>
 
@@ -101,8 +118,10 @@
             </Panel>
         </Border>
 
+        <GridSplitter Grid.Column="3" Classes="gap" ResizeDirection="Columns" ToolTip.Tip="Drag to resize" />
+
         <!-- Agents -->
-        <Border Grid.Column="2" Classes="panel" Padding="12">
+        <Border Grid.Column="4" Classes="panel" Padding="12">
             <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,3*,Auto,Auto,Auto,Auto,2*">
                 <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,8">
                     <TextBlock Classes="h2" Text="Agents" />

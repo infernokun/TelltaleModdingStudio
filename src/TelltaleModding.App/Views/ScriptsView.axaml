@@ -5,7 +5,15 @@
              x:Class="TelltaleModding.App.Views.ScriptsView"
              x:DataType="vm:ScriptsViewModel">
 
-    <Grid ColumnDefinitions="320,*,220" Margin="12">
+    <Grid Margin="12">
+        <!-- The gaps between the panels are drag handles; the code takes what is left. -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="0.38*" MinWidth="220" MaxWidth="520" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="*" MinWidth="560" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="0.26*" MinWidth="160" MaxWidth="420" />
+        </Grid.ColumnDefinitions>
 
         <!-- Script list -->
         <Border Classes="panel" Padding="12">
@@ -31,8 +39,10 @@
             </Grid>
         </Border>
 
+        <GridSplitter Grid.Column="1" Classes="gap" ResizeDirection="Columns" ToolTip.Tip="Drag to resize" />
+
         <!-- Code -->
-        <Border Grid.Column="1" Classes="panel" Margin="12,0,0,0" Padding="14">
+        <Border Grid.Column="2" Classes="panel" Padding="14">
             <Grid RowDefinitions="Auto,Auto,*">
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Classes="h2" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
@@ -64,15 +74,17 @@
                                        HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
                         <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center"
                                    IsVisible="{Binding !HasScript}" Text="Pick a script to read it." />
-                        <ProgressBar IsIndeterminate="True" Width="160" VerticalAlignment="Top" Margin="0,12"
+                        <ProgressBar IsIndeterminate="{Binding IsLoading}" Width="160" VerticalAlignment="Top" Margin="0,12"
                                      IsVisible="{Binding IsLoading}" />
                     </Panel>
                 </Border>
             </Grid>
         </Border>
 
+        <GridSplitter Grid.Column="3" Classes="gap" ResizeDirection="Columns" ToolTip.Tip="Drag to resize" />
+
         <!-- Outline -->
-        <Border Grid.Column="2" Classes="panel" Margin="12,0,0,0" Padding="12">
+        <Border Grid.Column="4" Classes="panel" Padding="12">
             <Grid RowDefinitions="Auto,*">
                 <TextBlock Classes="section" Text="FUNCTIONS" Margin="2,0,0,8" />
                 <ListBox Grid.Row="1" x:Name="OutlineList" ItemsSource="{Binding Outline}">

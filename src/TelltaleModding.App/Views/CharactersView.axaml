@@ -5,7 +5,15 @@
              x:Class="TelltaleModding.App.Views.CharactersView"
              x:DataType="vm:CharactersViewModel">
 
-    <Grid ColumnDefinitions="290,*,340" Margin="12">
+    <Grid Margin="12">
+        <!-- The gaps between the panels are drag handles; the viewport takes what is left. -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="0.38*" MinWidth="230" MaxWidth="460" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="*" MinWidth="500" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="0.45*" MinWidth="300" MaxWidth="600" />
+        </Grid.ColumnDefinitions>
 
         <!-- Character list -->
         <Border Grid.Column="0" Classes="panel" Padding="12">
@@ -43,51 +51,54 @@
             </Grid>
         </Border>
 
+        <GridSplitter Grid.Column="1" Classes="gap" ResizeDirection="Columns" ToolTip.Tip="Drag to resize" />
+
         <!-- Viewer -->
-        <Grid Grid.Column="1" RowDefinitions="*,Auto" Margin="12,0">
+        <Grid Grid.Column="2" RowDefinitions="*,Auto">
             <Border Classes="panel" ClipToBounds="True" CornerRadius="12">
                 <Panel>
                     <Panel x:Name="ViewportHost" Background="Transparent">
                         <views:MeshViewport x:Name="Viewport" IsVisible="{Binding HasModel}" />
                     </Panel>
 
-                    <!-- Title overlay -->
-                    <StackPanel Margin="20,16" HorizontalAlignment="Left" VerticalAlignment="Top" Spacing="2"
-                                IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                        <TextBlock Classes="h1" Text="{Binding Title}" />
-                        <TextBlock Classes="muted" Text="{Binding Subtitle}" />
-                        <TextBlock Classes="faint" Text="{Binding Stats}" Margin="0,4,0,0" />
-                    </StackPanel>
+                    <!-- Title overlay and view tools; a narrow viewport shortens the title rather than covering it. -->
+                    <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Top">
+                        <StackPanel Margin="20,16,8,16" Spacing="2"
+                                    IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="muted" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="faint" Text="{Binding Stats}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
 
-                    <!-- View tools -->
-                    <StackPanel Margin="12" HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal"
-                                IsVisible="{Binding HasModel}">
-                        <views:LookToggle DataContext="{Binding Look}" Margin="0,0,8,0" />
-                        <Button Classes="icon" Command="{Binding ShowLinesCommand}"
-                                ToolTip.Tip="Hear their lines" AutomationProperties.Name="Hear their lines">
-                            <PathIcon Data="{StaticResource IconChat}" />
-                        </Button>
-                        <ToggleButton x:Name="SkeletonToggle" Background="Transparent" BorderThickness="0" Padding="6"
-                                      Width="34" Height="34" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                      ToolTip.Tip="Show the skeleton" AutomationProperties.Name="Show skeleton">
-                            <PathIcon Data="{StaticResource IconSkeleton}" />
-                        </ToggleButton>
-                        <Button Classes="icon" Command="{Binding FaceViewCommand}"
-                                ToolTip.Tip="Face close-up" AutomationProperties.Name="Face close-up">
-                            <PathIcon Data="{StaticResource IconFace}" />
-                        </Button>
-                        <Button Classes="icon" Command="{Binding ResetViewCommand}"
-                                ToolTip.Tip="Reset view (or double-click the model)" AutomationProperties.Name="Reset view">
-                            <PathIcon Data="{StaticResource IconRecenter}" />
-                        </Button>
-                        <Button Classes="icon" Command="{Binding ExportGltfCommand}"
-                                ToolTip.Tip="Export… (glTF .glb with skeleton and the playing clip)" AutomationProperties.Name="Export">
-                            <PathIcon Data="{StaticResource IconExport}" />
-                        </Button>
-                    </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="12" VerticalAlignment="Top" Orientation="Horizontal"
+                                    IsVisible="{Binding HasModel}">
+                            <views:LookToggle DataContext="{Binding Look}" Margin="0,0,8,0" />
+                            <Button Classes="icon" Command="{Binding ShowLinesCommand}"
+                                    ToolTip.Tip="Hear their lines" AutomationProperties.Name="Hear their lines">
+                                <PathIcon Data="{StaticResource IconChat}" />
+                            </Button>
+                            <ToggleButton x:Name="SkeletonToggle" Background="Transparent" BorderThickness="0" Padding="6"
+                                          Width="34" Height="34" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                          ToolTip.Tip="Show the skeleton" AutomationProperties.Name="Show skeleton">
+                                <PathIcon Data="{StaticResource IconSkeleton}" />
+                            </ToggleButton>
+                            <Button Classes="icon" Command="{Binding FaceViewCommand}"
+                                    ToolTip.Tip="Face close-up" AutomationProperties.Name="Face close-up">
+                                <PathIcon Data="{StaticResource IconFace}" />
+                            </Button>
+                            <Button Classes="icon" Command="{Binding ResetViewCommand}"
+                                    ToolTip.Tip="Reset view (or double-click the model)" AutomationProperties.Name="Reset view">
+                                <PathIcon Data="{StaticResource IconRecenter}" />
+                            </Button>
+                            <Button Classes="icon" Command="{Binding ExportGltfCommand}"
+                                    ToolTip.Tip="Export… (glTF .glb with skeleton and the playing clip)" AutomationProperties.Name="Export">
+                                <PathIcon Data="{StaticResource IconExport}" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
 
                     <TextBlock Classes="faint" Margin="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                               IsVisible="{Binding HasModel}"
+                               IsVisible="{Binding HasModel}" TextWrapping="Wrap" TextAlignment="Right"
                                Text="Drag to orbit · middle-drag to pan · WASD / QE to fly · right-drag to look · scroll to dolly · F to frame" />
 
                     <!-- Empty state -->
@@ -105,7 +116,7 @@
                             Padding="20,14" IsVisible="{Binding IsLoading}">
                         <StackPanel Spacing="10" Width="220">
                             <TextBlock Text="{Binding LoadingText}" HorizontalAlignment="Center" />
-                            <ProgressBar IsIndeterminate="True" />
+                            <ProgressBar IsIndeterminate="{Binding IsLoading}" />
                         </StackPanel>
                     </Border>
 
@@ -160,8 +171,10 @@
             </Border>
         </Grid>
 
+        <GridSplitter Grid.Column="3" Classes="gap" ResizeDirection="Columns" ToolTip.Tip="Drag to resize" />
+
         <!-- Inspector -->
-        <Border Grid.Column="2" Classes="panel" Padding="8,4,8,8">
+        <Border Grid.Column="4" Classes="panel" Padding="8,4,8,8">
             <TabControl Classes="inspector">
                 <TabItem Header="Outfit">
                     <Grid RowDefinitions="Auto,*" Margin="4,8,4,0">
@@ -214,7 +227,7 @@
                 <TabItem Header="Face">
                     <Panel DataContext="{Binding Face}" x:DataType="vm:FaceViewModel">
                         <Panel.Resources>
-                            <!-- Expanders in the app's card colours rather than the theme's near-black. -->
+                            <!-- Expanders in the app's card colors rather than the theme's near-black. -->
                             <StaticResource x:Key="ExpanderHeaderBackground" ResourceKey="Card" />
                             <StaticResource x:Key="ExpanderHeaderBackgroundPointerOver" ResourceKey="CardHover" />
                             <StaticResource x:Key="ExpanderHeaderBackgroundPressed" ResourceKey="CardHover" />
