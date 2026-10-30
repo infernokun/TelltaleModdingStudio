@@ -65,6 +65,13 @@
                     </Grid>
                     <Grid Classes="row" ColumnDefinitions="*,Auto">
                         <StackPanel>
+                            <TextBlock Classes="label" Text="Check for updates on start" />
+                            <TextBlock Classes="hint" Text="Look on GitHub for a newer release when the app opens. You can always check from the status bar." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.CheckForUpdatesOnStart}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
                             <TextBlock Classes="label" Text="{Binding CacheSize, StringFormat='Game index cache: {0}'}" />
                             <TextBlock Classes="hint" Text="Saved indexes make games open in seconds. Clearing them only means the next open re-indexes; game files are never touched." />
                         </StackPanel>
@@ -163,7 +170,7 @@
                     <Grid Classes="row" ColumnDefinitions="*,Auto">
                         <StackPanel>
                             <TextBlock Classes="label" Text="Background" />
-                            <TextBlock Classes="hint" Text="The colour behind models and scenes." />
+                            <TextBlock Classes="hint" Text="The color behind models and scenes." />
                         </StackPanel>
                         <ComboBox Grid.Column="1" ItemsSource="{Binding Backgrounds}" SelectedItem="{Binding Preferences.Background}" />
                     </Grid>
@@ -330,7 +337,7 @@
                     <Grid Classes="row" ColumnDefinitions="*,Auto">
                         <StackPanel>
                             <TextBlock Classes="label" Text="Convert when exporting results" />
-                            <TextBlock Classes="hint" Text="Assets › Export results saves textures as PNG, sounds as MP3/Ogg, scripts as Lua and subtitles as transcripts." />
+                            <TextBlock Classes="hint" Text="Assets › Export results saves textures as PNG, sounds as MP3/Ogg, scripts as Lua, subtitles as transcripts and chores as text timelines." />
                         </StackPanel>
                         <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.ConvertOnExport}" OnContent="" OffContent="" />
                     </Grid>

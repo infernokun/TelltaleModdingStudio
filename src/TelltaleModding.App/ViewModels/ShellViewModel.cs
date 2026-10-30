@@ -29,6 +29,7 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
         UserPreferences.Current = Preferences;
         Look.Preferences = Preferences;
         Settings = new SettingsViewModel(Preferences, Look);
+        Updates = new UpdatesViewModel(settings);
         Preferences.PropertyChanged += (_, e) =>
         {
             ApplyPreferences(e.PropertyName);
@@ -88,6 +89,9 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
     public UserPreferences Preferences { get; }
 
     public SettingsViewModel Settings { get; }
+
+    /// <summary>The update check behind the status bar button and the start-up popup.</summary>
+    public UpdatesViewModel Updates { get; }
 
     // Pushes preferences into the workspaces (all of them, or the one that changed).
     private void ApplyPreferences(string? changed)
@@ -333,11 +337,14 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
             ActiveGameName = install.DisplayName;
             Look.Style = GameLookStyle.ForGame(install.Game.GameNum);
             card.Status = $"{catalog.Characters.Count:N0} characters · {catalog.Entries.Count:N0} files";
-            Characters.Load(catalog);
-            Dialogue.Load(catalog);
+            // One model assembler per game: Characters, the Dialogue speaker and Assets
+            // previews share its decoded meshes and textures (and its memory budget).
+            var models = new ModelAssembler(new CatalogAssetResolver(catalog));
+            Characters.Load(catalog, models);
+            Dialogue.Load(catalog, models);
             Scripts.Load(catalog);
             Scenes.Load(catalog);
-            Assets.Load(catalog);
+            Assets.Load(catalog, models);
             Mod.UseGame(install.Game, install.ArchivePaths.FirstOrDefault());
             _settings.LastGameFolder = card.Folder;
             _settings.Save();

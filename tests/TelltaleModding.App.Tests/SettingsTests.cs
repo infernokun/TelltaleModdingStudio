@@ -28,6 +28,7 @@ public class SettingsTests
             prefs.ScriptsDecompiled = false;
             prefs.ConvertOnExport = false;
             prefs.SubtitleLanguage = "french";
+            prefs.CheckForUpdatesOnStart = false;
 
             Assert.False(shell.Characters.Loop);
             Assert.Equal(0.5, shell.Characters.Speed);
@@ -43,6 +44,7 @@ public class SettingsTests
             Assert.False(reloaded.Preferences.LoopClips);
             Assert.Equal(40, reloaded.Preferences.Volume);
             Assert.Equal("french", reloaded.Preferences.SubtitleLanguage);
+            Assert.False(reloaded.Preferences.CheckForUpdatesOnStart);
             shell.Look.ShowGraphicBlackCommand.Execute(null);
             prefs.GraphicBlackIntensity = 0.5;
             prefs.EngineDefaultIntensity = 1.5;

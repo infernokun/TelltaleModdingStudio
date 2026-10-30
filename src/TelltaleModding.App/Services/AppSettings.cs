@@ -21,6 +21,9 @@ public sealed class AppSettings
     /// <summary>How the 3D viewports shade; null in settings saved before there were three looks.</summary>
     public Core.Scene.RenderMode? ViewportLook { get; set; }
 
+    /// <summary>A release tag the user chose to skip; the start-up check stays quiet about it.</summary>
+    public string? SkippedUpdateVersion { get; set; }
+
     /// <summary>Choices from the Settings page.</summary>
     public UserPreferences Preferences { get; set; } = new();
 
