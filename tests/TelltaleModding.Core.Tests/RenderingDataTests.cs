@@ -104,7 +104,7 @@ public class RenderingDataTests
     }
 
     [SkippableFact]
-    public void Older_meshes_find_maps_named_after_their_colour_texture()
+    public void Older_meshes_find_maps_named_after_their_color_texture()
     {
         var textures = new[]
         {
@@ -139,6 +139,20 @@ public class RenderingDataTests
     {
         Assert.Equal(SpecularMapLayout.Packed, ModelAssembler.ClassifySpecularMap(Solid(0, 0, 120, 80)));
         Assert.Equal(SpecularMapLayout.Intensity, ModelAssembler.ClassifySpecularMap(Solid(60, 60, 60, 40)));
+    }
+
+    // Channel averages measured on real Definitive Series maps.
+    [Theory]
+    [InlineData(8, 48, 122, 29, SpecularMapLayout.Packed)]     // sk63_aj_bodyUpperJacketDiscoDog_spec: a big green metal mask
+    [InlineData(0, 88, 50, 51, SpecularMapLayout.Packed)]      // sk63_willy_bodyUpper_spec
+    [InlineData(24, 0, 101, 82, SpecularMapLayout.Packed)]     // sk61_zombie400_bodyChubby_spec
+    [InlineData(8, 0, 25, 48, SpecularMapLayout.Packed)]       // sk62_clementine400_hands_spec
+    [InlineData(39, 35, 33, 10, SpecularMapLayout.Intensity)]  // sk54_lee_head_spec (Season 1)
+    [InlineData(61, 57, 55, 57, SpecularMapLayout.Intensity)]  // sk54_lee_skin_spec
+    [InlineData(10, 10, 12, 30, SpecularMapLayout.Intensity)]  // a dark grey map
+    public void Packed_specular_maps_are_found_by_red_and_blue(byte r, byte g, byte b, byte a, SpecularMapLayout expected)
+    {
+        Assert.Equal(expected, ModelAssembler.ClassifySpecularMap(Solid(r, g, b, a)));
     }
 
     [SkippableFact]

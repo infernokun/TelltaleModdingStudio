@@ -166,6 +166,9 @@ public sealed class D3dMeshFile
 
     private D3dMeshFile() { }
 
+    /// <summary>Bytes of vertex and index data held (for cache budgets).</summary>
+    internal long DataSize => _bufferData.LongLength;
+
     public string Describe() =>
         $"{VertexCount:N0} verts · {Batches.Sum(b => b.PrimitiveCount):N0} tris · {Batches.Count} batch{(Batches.Count == 1 ? "" : "es")} · v{Version}";
 
@@ -846,8 +849,8 @@ public sealed class D3dMeshFile
             Expect(slotsEnd, "texture slot indices");
             SkipBlock();                      // triangle strips
             I32();                            // total index count
-            // Shading constants: bump heights, specular power, four colours, toon outline,
-            // glow and shadow, alpha/UV-generation modes, diffuse colour.
+            // Shading constants: bump heights, specular power, four colors, toon outline,
+            // glow and shadow, alpha/UV-generation modes, diffuse color.
             off += LegacyTriangleSetShadingSize;
             batches.Add(new MeshBatch(startIndex, numPrims, -1, minVert, maxVert, -1, bonePalette));
             batchSlots.Add(slots);
@@ -1033,7 +1036,7 @@ public sealed class D3dMeshFile
     private const uint LegacyHasIndexBufferFlag = 0x1;
     private const uint LegacyTriangleStripsFlag = 0x10000;
     private const int LegacyIndexFormat16 = 101, LegacyIndexFormat32 = 102; // D3DFMT_INDEX16 / INDEX32
-    // Triangle set shading constants: 3 floats, 4 colours, 5 floats, 7 ints/floats, 1 colour.
+    // Triangle set shading constants: 3 floats, 4 colors, 5 floats, 7 ints/floats, 1 color.
     private const int LegacyTriangleSetShadingSize = 3 * 4 + 4 * 16 + 5 * 4 + 7 * 4 + 16;
 
     private D3dMeshFile CopyTransformsFrom(D3dMeshFile other)
@@ -1088,7 +1091,7 @@ public sealed class D3dMeshFile
     }
 
     /// <summary>
-    /// The vertices' colours of set <paramref name="set"/> (RGBA, 0-1), one per vertex as in
+    /// The vertices' colors of set <paramref name="set"/> (RGBA, 0-1), one per vertex as in
     /// <see cref="GetGeometry"/>, or null when the mesh has no such set (or is a legacy mesh).
     /// Tales from the Borderlands keeps an alpha-blended material's opacity in set 0's alpha.
     /// </summary>
@@ -1126,7 +1129,7 @@ public sealed class D3dMeshFile
         return colors;
     }
 
-    // Legacy meshes: set 0 is the colour UVs, set 1 the detail-map stream (ink lines),
+    // Legacy meshes: set 0 is the color UVs, set 1 the detail-map stream (ink lines),
     // each with its own UV scale.
     private Vector2[]? GetLegacyTexCoords(int set)
     {

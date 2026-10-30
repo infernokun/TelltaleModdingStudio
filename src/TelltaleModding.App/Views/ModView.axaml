@@ -87,7 +87,7 @@
                             <TextBlock Text="Build patch archive…" />
                         </StackPanel>
                     </Button>
-                    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsRunning}" />
+                    <ProgressBar IsIndeterminate="{Binding IsRunning}" IsVisible="{Binding IsRunning}" />
                     <Button Content="Cancel" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                             Command="{Binding CancelBuildCommand}" IsVisible="{Binding IsRunning}" />
                 </StackPanel>
