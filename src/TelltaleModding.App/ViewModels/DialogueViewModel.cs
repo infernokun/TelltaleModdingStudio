@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using TelltaleModding.App.Services;
 using TelltaleModding.Core.Catalog;
 using TelltaleModding.Core.Dialogue;
+using TelltaleModding.Core.Scene;
 
 namespace TelltaleModding.App.ViewModels;
 
@@ -82,6 +83,17 @@ public sealed partial class DialogueViewModel : ViewModelBase
     [ObservableProperty]
     private bool _showSpeaker = true;
 
+    /// <summary>Plays each line's body language from the game's chore on the speaker.</summary>
+    [ObservableProperty]
+    private bool _playPerformance = true;
+
+    partial void OnPlayPerformanceChanged(bool value)
+    {
+        Speaker.PlayPerformance = value;
+        if (ShowSpeaker && NowPlaying is { } line)
+            _ = Speaker.ShowAsync(line.Entry);
+    }
+
     partial void OnShowSpeakerChanged(bool value)
     {
         OnPropertyChanged(nameof(IsSpeakerVisible));
@@ -115,12 +127,15 @@ public sealed partial class DialogueViewModel : ViewModelBase
     /// <summary>The subtitle language to pick when a game has it (from Settings).</summary>
     public string PreferredLanguage { get; set; } = "english";
 
-    /// <summary>Starts indexing <paramref name="catalog"/>'s dialogue in the background.</summary>
-    public void Load(GameCatalog catalog)
+    /// <summary>
+    /// Starts indexing <paramref name="catalog"/>'s dialogue in the background.
+    /// <paramref name="models"/> builds the speakers (the game's shared model assembler).
+    /// </summary>
+    public void Load(GameCatalog catalog, ModelAssembler? models = null)
     {
         _catalog = catalog;
         _audio = new GameAudio(catalog);
-        Speaker.Load(catalog);
+        Speaker.Load(catalog, models);
         Music.Load(catalog, _audio);
         HasSource = true;
         // Clear the selection while the list is refilled so the picker shows the new one.

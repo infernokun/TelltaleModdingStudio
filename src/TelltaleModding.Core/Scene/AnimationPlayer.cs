@@ -14,7 +14,7 @@ namespace TelltaleModding.Core.Scene;
 public sealed class AnimationPlayer
 {
     private readonly SkeletonFile _skeleton;
-    private readonly MeshSkinner _skinner;
+    private MeshSkinner? _skinner;
     private readonly Dictionary<ulong, (Quaternion Correction, float Length)> _translationFrames = new();
 
     private Dictionary<ulong, TransformTrack> _tracks = new();
@@ -29,7 +29,6 @@ public sealed class AnimationPlayer
     public AnimationPlayer(MeshGeometry geometry, SkeletonFile skeleton)
     {
         _skeleton = skeleton;
-        _skinner = new MeshSkinner(geometry, skeleton);
         Geometry = geometry;
 
         // How each bone maps a compressed-pose translation to its local offset (bone length
@@ -93,12 +92,15 @@ public sealed class AnimationPlayer
         return index;
     }
 
+    // Built on first use: a player that only samples bones (layered under another) never skins.
+    private MeshSkinner Skinner => _skinner ??= new MeshSkinner(Geometry, _skeleton);
+
     /// <summary>Skins the model at <paramref name="time"/> seconds into the outputs.</summary>
     public void Evaluate(float time, Vector3[] outPositions, Vector3[] outNormals) =>
-        _skinner.Skin(Pose(time), outPositions, outNormals);
+        Skinner.Skin(Pose(time), outPositions, outNormals);
 
     /// <summary>The skinning matrices at <paramref name="time"/> (see <see cref="MeshSkinner.SkinMatrices"/>).</summary>
-    public Matrix4x4[] SkinMatrices(float time) => _skinner.SkinMatrices(Pose(time));
+    public Matrix4x4[] SkinMatrices(float time) => Skinner.SkinMatrices(Pose(time));
 
     /// <summary>World transforms of every skeleton bone at <paramref name="time"/>.</summary>
     public Matrix4x4[] Pose(float time) => _skeleton.ComposeWorld(bone => SampleLocal(bone, time));

@@ -62,10 +62,10 @@ public sealed partial class AssetsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _hasSource;
 
-    public void Load(GameCatalog catalog)
+    public void Load(GameCatalog catalog, ModelAssembler? models = null)
     {
         _catalog = catalog;
-        _assembler = new ModelAssembler(new CatalogAssetResolver(catalog));
+        _assembler = models ?? new ModelAssembler(new CatalogAssetResolver(catalog));
         _audio = new GameAudio(catalog);
         HasSource = true;
         Query = "";
@@ -191,6 +191,12 @@ public sealed partial class AssetsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isScriptPreview;
 
+    [ObservableProperty]
+    private bool _isChorePreview;
+
+    /// <summary>The selected chore's timeline, one entry per agent.</summary>
+    public ObservableCollection<ChoreTrackViewModel> ChoreTracks { get; } = new();
+
     /// <summary>The sounds in the selected file (several for a bank).</summary>
     public ObservableCollection<AudioClip> PreviewClips { get; } = new();
 
@@ -234,6 +240,8 @@ public sealed partial class AssetsViewModel : ViewModelBase
         IsMeshPreview = false;
         IsAudioPreview = false;
         IsScriptPreview = false;
+        IsChorePreview = false;
+        ChoreTracks.Clear();
         Player.Unload();
         PreviewClips.Clear();
         SelectedClip = null;
@@ -254,6 +262,8 @@ public sealed partial class AssetsViewModel : ViewModelBase
         PreviewInfo = "Loading…";
         PreviewDetails.Clear();
         HasPreview = true;
+        IsChorePreview = false;
+        ChoreTracks.Clear();
 
         var ext = Path.GetExtension(entry.Name).ToLowerInvariant();
         IsScriptPreview = LuaScriptReader.IsScriptFile(entry.Name);
@@ -274,6 +284,12 @@ public sealed partial class AssetsViewModel : ViewModelBase
         PreviewInfo = result.Info;
         foreach (var line in result.Details)
             PreviewDetails.Add(line);
+        if (result.Chore is { } tracks)
+        {
+            foreach (var track in tracks)
+                ChoreTracks.Add(track);
+            IsChorePreview = true;
+        }
         if (result.Model is not null)
             MeshPreviewReady?.Invoke(result.Model);
     }
@@ -308,7 +324,8 @@ public sealed partial class AssetsViewModel : ViewModelBase
         }
     }
 
-    private sealed record PreviewResult(string Info, DdsImage? Image, AssembledModel? Model, IReadOnlyList<string> Details);
+    private sealed record PreviewResult(string Info, DdsImage? Image, AssembledModel? Model, IReadOnlyList<string> Details,
+        IReadOnlyList<ChoreTrackViewModel>? Chore = null);
 
     private static PreviewResult BuildPreview(GameCatalog catalog, ModelAssembler assembler, ArchiveEntryRef entry, string ext)
     {
@@ -348,6 +365,13 @@ public sealed partial class AssetsViewModel : ViewModelBase
                     return AnimationFile.TryLoad(bytes, out var anim, out var error)
                         ? new($"{anim!.Describe()} · {size}", null, null, Array.Empty<string>())
                         : new($"{size} · {error}", null, null, Array.Empty<string>());
+                }
+                case ".chore":
+                {
+                    if (!ChoreFile.TryRead(catalog.Read(entry), out var chore, out var error))
+                        return new($"{size} · {error}", null, null, Array.Empty<string>());
+                    var preview = ChorePreview.Build(catalog, entry.Name, chore!);
+                    return new($"{preview.Info} · {size}", null, null, preview.Details, preview.Tracks);
                 }
                 case ".lua" or ".lenc" or ".luac":
                 {
@@ -458,13 +482,14 @@ public sealed partial class AssetsViewModel : ViewModelBase
     /// <summary>
     /// Bulk export converts to everyday formats: textures to PNG, sounds to MP3/Ogg
     /// (bank sounds into a folder per bank), scripts to decompiled Lua, subtitle
-    /// databases to a tab-separated transcript. Off: files are written as stored.
+    /// databases to a tab-separated transcript, chores to a text timeline. Off: files
+    /// are written as stored.
     /// </summary>
     [ObservableProperty]
     private bool _convertOnExport = true;
 
     // Writes one entry into folder, converted when possible; returns false if it fell back to the raw file.
-    private static bool ExportConverted(GameCatalog catalog, GameAudio audio, ArchiveEntryRef entry, string folder)
+    private static bool ExportConverted(GameCatalog catalog, GameAudio audio, ChoreNames choreNames, ArchiveEntryRef entry, string folder)
     {
         var name = Path.GetFileName(entry.Name);
         var stem = Path.GetFileNameWithoutExtension(name);
@@ -510,6 +535,13 @@ public sealed partial class AssetsViewModel : ViewModelBase
                     File.WriteAllText(Path.Combine(folder, stem + ".tsv"), text.ToString());
                     return true;
                 }
+                case AssetCategory.Performance when name.EndsWith(".chore", StringComparison.OrdinalIgnoreCase):
+                {
+                    if (!ChoreFile.TryRead(data, out var chore, out var error))
+                        throw new InvalidDataException(error);
+                    File.WriteAllText(Path.Combine(folder, stem + ".txt"), choreNames.Text(name, chore!));
+                    return true;
+                }
             }
         }
         catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or ArgumentException)
@@ -533,6 +565,8 @@ public sealed partial class AssetsViewModel : ViewModelBase
         var catalog = _catalog;
         var audio = _audio!;
         bool convert = ConvertOnExport;
+        // Shared across the export so each subtitle database is read once.
+        var choreNames = new ChoreNames(catalog);
         var progress = new Progress<int>(n => StatusMessage?.Invoke($"Exporting… {n:N0}/{entries.Count:N0}"));
         int failed = await Task.Run(() =>
         {
@@ -542,7 +576,7 @@ public sealed partial class AssetsViewModel : ViewModelBase
                 try
                 {
                     if (convert)
-                        ExportConverted(catalog, audio, entry, folder);
+                        ExportConverted(catalog, audio, choreNames, entry, folder);
                     else
                         File.WriteAllBytes(Path.Combine(folder, Path.GetFileName(entry.Name)), catalog.Read(entry));
                 }

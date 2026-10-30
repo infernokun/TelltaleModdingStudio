@@ -160,12 +160,12 @@ internal static class DlogReader
             {
                 case "DlgNodeExchange":
                     r.U32(); // priority
-                    r.Block(); // chore
+                    node.ChoreSymbol = ReadHandle(r);
                     ReadNodeBase(r.Block(), node);
                     ReadExchangeTail(r, layout, node);
                     break;
                 case "DlgNodeChore":
-                    r.Block(); // chore
+                    node.ChoreSymbol = ReadHandle(r);
                     r.U32(); // priority
                     r.Byte(); // looping
                     ReadNodeBase(r.Block(), node);
@@ -461,6 +461,13 @@ internal static class DlogReader
     // ---- Primitives ------------------------------------------------------------
 
     private static ulong ReadObjId(Reader r) => r.Block().Block().U64();
+
+    // A resource handle: a block holding the symbol of the file's name (0 for none).
+    private static ulong ReadHandle(Reader r)
+    {
+        var handle = r.Block();
+        return handle.Left >= 8 ? handle.U64() : 0;
+    }
 
     private static ulong ReadLink(Reader r)
     {

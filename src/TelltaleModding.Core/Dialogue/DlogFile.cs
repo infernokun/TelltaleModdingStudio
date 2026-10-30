@@ -180,6 +180,12 @@ public sealed class DlogNode
     public IReadOnlyList<uint> LineIds { get; internal set; } = Array.Empty<uint>();
 
     /// <summary>
+    /// Symbol of the <c>.chore</c> file an exchange or chore node plays (the exchange's
+    /// lines are voiced on its timeline); 0 for none.
+    /// </summary>
+    public ulong ChoreSymbol { get; internal set; }
+
+    /// <summary>
     /// Child branches in order: a choice menu's pre-choice, options, then post-choice;
     /// a conditional's cases; a sequence's elements.
     /// </summary>

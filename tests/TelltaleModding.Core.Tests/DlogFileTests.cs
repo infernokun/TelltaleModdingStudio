@@ -219,6 +219,18 @@ public class DlogFileTests
     }
 
     [SkippableTheory]
+    [InlineData("dlog_wdc_crawfordautoshop_lee_molly.dlog", 314699777u, "crawfordautoshop_lee_molly_use_molly_3.chore")]
+    [InlineData("dlog_got_env_oceanwesteros.dlog", 366247950u, "env_whiteHarborGate_cs_seaMontage_13.chore")]
+    [InlineData("dlog_tftb_env_01_framestoryprosperityjunction_rhys.dlog", 361570435u, "ui_openingIntro.chore")]
+    public void Exchanges_name_the_chore_that_voices_their_lines(string dlog, uint line, string chore)
+    {
+        Assert.True(DlogFile.TryRead(File.ReadAllBytes(SampleData.Sample(dlog)), out var dialog, out var error), error);
+        var exchange = Assert.Single(dialog!.Nodes, n => n.Kind == DlogNodeKind.Exchange && n.LineIds.Contains(line));
+        Assert.Equal(TelltaleCrc64.HashSymbol(chore), exchange.ChoreSymbol);
+        Assert.All(dialog.Nodes.Where(n => n.Kind == DlogNodeKind.Exchange), n => Assert.NotEqual(0ul, n.ChoreSymbol));
+    }
+
+    [SkippableTheory]
     [InlineData("env_heliosOffice.dlog", "env_heliosoffice")]
     [InlineData("crawfordAutoShop_lee_molly.dlog", "crawfordautoshop_lee_molly")]
     public void Scene_names_match_language_databases(string dlog, string scene) =>
