@@ -10,7 +10,7 @@ namespace TelltaleModding.Core.Scene;
 /// Baked lightmaps of an assembled scene: a second UV set laid out over per-mesh lightmap
 /// atlases (Tales from the Borderlands: <c>&lt;mesh&gt;_000.d3dtx</c> sampled with texcoord set 5).
 /// Lighting at a texel is <c>sample.rgb × <see cref="Scale"/> × <see cref="Intensity"/></c>;
-/// a lit colour is the diffuse colour times that (plus any dynamic lights).
+/// a lit color is the diffuse color times that (plus any dynamic lights).
 /// </summary>
 public sealed class SceneLightmaps
 {

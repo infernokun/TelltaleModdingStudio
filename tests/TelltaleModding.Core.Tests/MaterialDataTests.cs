@@ -30,7 +30,7 @@ public class MaterialDataTests
         Assert.Equal(MaterialBlendMode.Normal, head.BlendMode);
         Assert.False(head.IsBlended);
         Assert.Equal(TelltaleCrc64.HashSymbol("sk62_clementine400_head.d3dtx"), Diffuse(head));
-        // The compiled data gives each texture a role: the normal map is never a colour map.
+        // The compiled data gives each texture a role: the normal map is never a color map.
         var normal = head.Textures.Single(t => t.Key == MaterialTextureLocator.NormalMapKey);
         Assert.Equal(MaterialTextureTypes.NormalXYMap, normal.Types);
         Assert.True(head.Textures.Single(t => t.Key == MaterialTextureLocator.DiffuseTextureKey).Types

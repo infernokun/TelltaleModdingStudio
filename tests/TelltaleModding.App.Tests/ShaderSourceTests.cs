@@ -33,4 +33,19 @@ public class ShaderSourceTests
 
         Assert.True(!used.Any(), $"{name} uses reserved GLSL words: {string.Join(", ", used)}");
     }
+
+    private static string Source(string name) =>
+        (string)typeof(App).Assembly.GetType("TelltaleModding.App.Views.MeshShaders")!.GetField(name)!.GetRawConstantValue()!;
+
+    [Fact]
+    public void Outlines_are_drawn_in_each_surface_s_own_color()
+    {
+        // The scene pass writes every surface's outline color (the material's, or the look's)
+        // to a third target, the hull fills it too, and the edge pass draws lines in it.
+        Assert.Contains("layout(location = 2) out vec4 outLine;", Source("SceneFragment"));
+        Assert.Contains("outLine = vec4(uLineColor, alpha);", Source("SceneFragment"));
+        Assert.Contains("layout(location = 2) out vec4 outLine;", Source("HullFragment"));
+        Assert.Contains("texture(uLine, vUv).rgb", Source("PostFragment"));
+        Assert.DoesNotContain("uOutlineColor", Source("PostFragment"));
+    }
 }

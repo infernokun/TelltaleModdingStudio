@@ -24,6 +24,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
     private readonly List<CharacterItemViewModel> _allCharacters = new();
     private List<AnimationItemViewModel> _allAnimations = new();
     private string? _preferredSkeleton;
+    private string? _agentProp;
     private int _buildGeneration, _clipGeneration;
 
     private AssembledModel? _model;
@@ -72,13 +73,16 @@ public sealed partial class CharactersViewModel : ViewModelBase
     [ObservableProperty]
     private string _sourceName = "";
 
-    /// <summary>Shows a game's characters.</summary>
-    public void Load(GameCatalog catalog)
+    /// <summary>
+    /// Shows a game's characters. <paramref name="models"/> is the game's shared model
+    /// assembler (one per open game, so pages share its decoded meshes and textures).
+    /// </summary>
+    public void Load(GameCatalog catalog, ModelAssembler? models = null)
     {
         Reset();
         _catalog = catalog;
         _assets = new CatalogAssetResolver(catalog);
-        _assembler = new ModelAssembler(_assets);
+        _assembler = models ?? new ModelAssembler(_assets);
         UseFaceSource(catalog, _assets, catalog.Entries.Select(e => e.Name));
         SourceName = catalog.Install.DisplayName;
         HasSource = true;
@@ -99,6 +103,8 @@ public sealed partial class CharactersViewModel : ViewModelBase
         var resolver = new FolderAssetResolver(folder);
         _assets = resolver;
         _assembler = new ModelAssembler(resolver);
+        // The agent named after the first mesh, when its .prop is in the folder and lists it.
+        _agentProp = Path.GetFileNameWithoutExtension(meshPaths[0]) + ".prop";
         UseFaceSource(null, resolver, resolver.FileNames);
         SourceName = folder;
         HasSource = true;
@@ -202,6 +208,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
         Title = entry.DisplayName;
         Subtitle = entry.Variant is null ? entry.Id : $"{entry.Variant} · {entry.Id}";
         _preferredSkeleton = entry.Skeleton?.Name;
+        _agentProp = entry.Id + ".prop";
         Face.SetCharacter(entry.Id, entry.DisplayName);
 
         // Outfit: parts grouped by slot, in a stable body order.
@@ -332,7 +339,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
         await _buildLock.WaitAsync();
         try
         {
-            model = await Task.Run(() => assembler.Build(meshes, _preferredSkeleton));
+            model = await Task.Run(() => assembler.Build(meshes, _preferredSkeleton, _agentProp));
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException)
         {

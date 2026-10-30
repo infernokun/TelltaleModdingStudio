@@ -1,3 +1,4 @@
+using System.Numerics;
 using TelltaleModding.Core.Archives;
 using TelltaleModding.Core.Catalog;
 using TelltaleModding.Core.Scene;
@@ -32,6 +33,9 @@ public class ModelAuditTests
             _catalog.FindBySymbol(symbol) is { } e && e.Name.EndsWith(".d3dtx", StringComparison.OrdinalIgnoreCase) ? e.Name : null;
         public IEnumerable<string> SkeletonNames =>
             _catalog.Characters.Where(c => c.Skeleton is not null).Select(c => c.Skeleton!.Name).Distinct();
+        public IEnumerable<string> MeshNamesStartingWith(string prefix) =>
+            _catalog.Entries.Where(e => e.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                                        e.Name.EndsWith(".d3dmesh", StringComparison.OrdinalIgnoreCase)).Select(e => e.Name);
     }
 
     private static async Task<GameCatalog> Open(string folder)
@@ -94,12 +98,12 @@ public class ModelAuditTests
     }
 
     [GameFact(DefinitiveSeries)]
-    public async Task Season_four_zombies_are_coloured_through_their_gradient()
+    public async Task Season_four_zombies_are_colored_through_their_gradient()
     {
-        // Their "diffuse" holds red shading and green masks; the material's gradient strip colours it.
+        // Their "diffuse" holds red shading and green masks; the material's gradient strip colors it.
         using var catalog = await Open(DefinitiveSeries);
         var model = Build(catalog, "sk61_zombie400");
-        Assert.Contains(model.Details, d => d.Contains("sk61_zombie400_bodySkinny.d3dtx (coloured through sk_wd4SharedParts_gradientZombieSkins.d3dtx)"));
+        Assert.Contains(model.Details, d => d.Contains("sk61_zombie400_bodySkinny.d3dtx (colored through sk_wd4SharedParts_gradientZombieSkins.d3dtx)"));
     }
 
     [GameFact(DefinitiveSeries)]
@@ -125,6 +129,99 @@ public class ModelAuditTests
         // Rhys's robot eye parts are rigid (blend indices only) and still animate with him.
         var rhys = Build(catalog, "sk54_rhys");
         Assert.True(rhys.CanAnimate);
+    }
+
+    [GameFact(Borderlands)]
+    public async Task Hologram_Jack_is_tinted_blue_glows_and_is_see_through()
+    {
+        using var catalog = await Open(Borderlands);
+        // His textures are grey; his agent .prop makes them a blue, glowing, see-through hologram.
+        var ai = Build(catalog, "skB1_handsomeJackAI");
+        Assert.Equal("skB1_handsomeJackAI.prop", ai.AgentProp);
+        Assert.Equal(66 / 255f, ai.Agent.DiffuseColor.X, 0.002f);
+        Assert.All(ai.BatchMaterialParams, p =>
+        {
+            Assert.True(p!.DiffuseColor.Z > 4 * p.DiffuseColor.X, "tinted blue");
+            Assert.Equal(Vector3.One, p.EmissiveColor);
+            // His white emission lights his own color, as bright as the game shows him.
+            Assert.Equal(Vector3.One, p.SelfIllumination);
+            Assert.True(p.DrawAsOneLayer);
+        });
+        Assert.Equal(ai.Geometry.Batches.Count, ai.BatchEmissiveMaps.Count);
+        Assert.All(ai.BatchEmissiveMaps, Assert.NotNull);
+        Assert.Contains(ai.Details, d => d.Contains("(glows through skB1_handsomeJackAI_bodyCube2_glow.d3dtx)"));
+
+        var ai102 = Build(catalog, "skB1_handsomeJackAI102");
+        Assert.All(ai102.BatchMaterialParams, p => Assert.Equal(0.85f, p!.Opacity, 0.002f));
+        // His textures have no glow maps: nothing is listed as glowing.
+        Assert.Empty(ai102.BatchEmissiveMaps);
+
+        // The plain (non-hologram) mesh names face and body textures the game does not ship;
+        // it borrows the plain art of AI103, built on the same UV layout, untinted.
+        var plain = Build(catalog, "skB1_handsomeJack");
+        Assert.True(plain.Agent.IsDefault);
+        Assert.All(plain.BatchTextures, Assert.NotNull);
+        Assert.Contains(plain.Details, d => d.Contains("the game ships none of its textures; borrowed from skB1_handsomeJackAI103"));
+        Assert.Contains(plain.Details, d => d.Contains("skB1_handsomeJackAI102_body.d3dtx"));
+        Assert.DoesNotContain(plain.Details, d => d.Contains("Cube"));
+        Assert.All(plain.BatchMaterialParams, p => Assert.Equal(Vector3.Zero, p!.SelfIllumination));
+    }
+
+    [GameFact(Borderlands)]
+    public async Task Hologram_Jack_placed_in_a_scene_is_drawn_as_he_is_on_his_own()
+    {
+        using var catalog = await Open(Borderlands);
+        var assembler = new SceneAssembler(new SceneAssetResolver(catalog));
+        var layout = assembler.Describe(SceneFile.Load(catalog.Read(catalog.Find("adv_arenaGortysCoreSilo.scene")!)));
+        // He inherits skB1_handsomeJackAI.prop, which makes him a blue, glowing hologram.
+        var jack = layout.Objects.Single(o => o.Name == "Jack");
+        Assert.True(jack.Render.IsEffect);
+        Assert.Equal(66 / 255f, jack.Render.DiffuseColor.X, 0.002f);
+        var silo = layout.Objects.First(o => o.ShownByDefault && o.Kind == SceneAgentKind.Environment);
+
+        var scene = assembler.Build(layout, o => o == jack || o == silo);
+        var built = scene.Model;
+        var jackBatches = Enumerable.Range(0, built.Geometry.Batches.Count)
+            .Where(b => scene.BatchObjects[b] == jack.Agent.Index).ToList();
+        Assert.NotEmpty(jackBatches);
+        Assert.All(jackBatches, b =>
+        {
+            var p = built.BatchMaterialParams[b]!;
+            Assert.True(p.DiffuseColor.Z > 4 * p.DiffuseColor.X, "tinted blue");
+            Assert.Equal(Vector3.One, p.SelfIllumination);
+            Assert.Equal(Vector3.One, p.EmissiveColor);
+            Assert.True(p.DrawAsOneLayer);
+            Assert.NotNull(built.BatchEmissiveMaps[b]);
+        });
+        Assert.Contains(built.Details, d => d.Contains("Jack: drawn as an effect · tinted #427EFF, glowing #FFFFFF"));
+        // The room around him is drawn as before.
+        Assert.All(Enumerable.Range(0, built.Geometry.Batches.Count).Except(jackBatches), b =>
+        {
+            var p = built.BatchMaterialParams[b];
+            Assert.True(p is null || (p.DiffuseColor == Vector3.One && p.SelfIllumination == Vector3.Zero && !p.DrawAsOneLayer));
+            Assert.Null(built.BatchEmissiveMaps[b]);
+        });
+    }
+
+    [GameFact(Borderlands)]
+    public async Task Hologram_Jack_keeps_his_cyan_outline_in_a_scene_and_on_his_own()
+    {
+        using var catalog = await Open(Borderlands);
+        var cyan = new Vector4(0, 1, 1, 1);
+        var ai102 = Build(catalog, "skB1_handsomeJackAI102");
+        Assert.All(ai102.BatchMaterialParams, p => Assert.Equal(cyan, p!.OutlineColor));
+
+        var assembler = new SceneAssembler(new SceneAssetResolver(catalog));
+        var layout = assembler.Describe(SceneFile.Load(catalog.Read(catalog.Find("jackAI.scene")!)));
+        var built = assembler.Build(layout, o => o.Name == "Jack").Model;
+        Assert.NotEmpty(built.BatchMaterialParams);
+        Assert.All(built.BatchMaterialParams, p =>
+        {
+            Assert.Equal(cyan, p!.OutlineColor);
+            Assert.Equal(0.85f, p.Opacity, 0.002f);
+        });
+        // His 85% opacity is in the textures' alpha, as on the Characters page.
+        Assert.All(built.BatchTextures, t => Assert.True(t!.Rgba.Where((_, i) => i % 4 == 3).Max() <= 218));
     }
 
     [GameFact(Borderlands)]

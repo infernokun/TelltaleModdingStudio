@@ -1,4 +1,5 @@
 using System.Numerics;
+using TelltaleModding.Core.Catalog;
 using TelltaleModding.Core.Meshes;
 using TelltaleModding.Core.Meta;
 using TelltaleModding.Core.Textures;
@@ -25,6 +26,9 @@ public interface IAssetResolver
 
     /// <summary>Names of every skeleton (.skl) available, for matching a model to its skeleton.</summary>
     IEnumerable<string> SkeletonNames { get; }
+
+    /// <summary>Names of the meshes (.d3dmesh) whose names start with <paramref name="prefix"/>: a model's variants.</summary>
+    IEnumerable<string> MeshNamesStartingWith(string prefix) => Array.Empty<string>();
 }
 
 /// <summary>A model assembled from one or more meshes, ready to render.</summary>
@@ -66,6 +70,18 @@ public sealed class AssembledModel
     /// <summary>Shading values per batch from its material (null where unknown; may be empty).</summary>
     public IReadOnlyList<MaterialShading?> BatchMaterialParams { get; init; } = Array.Empty<MaterialShading?>();
 
+    /// <summary>
+    /// Emissive texture per batch (null where none glows), added in the batch's
+    /// <see cref="MaterialShading.EmissiveColor"/>. Empty when nothing glows.
+    /// </summary>
+    public IReadOnlyList<DdsImage?> BatchEmissiveMaps { get; init; } = Array.Empty<DdsImage?>();
+
+    /// <summary>The agent <c>.prop</c> whose render settings were applied, or null when none was found.</summary>
+    public string? AgentProp { get; init; }
+
+    /// <summary>The render settings of <see cref="AgentProp"/> (already applied to the batches).</summary>
+    public AgentRenderSettings Agent { get; init; } = AgentRenderSettings.Default;
+
     /// <summary>Human-readable breakdown: one line per mesh and batch.</summary>
     public required IReadOnlyList<string> Details { get; init; }
 
@@ -95,26 +111,55 @@ public sealed class AssembledModel
 /// <summary>
 /// Builds renderable models from meshes, matching each batch's textures through the
 /// asset resolver and merging the parts into one geometry. Decoded meshes, textures
-/// and skeletons are cached, so re-assembling with a part toggled is quick.
-/// Not thread-safe: use one assembler per resolver from one thread at a time.
+/// and skeletons are cached, so re-assembling with a part toggled is quick. Meshes and
+/// textures are kept within a memory budget, the least recently used dropped first.
+/// Thread-safe: calls from several threads run one at a time, so one assembler can serve
+/// every page of an open game.
 /// </summary>
 public sealed class ModelAssembler
 {
     private readonly IAssetResolver _assets;
-    private readonly Dictionary<string, (D3dMeshFile? Mesh, string? Error)> _meshes = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, DdsImage?> _textures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _gate = new();
+    private readonly SizeBoundedCache<string, (D3dMeshFile? Mesh, string? Error)> _meshes;
+    private readonly SizeBoundedCache<string, DdsImage?> _textures;
     private readonly Dictionary<string, SkeletonFile?> _skeletons = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<ulong, MaterialData?> _materialFiles = new();
 
-    public ModelAssembler(IAssetResolver assets) => _assets = assets;
+    /// <summary>
+    /// The default budget for decoded meshes and textures: 1/16 of this machine's memory,
+    /// 256 MB to 1 GB. Browsing every character of a large game otherwise holds tens of GB.
+    /// </summary>
+    public static long DefaultCacheBytes { get; } = CacheBudget.For(1 / 16.0, 256L << 20, 1L << 30);
+
+    /// <param name="assets">Where meshes, textures and skeletons are read from.</param>
+    /// <param name="cacheBytes">Budget for decoded meshes and textures (default <see cref="DefaultCacheBytes"/>); textures get three quarters of it.</param>
+    public ModelAssembler(IAssetResolver assets, long? cacheBytes = null)
+    {
+        _assets = assets;
+        long budget = cacheBytes ?? DefaultCacheBytes;
+        _textures = new(budget / 4 * 3, image => image!.Rgba.LongLength + 64, StringComparer.OrdinalIgnoreCase);
+        _meshes = new(budget / 4, entry => (entry.Mesh?.DataSize ?? 0) + 256, StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Assembles the named meshes into one model. <paramref name="preferredSkeleton"/>
     /// (a .skl file name) is used when it fits; otherwise the skeleton covering the
-    /// most bones is chosen.
+    /// most bones is chosen. The render settings of the agent the meshes belong to
+    /// (<paramref name="agentProp"/>, or the <c>.prop</c> named after the skeleton, when it
+    /// lists one of the meshes) are applied over the materials: see <see cref="AgentRenderSettings"/>.
     /// </summary>
-    public AssembledModel Build(IReadOnlyList<string> meshNames, string? preferredSkeleton = null)
+    public AssembledModel Build(IReadOnlyList<string> meshNames, string? preferredSkeleton = null, string? agentProp = null)
     {
+        lock (_gate)
+            return BuildLocked(meshNames, preferredSkeleton, agentProp);
+    }
+
+    private AssembledModel BuildLocked(IReadOnlyList<string> meshNames, string? preferredSkeleton, string? agentPropName)
+    {
+        var (agentProp, agent) = FindAgent(meshNames, preferredSkeleton, agentPropName);
+        var agentTint = agent.LinearTint;
+        var agentGlow = agent.LinearGlow;
+        var batchEmissive = new List<DdsImage?>();
         var parts = new List<MeshGeometry>();
         var batchTextures = new List<DdsImage?>();
         var batchNormalMaps = new List<DdsImage?>();
@@ -176,8 +221,20 @@ public sealed class ModelAssembler
                     if (dataByMaterial[i] is { } d && MaterialTextureLocator.HasDiffuseProperty(d))
                         diffuseByMaterial[i] = named;
             }
-            // A colour texture (real or an engine solid-colour fill), not just maps. The
-            // Season 3-era eye "glass" layer has a colour texture, but it is a solid black
+            // A model whose textures the game never shipped (Tales from the Borderlands' plain
+            // skB1_handsomeJack, unused in play) borrows them from a variant built on the same
+            // UV layout, matched vertex by vertex.
+            BorrowedTextures? borrowed = null;
+            if (diffuseByMaterial.All(d => d is null) &&
+                dataByMaterial.Any(d => d is not null && MaterialTextureLocator.HasDiffuseProperty(d)))
+            {
+                borrowed = BorrowFromVariant(mesh, part, textureLookup);
+                if (borrowed is not null)
+                    foreach (var (i, diffuse) in borrowed.Diffuse)
+                        diffuseByMaterial[i] = diffuse;
+            }
+            // A color texture (real or an engine solid-color fill), not just maps. The
+            // Season 3-era eye "glass" layer has a color texture, but it is a solid black
             // stand-in for a transparent, reflective cornea, so it counts as none.
             bool HasColor(string? diffuse) =>
                 diffuse is not null && !MaterialTextureLocator.IsNonDiffuseMap(diffuse) && !IsClearEyeLayer(diffuse);
@@ -199,6 +256,8 @@ public sealed class ModelAssembler
                 slot >= 0 && slot < mesh.TextureSymbols.Count ? textureLookup(mesh.TextureSymbols[slot]) : null;
 
             details.Add($"{mesh.Name}: {mesh.Describe()}");
+            if (borrowed is not null)
+                details.Add($"  the game ships none of its textures; borrowed from {borrowed.From}, built on the same UV layout");
             Vector4[]? vertexColors = null;
             bool vertexColorsRead = false;
             Vector4[]? VertexColors()
@@ -227,7 +286,7 @@ public sealed class ModelAssembler
                 // A material without a diffuse property, next to materials with one or
                 // blended over the surface, is a layer the engine composites: the cornea
                 // over the iris, or an effect such as a bleeding wound drawn through a mask
-                // in a material colour. Effects with a mask and colour are drawn that way;
+                // in a material color. Effects with a mask and color are drawn that way;
                 // anything else would hide what is underneath, so it is left out.
                 if (data is not null && !engineDiffuse[material] && (anyEngineDiffuse || data.IsBlended) &&
                     batch.DiffuseTextureIndex < 0)
@@ -241,6 +300,7 @@ public sealed class ModelAssembler
                         batchSpecular.Add(null);
                         batchInk.Add(null);
                         batchParams.Add(null);
+                        batchEmissive.Add(null);
                         details.Add($"  batch {b}: {batch.PrimitiveCount:N0} tris · effect layer: {layer.Name}");
                         continue;
                     }
@@ -248,7 +308,7 @@ public sealed class ModelAssembler
                     continue;
                 }
 
-                // A material with no colour texture (none at all, or only a normal map,
+                // A material with no color texture (none at all, or only a normal map,
                 // e.g. the eye-wetness/cornea layer over the iris) while its siblings have
                 // one is a clear overlay shell; drawn opaque it would hide what is
                 // underneath, so leave it out.
@@ -268,7 +328,7 @@ public sealed class ModelAssembler
                     details.Add($"  batch {b}: {batch.PrimitiveCount:N0} tris · hidden (clear eye layer, {diffuseName})");
                     continue;
                 }
-                float opacity = data is null ? 1f : BatchOpacity(mesh, part, batch, data, VertexColors);
+                float opacity = (data is null ? 1f : BatchOpacity(mesh, part, batch, data, VertexColors)) * agent.Opacity;
                 if (opacity < 1f / 255f)
                 {
                     // E.g. the clear cornea shells over Tales from the Borderlands eyes: drawn
@@ -280,12 +340,13 @@ public sealed class ModelAssembler
                 string? normalName = !hasPayload ? null
                     : data is not null ? MaterialTextureLocator.PickNormalMap(data, payloadByMaterial[material]!, textureLookup)
                     : MaterialTextureLocator.PickNormalMap(payloadByMaterial[material]!, textureLookup);
+                normalName ??= borrowed?.Normal.GetValueOrDefault(material);
                 var shading = data is not null ? MaterialShading.FromMaterial(data) : MaterialShading.Default;
                 string? specularName = data is not null ? MaterialTextureLocator.PickSpecularMap(data, textureLookup) : null;
                 var ink = data is not null ? MaterialTextureLocator.PickInkTexture(data, textureLookup) : null;
                 if (mesh.MaterialHandles.Count == 0 && diffuseName is not null)
                 {
-                    // Older meshes carry no material data: their maps are named after the colour texture.
+                    // Older meshes carry no material data: their maps are named after the color texture.
                     var (legacyNormal, legacyLines) = MaterialTextureLocator.PickLegacyMaps(diffuseName,
                         mesh.TextureSymbols.Select(textureLookup).OfType<string>());
                     normalName ??= legacyNormal;
@@ -296,13 +357,21 @@ public sealed class ModelAssembler
                 }
                 var specular = DecodeTexture(specularName);
                 var inkImage = ink is { } inkMap ? DecodeTexture(inkMap.Name) : null;
+                // Emissive maps glow only in the agent's emission color (black by default).
+                string? emissiveName = data is not null && agentGlow != Vector3.Zero
+                    ? MaterialTextureLocator.PickEmissiveMap(data, textureLookup) : null;
+                var emissive = Texture(emissiveName);
                 shading = shading with
                 {
+                    DiffuseColor = shading.DiffuseColor * agentTint,
+                    EmissiveColor = emissive is null ? Vector3.Zero : agentGlow,
+                    SelfIllumination = agentGlow,
+                    DrawAsOneLayer = agent.DrawAsOneLayer,
                     SpecularLayout = specular is null ? SpecularMapLayout.None : ClassifySpecularMap(specular),
                     InkKind = inkImage is null ? InkMapKind.None : ink!.Value.Kind,
                     // Line art is read from alpha (below one half = ink), whatever the texture's
-                    // format: placeholder detail maps are opaque with no colour, which must mean
-                    // "no lines". Shadow ink keeps its strokes in colour.
+                    // format: placeholder detail maps are opaque with no color, which must mean
+                    // "no lines". Shadow ink keeps its strokes in color.
                     InkInAlpha = inkImage is not null &&
                                  (ink!.Value.Kind == InkMapKind.LineArt || _alphaTextures.Contains(ink.Value.Name)),
                     Opacity = opacity,
@@ -324,9 +393,15 @@ public sealed class ModelAssembler
                 batchSpecular.Add(specular);
                 batchInk.Add(inkImage);
                 batchParams.Add(shading);
+                batchEmissive.Add(emissive);
                 details.Add($"  batch {b}: {batch.PrimitiveCount:N0} tris · " +
-                            (diffuse is not null ? diffuseName : diffuseName is null ? "no texture" : $"{diffuseName} (could not decode)") +
-                            (gradientNote is null ? "" : $" (coloured through {gradientNote})") +
+                            (diffuse is not null ? diffuseName
+                                : diffuseName is not null ? $"{diffuseName} (could not decode)"
+                                // skB1_handsomeJack names face and body textures the game does not ship.
+                                : data is not null && MaterialTextureLocator.HasDiffuseProperty(data) ? "no texture (its diffuse texture is not in the game files)"
+                                : "no texture") +
+                            (gradientNote is null ? "" : $" (colored through {gradientNote})") +
+                            (emissive is null ? "" : $" (glows through {emissiveName})") +
                             (opacity < 1f ? $" ({opacity:P0} opaque)" : ""));
             }
             parts.Add(kept.Count == part.Batches.Count ? part : part with { Batches = kept });
@@ -362,9 +437,28 @@ public sealed class ModelAssembler
             details.Insert(0, skeleton is null
                 ? $"Skeleton: none found for {bones.Count} bones"
                 : $"Skeleton: {skeletonName} · {matched}/{bones.Count} bones matched");
+        if (agentProp is not null && !agent.IsDefault)
+        {
+            var notes = new List<string>();
+            if (agent.DiffuseColor != Vector3.One)
+                notes.Add(agent.IsEffect
+                    ? $"tinted {ColorText(new Vector4(agent.DiffuseColor, 1f))}"
+                    : $"its color {ColorText(new Vector4(agent.DiffuseColor, 1f))} left out (it grades the character for a scene)");
+            if (agent.EmissionColor != Vector3.Zero)
+                notes.Add($"glowing {ColorText(new Vector4(agent.EmissionColor, 1f))}");
+            if (agent.Opacity < 1f)
+                notes.Add($"{agent.Opacity:P0} opaque");
+            if (agent.DrawAsOneLayer)
+                notes.Add("see-through as one layer");
+            if (notes.Count > 0)
+                details.Insert(bones.Count > 0 ? 1 : 0, $"Agent: {agentProp} · {string.Join(", ", notes)}");
+        }
 
         return new AssembledModel
         {
+            BatchEmissiveMaps = batchEmissive.Any(e => e is not null) ? batchEmissive : Array.Empty<DdsImage?>(),
+            AgentProp = agentProp,
+            Agent = agent,
             Geometry = geometry,
             BatchTextures = batchTextures,
             BatchNormalMaps = batchNormalMaps,
@@ -452,6 +546,99 @@ public sealed class ModelAssembler
     /// The texture named after a mesh, dropping trailing words of its last part until one is
     /// found (bodyUpperBitten → bodyUpper → body), or null.
     /// </summary>
+    private sealed record BorrowedTextures(string From, Dictionary<int, string?> Diffuse, Dictionary<int, string?> Normal);
+
+    // For each material of the mesh, the textures of the material that draws the same vertices
+    // (same place, same UV) in a variant: a mesh whose name starts with this one's. Later
+    // variants are tried first, as the first is often an effect version (skB1_handsomeJackAI
+    // is broken up into cubes; AI102 and AI103 carry his plain art).
+    private BorrowedTextures? BorrowFromVariant(D3dMeshFile mesh, MeshGeometry part, Func<ulong, string?> textureLookup)
+    {
+        var stem = Path.GetFileNameWithoutExtension(mesh.Name);
+        var candidates = _assets.MeshNamesStartingWith(stem)
+            .Where(n => !Path.GetFileNameWithoutExtension(n).Equals(stem, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(n => n, StringComparer.OrdinalIgnoreCase)
+            .Take(12)
+            .ToList();
+        if (candidates.Count == 0)
+            return null;
+
+        // A few vertices drawn by each material, to look up in the variants.
+        var samples = new Dictionary<int, List<int>>();
+        foreach (var batch in part.Batches)
+        {
+            if (!samples.TryGetValue(batch.MaterialIndex, out var list))
+                samples[batch.MaterialIndex] = list = new List<int>();
+            for (int k = 0; k < 3 && k < batch.PrimitiveCount; k++)
+                list.Add(part.Indices[batch.StartIndex + k * 3]);
+        }
+
+        var diffuse = new Dictionary<int, string?>();
+        var normal = new Dictionary<int, string?>();
+        var from = new List<string>();
+        foreach (var name in candidates)
+        {
+            if (samples.Keys.All(diffuse.ContainsKey))
+                break;
+            var (other, _) = LoadMesh(name);
+            if (other is null)
+                continue;
+            MeshGeometry geometry;
+            try
+            {
+                geometry = other.GetGeometry();
+            }
+            catch (InvalidDataException)
+            {
+                continue;
+            }
+            var batchOf = new int[geometry.Positions.Length];
+            Array.Fill(batchOf, -1);
+            for (int b = 0; b < geometry.Batches.Count; b++)
+            {
+                var batch = geometry.Batches[b];
+                for (int k = 0; k < batch.PrimitiveCount * 3 && batch.StartIndex + k < geometry.Indices.Length; k++)
+                    batchOf[geometry.Indices[batch.StartIndex + k]] = b;
+            }
+            var payloads = other.MaterialHandles
+                .Select(h => other.MaterialResources.FirstOrDefault(r => r.NameSymbol == h).Payload)
+                .ToList();
+            bool used = false;
+            foreach (var (material, vertices) in samples)
+            {
+                if (diffuse.ContainsKey(material))
+                    continue;
+                foreach (int v in vertices)
+                {
+                    int match = FindVertex(geometry, part.Positions[v], part.TexCoords[v]);
+                    if (match < 0 || batchOf[match] < 0)
+                        continue;
+                    int m = geometry.Batches[batchOf[match]].MaterialIndex;
+                    if (m < 0 || m >= payloads.Count || payloads[m] is not { } payload || MaterialData.TryParse(payload) is not { } data ||
+                        MaterialTextureLocator.PickDiffuseTexture(data, payload, textureLookup) is not { } texture)
+                        continue;
+                    diffuse[material] = texture;
+                    normal[material] = MaterialTextureLocator.PickNormalMap(data, payload, textureLookup);
+                    used = true;
+                    break;
+                }
+            }
+            if (used)
+                from.Add(name);
+        }
+        return diffuse.Count == 0 ? null : new BorrowedTextures(string.Join(", ", from), diffuse, normal);
+    }
+
+    // The vertex at the same place with the same UV, or -1.
+    private static int FindVertex(MeshGeometry geometry, Vector3 position, Vector2 uv)
+    {
+        for (int i = 0; i < geometry.Positions.Length; i++)
+            if (Vector3.DistanceSquared(geometry.Positions[i], position) < 4e-6f &&
+                Vector2.DistanceSquared(geometry.TexCoords[i], uv) < 1e-4f)
+                return i;
+        return -1;
+    }
+
     private static string? TextureNamedAfter(string meshName, Func<ulong, string?> textureLookup)
     {
         var stem = Path.GetFileNameWithoutExtension(meshName);
@@ -478,14 +665,60 @@ public sealed class ModelAssembler
             return cached;
         MaterialData? data = null;
         if (_assets.NameForSymbol(symbol) is { } name && name.EndsWith(".prop", StringComparison.OrdinalIgnoreCase) &&
-            _assets.TryRead(name) is { } bytes && MetaStreamHeader.TryParse(bytes, out var meta, out _) && meta is not null)
-        {
-            int size = Math.Min(meta.DefaultSectionSize, bytes.Length - meta.DefaultSectionOffset);
-            if (size > 0)
-                data = MaterialData.TryParse(bytes.AsSpan(meta.DefaultSectionOffset, size).ToArray());
-        }
+            _assets.TryRead(name) is { } bytes)
+            data = PropertySet(bytes);
         _materialFiles[symbol] = data;
         return data;
+    }
+
+    /// <summary>The property set of a .prop file's bytes, or null.</summary>
+    private static MaterialData? PropertySet(byte[] bytes)
+    {
+        if (!MetaStreamHeader.TryParse(bytes, out var meta, out _) || meta is null)
+            return null;
+        int size = Math.Min(meta.DefaultSectionSize, bytes.Length - meta.DefaultSectionOffset);
+        return size > 0 ? MaterialData.TryParse(bytes.AsSpan(meta.DefaultSectionOffset, size).ToArray()) : null;
+    }
+
+    private readonly Dictionary<string, (HashSet<ulong> Meshes, AgentRenderSettings Settings)?> _agents =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The agent .prop the meshes belong to and its render settings: <paramref name="named"/>,
+    /// otherwise the .prop named after the skeleton, whichever lists one of the meshes (another
+    /// agent's settings must not color this outfit). (null, defaults) when none does.
+    /// </summary>
+    private (string? Name, AgentRenderSettings Settings) FindAgent(
+        IReadOnlyList<string> meshNames, string? preferredSkeleton, string? named)
+    {
+        var candidates = new List<string>();
+        if (named is not null)
+            candidates.Add(named);
+        if (preferredSkeleton is not null)
+            candidates.Add(Path.GetFileNameWithoutExtension(preferredSkeleton) + ".prop");
+        // Props name their meshes with or without the extension.
+        var meshes = meshNames
+            .SelectMany(m => new[] { TelltaleCrc64.HashSymbol(m), TelltaleCrc64.HashSymbol(Path.GetFileNameWithoutExtension(m)) })
+            .ToHashSet();
+        foreach (var name in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!_agents.TryGetValue(name, out var agent))
+                _agents[name] = agent = ReadAgent(name);
+            if (agent is { } found && found.Meshes.Overlaps(meshes))
+                return (name, found.Settings);
+        }
+        return (null, AgentRenderSettings.Default);
+    }
+
+    private (HashSet<ulong> Meshes, AgentRenderSettings Settings)? ReadAgent(string propName)
+    {
+        if (_assets.TryRead(propName) is not { } bytes || CharacterProp.TryParse(bytes) is not { } prop ||
+            PropertySet(bytes) is not { } properties)
+            return null;
+        var meshes = prop.MeshListSymbols.ToHashSet();
+        if (prop.MeshSymbol is { } single)
+            meshes.Add(single);
+        return (meshes, AgentRenderSettings.FromProperties(properties, MaterialFile));
     }
 
     /// <summary>The texture with every pixel opaque (cached), or the texture itself when it already is.</summary>
@@ -511,8 +744,8 @@ public sealed class ModelAssembler
 
     /// <summary>
     /// How opaque an alpha-blended material's batch is: its "Material - Alpha", its diffuse
-    /// colour's alpha and (on Tales from the Borderlands-era meshes, whose shaders multiply
-    /// it in) the alpha of the batch's vertex colours (tinted lenses are 27-85%; the clear
+    /// color's alpha and (on Tales from the Borderlands-era meshes, whose shaders multiply
+    /// it in) the alpha of the batch's vertex colors (tinted lenses are 27-85%; the clear
     /// shells over some eyes 0). 1 for anything not alpha-blended, and where the vertex alpha
     /// varies across the batch (blended terrain decals), which one value cannot express.
     /// </summary>
@@ -542,16 +775,24 @@ public sealed class ModelAssembler
         return opacity;
     }
 
-    /// <summary>
-    /// The texture with its alpha scaled by <paramref name="opacity"/> (cached). Tiny textures
-    /// (the engine's 4×4 solid-colour fills) are widened to 8×8 so a viewer judging
-    /// translucency by pixel count does not take them for compression noise.
-    /// </summary>
+    /// <summary>The texture with its alpha scaled by <paramref name="opacity"/> (cached); see <see cref="WithOpacity"/>.</summary>
     private DdsImage TranslucentTexture(string fileName, DdsImage image, float opacity)
     {
         var key = $"{fileName}|opacity {opacity:F3}";
         if (_textures.TryGetValue(key, out var cached))
             return cached!;
+        var result = WithOpacity(image, opacity);
+        _textures[key] = result;
+        return result;
+    }
+
+    /// <summary>
+    /// A copy of the texture with its alpha scaled by <paramref name="opacity"/>. Tiny textures
+    /// (the engine's 4×4 solid-color fills) are widened to 8×8 so a viewer judging
+    /// translucency by pixel count does not take them for compression noise.
+    /// </summary>
+    internal static DdsImage WithOpacity(DdsImage image, float opacity)
+    {
         int scale = image.Width * image.Height < 64 ? (int)Math.Ceiling(8.0 / Math.Max(1, Math.Min(image.Width, image.Height))) : 1;
         int width = image.Width * scale, height = image.Height * scale;
         var px = new byte[width * height * 4];
@@ -564,23 +805,21 @@ public sealed class ModelAssembler
                 px[to + 2] = image.Rgba[from + 2];
                 px[to + 3] = (byte)MathF.Round(image.Rgba[from + 3] * opacity);
             }
-        var result = ImageFromRgba(width, height, px) ?? image;
-        _textures[key] = result;
-        return result;
+        return ImageFromRgba(width, height, px) ?? image;
     }
 
     private static readonly ulong GradientBiasKey = TelltaleCrc64.HashSymbol("Material - Gradient Bias");
 
     /// <summary>
-    /// Season 4 zombies store shading, not colour, in their diffuse texture's red channel;
-    /// the material colours it through a gradient strip (a few texels wide, one palette
-    /// per band of rows, the band picked by its "Gradient Bias"). Returns the coloured
+    /// Season 4 zombies store shading, not color, in their diffuse texture's red channel;
+    /// the material colors it through a gradient strip (a few texels wide, one palette
+    /// per band of rows, the band picked by its "Gradient Bias"). Returns the colored
     /// texture, or null when the material has no gradient.
     /// </summary>
     private (DdsImage Image, string Gradient)? GradientMapped(
         string diffuseName, DdsImage diffuse, MaterialData material, Func<ulong, string?> textureLookup)
     {
-        // Only a shading texture (red carries the image, green/blue are masks) is recoloured.
+        // Only a shading texture (red carries the image, green/blue are masks) is recolored.
         long red = 0, other = 0;
         for (int i = 0; i < diffuse.Rgba.Length; i += 4 * 61)
         {
@@ -622,8 +861,8 @@ public sealed class ModelAssembler
     }
 
     /// <summary>
-    /// For an effect material (e.g. a bleeding wound): its colour property shown through its
-    /// mask texture's alpha, or null when it has no such colour and mask.
+    /// For an effect material (e.g. a bleeding wound): its color property shown through its
+    /// mask texture's alpha, or null when it has no such color and mask.
     /// </summary>
     private (DdsImage Image, string Name)? TintedMaskLayer(MaterialData material, Func<ulong, string?> textureLookup)
     {
@@ -665,7 +904,7 @@ public sealed class ModelAssembler
         return null;
     }
 
-    private static string ColorText(Vector4 c) => $"#{(int)(Math.Clamp(c.X, 0, 1) * 255):X2}{(int)(Math.Clamp(c.Y, 0, 1) * 255):X2}{(int)(Math.Clamp(c.Z, 0, 1) * 255):X2}";
+    internal static string ColorText(Vector4 c) => $"#{(int)(Math.Clamp(c.X, 0, 1) * 255):X2}{(int)(Math.Clamp(c.Y, 0, 1) * 255):X2}{(int)(Math.Clamp(c.Z, 0, 1) * 255):X2}";
 
     /// <summary>Wraps RGBA pixels as an uncompressed 32-bit DDS and decodes it into an image.</summary>
     private static DdsImage? ImageFromRgba(int width, int height, byte[] rgba)
@@ -693,11 +932,14 @@ public sealed class ModelAssembler
     /// <summary>Loads a skeleton by file name through the resolver (cached), or null.</summary>
     public SkeletonFile? LoadSkeleton(string fileName)
     {
-        if (_skeletons.TryGetValue(fileName, out var cached))
-            return cached;
-        var bytes = _assets.TryRead(fileName);
-        SkeletonFile? skeleton = bytes is not null && SkeletonFile.TryLoad(bytes, out var skl, out _) ? skl : null;
-        return _skeletons[fileName] = skeleton;
+        lock (_gate)
+        {
+            if (_skeletons.TryGetValue(fileName, out var cached))
+                return cached;
+            var bytes = _assets.TryRead(fileName);
+            SkeletonFile? skeleton = bytes is not null && SkeletonFile.TryLoad(bytes, out var skl, out _) ? skl : null;
+            return _skeletons[fileName] = skeleton;
+        }
     }
 
     private (D3dMeshFile? Mesh, string? Error) LoadMesh(string name)
@@ -712,27 +954,28 @@ public sealed class ModelAssembler
     }
 
     /// <summary>
-    /// Season 4 specular maps leave red and green almost empty (metal masks) and keep gloss in
-    /// blue and intensity in alpha; older ones are a grey intensity image.
+    /// Season 4 specular maps keep metal masks in red and green, gloss in blue and intensity in
+    /// alpha; older ones are a grey intensity image. Red is almost empty on every packed map,
+    /// but green can cover a lot (a jacket's zips and studs), so blue is weighed against red
+    /// alone. Read as intensity, a packed map tints the highlights green and blue.
     /// </summary>
     public static SpecularMapLayout ClassifySpecularMap(DdsImage image)
     {
-        long r = 0, g = 0, b = 0, n = 0;
+        long r = 0, b = 0, n = 0;
         for (int i = 0; i < image.Rgba.Length; i += 4 * 37, n++)
         {
             r += image.Rgba[i];
-            g += image.Rgba[i + 1];
             b += image.Rgba[i + 2];
         }
         if (n == 0)
             return SpecularMapLayout.Intensity;
-        return (r + g) / (2 * n) < 24 && b / n > 2 * Math.Max(1, (r + g) / (2 * n)) ? SpecularMapLayout.Packed : SpecularMapLayout.Intensity;
+        return r / n < 32 && b / n > 2 * Math.Max(1, r / n) ? SpecularMapLayout.Packed : SpecularMapLayout.Intensity;
     }
 
     /// <summary>
     /// The ink texture's UV set: set 3 on Definitive Series meshes, the detail-map stream on
     /// legacy meshes (The Wolf Among Us). Tales from the Borderlands paints its line-art detail
-    /// maps over the colour texture's layout, so it uses the main set (its set 1 is partly unset).
+    /// maps over the color texture's layout, so it uses the main set (its set 1 is partly unset).
     /// </summary>
     private static Vector2[] InkTexCoords(D3dMeshFile mesh, MeshGeometry part)
     {

@@ -101,4 +101,39 @@ public class ScenesViewTests
             vm.Clear();
         }
     }
+
+    [AvaloniaFact]
+    public void A_scene_that_starts_empty_shows_the_agents_switched_on()
+    {
+        using var catalog = OpenCatalog(TalesFromTheBorderlands);
+        if (catalog is null)
+            return;
+
+        var vm = new ScenesViewModel();
+        var window = new Window { Width = 1440, Height = 900, Content = new ScenesView { DataContext = vm } };
+        try
+        {
+            window.Show();
+            AssembledScene? shown = null;
+            bool? keptCamera = null;
+            vm.SceneReady += (scene, keep) => (shown, keptCamera) = (scene, keep);
+            vm.Load(catalog);
+            // jackAI.scene only holds hologram Jack, hidden until a chore shows him.
+            vm.IncludeOtherScenes = true;
+            vm.SelectedScene = vm.Scenes.First(s => s.FileName == "jackAI.scene");
+            PumpUntil(() => vm.Error is not null && !vm.IsLoading, 120, "the scene to load");
+            Assert.False(vm.HasScene);
+
+            vm.Agents.First(a => a.Object.Name == "Jack").IsOn = true;
+            PumpUntil(() => vm.HasScene && !vm.IsLoading, 120, "Jack to be assembled");
+            Assert.Null(vm.Error);
+            Assert.False(keptCamera, "the first agent shown is framed");
+            Assert.All(shown!.Model.BatchMaterialParams, p => Assert.True(p!.DrawAsOneLayer));
+        }
+        finally
+        {
+            window.Close();
+            vm.Clear();
+        }
+    }
 }
