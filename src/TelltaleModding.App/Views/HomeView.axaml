@@ -108,7 +108,7 @@
             <StackPanel Spacing="12">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Classes="section" Text="FOUND ON THIS PC" VerticalAlignment="Center" />
-                    <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding IsScanning}" VerticalAlignment="Center" />
+                    <ProgressBar IsIndeterminate="{Binding IsScanning}" Width="80" IsVisible="{Binding IsScanning}" VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBlock Classes="muted" IsVisible="{Binding !Detected.Count}"
                            Text="{Binding IsScanning, Converter={x:Static vm:Converters.ScanLabel}}" />
