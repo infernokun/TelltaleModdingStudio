@@ -19,6 +19,9 @@ public sealed partial class UserPreferences : ObservableObject
     /// <summary>The workspace a game opens in: Characters, Scenes, Dialogue, Scripts or Assets.</summary>
     [ObservableProperty] private string _startWorkspace = "Characters";
 
+    /// <summary>Look for a newer release on GitHub when the app starts.</summary>
+    [ObservableProperty] private bool _checkForUpdatesOnStart = true;
+
     // ---- 3D viewport ----------------------------------------------------------
 
     /// <summary>Vertical field of view in degrees.</summary>
@@ -115,7 +118,7 @@ public sealed partial class UserPreferences : ObservableObject
     /// <summary>Bulk export converts to everyday formats (PNG, MP3/Ogg, Lua, transcripts).</summary>
     [ObservableProperty] private bool _convertOnExport = true;
 
-    /// <summary>The viewport background colour for <see cref="Background"/> (linear-ish RGB, 0-1).</summary>
+    /// <summary>The viewport background color for <see cref="Background"/> (linear-ish RGB, 0-1).</summary>
     public System.Numerics.Vector3 BackgroundColor => Background switch
     {
         "Black" => new(0.0f, 0.0f, 0.0f),

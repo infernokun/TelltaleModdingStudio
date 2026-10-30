@@ -8,21 +8,35 @@
         Icon="/Assets/app.ico"
         Width="1440" Height="900"
         MinWidth="1100" MinHeight="680"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1">
 
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Window.Resources>
+        <StreamGeometry x:Key="CaptionMinimize">M0,4.5 H10 V5.5 H0 Z</StreamGeometry>
+        <StreamGeometry x:Key="CaptionMaximize">M0,0 H10 V10 H0 Z M1,1 V9 H9 V1 Z</StreamGeometry>
+        <StreamGeometry x:Key="CaptionRestore">M0,2 H8 V10 H0 Z M1,3 V9 H7 V3 Z M2,0 H10 V8 H9 V1 H2 Z</StreamGeometry>
+        <StreamGeometry x:Key="CaptionClose">M0.7,0 L5,4.3 L9.3,0 L10,0.7 L5.7,5 L10,9.3 L9.3,10 L5,5.7 L0.7,10 L0,9.3 L4.3,5 L0,0.7 Z</StreamGeometry>
+    </Window.Resources>
 
-        <!-- Header: brand · workspaces · open game -->
+    <!-- A maximized window with no system title bar reaches past the screen edge; this keeps the content on screen. -->
+    <Grid RowDefinitions="Auto,*,Auto" Margin="{Binding $parent[Window].OffScreenMargin}">
+
+        <!-- Header: brand · workspaces · open game · window buttons. It is also the title bar:
+             drag it to move the window, double-click it to maximize. -->
         <Border Grid.Row="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
-                BorderThickness="0,0,0,1" Padding="16,10">
+                BorderThickness="0,0,0,1" Padding="16,10" PointerPressed="OnTitleBarPressed">
+            <!-- Left, middle and right: the outer columns share the spare width, so the tabs stay centered on the window. -->
             <Grid ColumnDefinitions="*,Auto,*">
-                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <!-- In a narrow window the name is shortened rather than running under the tabs. -->
+                <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,0,12,0">
                     <Image Source="/Assets/app.png" Width="28" Height="28" />
-                    <TextBlock Text="Telltale Modding Studio" FontWeight="SemiBold" FontSize="15"
-                               VerticalAlignment="Center" />
-                </StackPanel>
+                    <TextBlock Grid.Column="1" Text="Telltale Modding Studio" FontWeight="SemiBold" FontSize="15"
+                               VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                </Grid>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <RadioButton Classes="nav" Content="Home"
                                  Tag="{StaticResource IconHome}" IsChecked="{Binding IsHome}" />
                     <RadioButton Classes="nav" Content="Characters"
@@ -39,22 +53,27 @@
                                  Tag="{StaticResource IconBuild}" IsChecked="{Binding IsMod}" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="2" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="4">
-                <Button Classes="ghost"
-                        Command="{Binding OpenHomeCommand}" ToolTip.Tip="Switch game">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Ellipse Width="8" Height="8" Fill="{StaticResource Success}"
-                                 IsVisible="{Binding ActiveGame, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <TextBlock Text="{Binding ActiveGameName}" Classes="muted" FontSize="13"
-                                   MaxWidth="360" TextTrimming="CharacterEllipsis" />
+                <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Orientation="Horizontal" Spacing="4">
+                    <ToggleButton Classes="ghost" IsChecked="{Binding IsSettings, Mode=OneWay}" Command="{Binding OpenSettingsCommand}"
+                                  Background="Transparent" BorderThickness="0" Width="34" Height="34" Padding="6"
+                                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                  ToolTip.Tip="Settings" AutomationProperties.Name="Settings">
+                        <PathIcon Data="{StaticResource IconSettings}" />
+                    </ToggleButton>
+                    <!-- Shown when the window really draws its own title bar (not on every Linux desktop). -->
+                    <StackPanel Orientation="Horizontal" Margin="10,-10,-16,-10"
+                                IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}">
+                        <Button Classes="caption" Click="OnMinimize" AutomationProperties.Name="Minimize">
+                            <PathIcon Width="10" Height="10" Data="{StaticResource CaptionMinimize}" />
+                        </Button>
+                        <Button Classes="caption" Click="OnMaximize" x:Name="MaximizeButton" AutomationProperties.Name="Maximize">
+                            <PathIcon Width="10" Height="10" x:Name="MaximizeIcon" Data="{StaticResource CaptionMaximize}" />
+                        </Button>
+                        <Button Classes="caption close" Click="OnClose" AutomationProperties.Name="Close">
+                            <PathIcon Width="10" Height="10" Data="{StaticResource CaptionClose}" />
+                        </Button>
                     </StackPanel>
-                </Button>
-                <ToggleButton Classes="ghost" IsChecked="{Binding IsSettings, Mode=OneWay}" Command="{Binding OpenSettingsCommand}"
-                              Background="Transparent" BorderThickness="0" Width="34" Height="34" Padding="6"
-                              HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                              ToolTip.Tip="Settings" AutomationProperties.Name="Settings">
-                    <PathIcon Data="{StaticResource IconSettings}" />
-                </ToggleButton>
                 </StackPanel>
             </Grid>
         </Border>
@@ -88,14 +107,45 @@
         <!-- Status bar -->
         <Border Grid.Row="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
                 BorderThickness="0,1,0,0" Padding="16,6">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-                <ProgressBar Grid.Column="0" Width="140" Margin="0,0,12,0" VerticalAlignment="Center"
-                             IsVisible="{Binding IsBusy}" Value="{Binding ProgressValue}"
-                             IsIndeterminate="{Binding IsProgressIndeterminate}" />
-                <TextBlock Grid.Column="1" Text="{Binding StatusText}" Classes="faint" FontSize="12"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <Button Grid.Column="2" Content="Cancel" Classes="ghost" FontSize="12" Padding="8,2"
-                        IsVisible="{Binding IsBusy}" Command="{Binding CancelOpenCommand}" />
+            <!-- The two outer columns share the spare width equally, so the middle stays centered. -->
+            <Grid ColumnDefinitions="*,Auto,*">
+                <!-- Left: the version, and what the last update check found. -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                            HorizontalAlignment="Left">
+                    <TextBlock Text="{Binding Updates.VersionLabel}" Classes="faint" FontSize="12" />
+                    <TextBlock Text="·" Classes="faint" FontSize="12" IsVisible="{Binding Updates.HasCheckStatus}" />
+                    <TextBlock Text="{Binding Updates.CheckStatus}" Classes="faint" FontSize="12"
+                               IsVisible="{Binding Updates.HasCheckStatus}" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Updates.CheckStatusDetail}" />
+                </StackPanel>
+
+                <!-- Middle: the open game, or what is loading; click it to switch games. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center"
+                            HorizontalAlignment="Center" Margin="16,0">
+                    <ProgressBar Width="140" VerticalAlignment="Center"
+                                 IsVisible="{Binding IsBusy}" Value="{Binding ProgressValue}">
+                        <!-- Animated only while shown: a hidden indeterminate bar keeps redrawing the window. -->
+                        <ProgressBar.IsIndeterminate>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="IsBusy" />
+                                <Binding Path="IsProgressIndeterminate" />
+                            </MultiBinding>
+                        </ProgressBar.IsIndeterminate>
+                    </ProgressBar>
+                    <Button Classes="ghost" Padding="8,2" Command="{Binding OpenHomeCommand}"
+                            ToolTip.Tip="Switch game" Cursor="Hand">
+                        <TextBlock Text="{Binding StatusText}" Classes="faint" FontSize="12" MaxWidth="640"
+                                   TextTrimming="CharacterEllipsis" />
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
+                    <Button Content="Cancel" Classes="ghost" FontSize="12" Padding="8,2"
+                            IsVisible="{Binding IsBusy}" Command="{Binding CancelOpenCommand}" />
+                    <Button Content="Check for updates" Classes="ghost" FontSize="12" Padding="8,2"
+                            Foreground="{StaticResource Muted}" Command="{Binding Updates.CheckNowCommand}"
+                            ToolTip.Tip="Look for a newer version on GitHub" />
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

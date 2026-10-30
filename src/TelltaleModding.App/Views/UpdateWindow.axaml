@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:TelltaleModding.App.ViewModels"
+        x:Class="TelltaleModding.App.Views.UpdateWindow"
+        x:DataType="vm:UpdatePrompt"
+        Title="Update available"
+        Icon="/Assets/app.ico"
+        Width="480" SizeToContent="Height"
+        CanResize="False" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+
+    <Border Background="{StaticResource Surface}" Padding="24,20,24,18">
+        <StackPanel Spacing="14">
+            <StackPanel Spacing="4">
+                <TextBlock Classes="h2" Text="{Binding Heading}" />
+                <TextBlock Classes="muted" Text="{Binding VersionLine}" />
+            </StackPanel>
+
+            <Border Classes="card" Padding="14,12">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
+                    <ScrollViewer MaxHeight="220" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasNotes}">
+                        <TextBlock Text="{Binding Notes}" Classes="muted" TextWrapping="Wrap" LineHeight="18" />
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,4,0,0">
+                <Button Name="SkipButton" Classes="ghost" Content="Skip this version" Click="OnSkip"
+                        ToolTip.Tip="Don't mention this version again when the app starts" />
+                <Button Grid.Column="2" Name="LaterButton" Content="Later" Margin="0,0,8,0" Click="OnLater" IsCancel="True" />
+                <Button Grid.Column="3" Name="DownloadButton" Classes="primary" Content="Download" Click="OnDownload" IsDefault="True" />
+            </Grid>
+        </StackPanel>
+    </Border>
+</Window>

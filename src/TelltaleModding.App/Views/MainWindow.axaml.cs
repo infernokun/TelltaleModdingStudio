@@ -1,4 +1,9 @@
+using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
 using TelltaleModding.App.Services;
 using TelltaleModding.App.ViewModels;
 
@@ -13,7 +18,10 @@ public partial class MainWindow : Window
         DataContextChanged += (_, _) =>
         {
             if (DataContext is ShellViewModel vm)
+            {
                 vm.Dialogs = new DialogService(this);
+                vm.Updates.ShowPrompt = prompt => UpdateWindow.AskAsync(this, prompt);
+            }
         };
 
         // Debug hooks for automated verification with loose extracted files:
@@ -35,5 +43,39 @@ public partial class MainWindow : Window
             }
             await vm.InitializeAsync();
         };
+    }
+
+    // The header stands in for the system title bar: dragging it moves the window (with the
+    // system's snapping) and a double-click maximizes or restores. Buttons in it handle their
+    // own presses, so only its empty parts and labels get here.
+    private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        if (e.ClickCount == 2)
+            ToggleMaximized();
+        else
+            BeginMoveDrag(e);
+        e.Handled = true;
+    }
+
+    private void OnMinimize(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnMaximize(object? sender, RoutedEventArgs e) => ToggleMaximized();
+
+    private void OnClose(object? sender, RoutedEventArgs e) => Close();
+
+    private void ToggleMaximized() =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property != WindowStateProperty || MaximizeIcon is null)
+            return;
+        bool maximized = WindowState == WindowState.Maximized;
+        if (this.FindResource(maximized ? "CaptionRestore" : "CaptionMaximize") is Geometry icon)
+            MaximizeIcon.Data = icon;
+        AutomationProperties.SetName(MaximizeButton, maximized ? "Restore" : "Maximize");
     }
 }
