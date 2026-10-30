@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 (2026-10-30)
+
+- New logo and app icon: round badges with lowercase letters, and a maroon badge with a wrench breaking out of its ring. The window, taskbar and header use the new badge.
+- The README opens with the logo, in a light and a dark version that follow GitHub's theme.
+
 ## 1.1.0 (2026-10-30)
 
 ### Linux support
