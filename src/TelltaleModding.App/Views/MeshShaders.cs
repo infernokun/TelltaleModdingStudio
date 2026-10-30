@@ -191,13 +191,13 @@ internal static class MeshShaders
             vec3 n = geo;
             if (uNmapKind >= 0 && length(vTangent.xyz) > 0.1)
             {
-                vec4 packed = texture(uNmap, vUv);
+                vec4 nmapTexel = texture(uNmap, vUv);
                 vec3 tsn;
                 if (uNmapKind == 2)
-                    tsn = packed.rgb * 2.0 - 1.0;
+                    tsn = nmapTexel.rgb * 2.0 - 1.0;
                 else
                 {
-                    vec2 nxy = (uNmapKind == 0 ? packed.ba : packed.rg) * 2.0 - 1.0;
+                    vec2 nxy = (uNmapKind == 0 ? nmapTexel.ba : nmapTexel.rg) * 2.0 - 1.0;
                     tsn = vec3(nxy, sqrt(max(0.0, 1.0 - dot(nxy, nxy))));
                 }
                 vec3 t = normalize(vTangent.xyz - geo * dot(geo, vTangent.xyz));

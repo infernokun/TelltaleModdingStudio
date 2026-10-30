@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Input;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
+using TelltaleModding.App.Services;
 using TelltaleModding.Core.Meshes;
 using TelltaleModding.Core.Scene;
 using TelltaleModding.Core.Textures;
@@ -651,7 +652,22 @@ public class MeshViewport : OpenGlControlBase
         return program;
     }
 
+    // Avalonia drops an exception thrown here without logging it and leaves the view
+    // blank, so it goes to the crash log first.
     protected override void OnOpenGlInit(GlInterface gl)
+    {
+        try
+        {
+            InitGl(gl);
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("3D view setup", ex);
+            throw;
+        }
+    }
+
+    private void InitGl(GlInterface gl)
     {
         _x = new GlExtras(gl);
         _scene = new SceneProgram(gl, Compile(gl, MeshShaders.SceneVertex, MeshShaders.SceneFragment));

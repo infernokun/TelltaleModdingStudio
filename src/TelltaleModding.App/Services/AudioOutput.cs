@@ -138,8 +138,18 @@ public static class AudioOutputs
     /// <summary>The shared output: the sound card, or a silent stand-in when none is available.</summary>
     public static IAudioOutput Shared
     {
-        get => _shared ??= OperatingSystem.IsWindows() && waveOutGetNumDevs() > 0 ? new WaveOutAudioOutput() : new SilentAudioOutput();
+        get => _shared ??= Create();
         set => _shared = value;
+    }
+
+    // Wave-out on Windows, PulseAudio (or PipeWire) on Linux.
+    private static IAudioOutput Create()
+    {
+        if (OperatingSystem.IsWindows())
+            return waveOutGetNumDevs() > 0 ? new WaveOutAudioOutput() : new SilentAudioOutput();
+        if (PulseAudioOutput.IsAvailable())
+            return new PulseAudioOutput();
+        return new SilentAudioOutput();
     }
 
     [System.Runtime.InteropServices.DllImport("winmm.dll")]

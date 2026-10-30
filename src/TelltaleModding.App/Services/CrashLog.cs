@@ -4,7 +4,8 @@ namespace TelltaleModding.App.Services;
 
 /// <summary>
 /// Records unhandled errors to <c>%LOCALAPPDATA%\TelltaleModdingStudio\crash.log</c>
-/// (newest last), so a crash leaves something to look at.
+/// (on Linux, <c>~/.local/share/TelltaleModdingStudio/crash.log</c>), newest last, so a
+/// crash leaves something to look at.
 /// </summary>
 public static class CrashLog
 {

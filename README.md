@@ -11,10 +11,15 @@ plain). [ttarchext](https://aluigi.altervista.org/papers.htm#ttarchext) by Luigi
 Auriemma (for learning purposes only) is still used to build patches, to decrypt
 the games' resource descriptions, and to read classic `.ttarch` archives.
 
-**Download:** the Windows build is on the [Releases](../../releases) page. Unzip it
-and run `TelltaleModding.App.exe`; keep the `engine` folder next to it.
+**Download:** Windows and Linux (x86-64) builds are on the [Releases](../../releases) page.
+
+- **Windows:** unzip it and run `TelltaleModding.App.exe`; keep the `engine` folder next to it.
+- **Linux:** extract the `.tar.gz` and run `TelltaleModding.App`; keep the `engine` folder and
+  `libtelltale_oodle.so` next to it. Games installed through Steam (including Flatpak and
+  Snap Steam) are found like on Windows.
+
 Each release lists SHA-256 checksums in `SHA256SUMS.txt`, and releases built by CI can be
-checked with `gh attestation verify <zip> --repo infernokun/TelltaleModdingStudio`.
+checked with `gh attestation verify <file> --repo infernokun/TelltaleModdingStudio`.
 
 ## Screenshots
 
@@ -61,8 +66,9 @@ frame. Click the view and use **WASD/QE** to fly; hold right-click to look aroun
 **Looks:** *Studio* for plain lighting, *Game* for each game's own art style, and
 *Graphic black* for solid black shadows in any game.
 
-Audio plays on Windows only. Some games' sounds need the game installed, since
-the app reads their audio codec setup from the install folder.
+Audio plays on Windows, and on Linux through PulseAudio or PipeWire. Some games'
+sounds need the game installed, since the app reads their audio codec setup from the
+install folder.
 
 ## Repository layout
 
@@ -73,6 +79,7 @@ the app reads their audio codec setup from the install folder.
 | `tests/TelltaleModding.Core.Tests` | xUnit suite, including tests against real sample files and (when present) installed games |
 | `tests/TelltaleModding.App.Tests` | Headless UI tests: render every workspace to PNG, and drive the app end-to-end against installed games |
 | `engine/ttarchext` | The ttarchext CLI (source + Windows exe), the extraction/build engine |
+| `engine/oodle` | Linux loader for a game's own Oodle DLL (`libtelltale_oodle.so`) |
 | `samples/` | Game files the tests read (archives, meshes, textures, skeletons, animations, props, resource descriptions). Only a few are in the repository; tests whose sample is missing are skipped |
 | `legacy/winforms` | The original WinForms GUI, kept for reference |
 
@@ -84,20 +91,20 @@ dotnet test                      # runs the Core test suite (works on any OS)
 dotnet run --project src/TelltaleModding.App
 ```
 
-Everything builds and runs cross-platform. The engine comes in two flavours:
+Everything builds and runs on Windows and Linux. Two native pieces:
 
-- **`ttarchext.exe`** (shipped): the Windows binary. Required for
-  Oodle-compressed archives (lowercase `zCTT`/`eCTT` tags), because Oodle
-  decompression works by loading the game's own `oo2core` DLL.
-- **Native build**: `make -C engine/ttarchext` (needs `zlib1g-dev`) produces a
-  Linux/macOS `ttarchext` that handles encrypted, zlib-compressed, and plain
-  archives. This repo carries a small portability fix for it (the original
-  Blowfish code assumed 32-bit `unsigned long`).
-
-The app picks whichever flavour runs on your OS automatically, or you can point
-the `TTARCHEXT_PATH` environment variable at a specific binary. When only the
-`.exe` is present on a non-Windows host, engine actions are disabled with an
-explanatory status message.
+- **ttarchext**: `ttarchext.exe` is shipped for Windows. On Linux and macOS,
+  `make -C engine/ttarchext` (needs `zlib1g-dev`) builds a native `ttarchext` that
+  handles encrypted, zlib-compressed and plain archives. This repo carries a small
+  portability fix for it (the original Blowfish code assumed 32-bit `unsigned long`).
+  The app picks the one that runs on your OS, or set `TTARCHEXT_PATH` to a specific
+  binary. When only the `.exe` is present on a non-Windows host, engine actions are
+  disabled with an explanatory status message.
+- **Oodle on Linux**: Oodle-compressed `.ttarch2` archives (lowercase `zCTT`/`eCTT`
+  tags) are decoded with the game's own `oo2core_*_win64.dll`. Windows loads it
+  directly; on x86-64 Linux, `make -C engine/oodle` builds `libtelltale_oodle.so`,
+  which loads that Windows DLL and calls it. The build copies it next to the app.
+  Nothing of Oodle is in this repository.
 
 With a native engine present, `dotnet test` also runs end-to-end integration
 tests: listing and extracting from the real sample archives and round-tripping a

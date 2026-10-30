@@ -45,7 +45,8 @@ public sealed record CatalogOptions
 {
     /// <summary>
     /// Folder for the on-disk index cache. Default:
-    /// <c>%LOCALAPPDATA%\TelltaleModdingStudio\catalogs</c>.
+    /// <c>%LOCALAPPDATA%\TelltaleModdingStudio\catalogs</c> (on Linux,
+    /// <c>~/.local/share/TelltaleModdingStudio/catalogs</c>).
     /// </summary>
     public string? CacheFolder { get; init; }
 
