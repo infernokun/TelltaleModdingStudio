@@ -22,6 +22,13 @@ public sealed class CatalogAssetResolver : IAssetResolver
 
     public string? NameForSymbol(ulong symbol) => _catalog.FindBySymbol(symbol)?.Name;
 
+    public IEnumerable<string> MeshNamesStartingWith(string prefix) =>
+        _catalog.Entries
+            .Where(e => e.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                        e.Name.EndsWith(".d3dmesh", StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
     public IEnumerable<string> SkeletonNames =>
         _catalog.Characters.Where(c => c.Skeleton is not null).Select(c => c.Skeleton!.Name).Distinct();
 }

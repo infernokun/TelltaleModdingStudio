@@ -432,8 +432,15 @@ public sealed partial class ScenesViewModel : ViewModelBase
                 Problems.Clear();
                 foreach (var (mesh, error) in rebuilt.Model.Failures.DistinctBy(f => f.Mesh))
                     Problems.Add($"{mesh}: {error}");
-                SceneReady?.Invoke(rebuilt, true);
+                // A scene that showed nothing at the start (jackAI.scene, whose agents start
+                // hidden) is framed when the first agent is switched on.
+                bool first = !HasScene;
+                Error = null;
+                SceneReady?.Invoke(rebuilt, !first);
+                HasScene = true;
                 UpdateStats();
+                if (first)
+                    StatusMessage?.Invoke($"{Title}: {Stats}");
             }
             finally
             {

@@ -58,7 +58,7 @@ public static class GltfExporter
     private const int Float = 5126, UnsignedByte = 5121, UnsignedShort = 5123, UnsignedInt = 5125;
     private const int ArrayBuffer = 34962, ElementArrayBuffer = 34963;
 
-    // Matches the viewer's untextured colour.
+    // Matches the viewer's untextured color.
     private static readonly Vector3 UntexturedColor = new(0.72f, 0.72f, 0.75f);
 
     /// <summary>Writes <paramref name="model"/> as a .glb file to <paramref name="output"/>.</summary>
@@ -530,7 +530,7 @@ public static class GltfExporter
         private enum AlphaUse { Opaque, Cutout, Blend }
 
         /// <summary>
-        /// How a colour texture's alpha is used. Like the viewer, a texture with more than a
+        /// How a color texture's alpha is used. Like the viewer, a texture with more than a
         /// few clearly transparent pixels is see-through, unless they are only a stray handful
         /// (block-compression noise); mostly hard-edged alpha (eyelash and hair cards) is a
         /// cut-out, mostly soft alpha blends.

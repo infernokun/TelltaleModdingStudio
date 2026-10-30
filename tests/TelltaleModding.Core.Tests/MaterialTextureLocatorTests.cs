@@ -26,7 +26,7 @@ public class MaterialTextureLocatorTests
     }
 
     [SkippableFact]
-    public void Colour_texture_is_the_stem_the_other_maps_extend()
+    public void Color_texture_is_the_stem_the_other_maps_extend()
     {
         // Clementine 305: a damage mask and a damage overlay are listed around the real head.
         string[] textures =
@@ -41,7 +41,7 @@ public class MaterialTextureLocatorTests
     }
 
     [SkippableFact]
-    public void Normal_map_matches_the_colour_texture_and_skips_wrinkle_maps()
+    public void Normal_map_matches_the_color_texture_and_skips_wrinkle_maps()
     {
         string[] textures =
         {

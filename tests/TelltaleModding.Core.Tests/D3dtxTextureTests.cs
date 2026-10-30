@@ -132,7 +132,7 @@ public class D3dtxTextureTests
     public void Msv5_era_face_texture_decodes_to_skin_tones()
     {
         // A misplaced mip or misread header would decode to noise; Bigby's face texture
-        // averages to a warm skin colour (red > green > blue).
+        // averages to a warm skin color (red > green > blue).
         var tex = Load(SampleData.Sample("sk54_bigby_head.d3dtx"));
         Assert.True(DdsImage.TryDecode(tex.ToDds(), out var image, out var error), error);
         double r = 0, g = 0, b = 0;
@@ -142,7 +142,7 @@ public class D3dtxTextureTests
             g += image.Rgba[i + 1];
             b += image.Rgba[i + 2];
         }
-        Assert.True(r > g && g > b, $"average colour {r} {g} {b}");
+        Assert.True(r > g && g > b, $"average color {r} {g} {b}");
     }
 
     [SkippableFact]

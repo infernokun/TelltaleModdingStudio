@@ -49,7 +49,7 @@ public sealed class SceneLight
     /// <summary>Where the light points (the agent's local +Z in world space), normalised.</summary>
     public Vector3 Direction { get; init; } = -Vector3.UnitY;
 
-    /// <summary>Linear RGB colour (the stored colour is converted from sRGB).</summary>
+    /// <summary>Linear RGB color (the stored color is converted from sRGB).</summary>
     public Vector3 Color { get; init; } = Vector3.One;
 
     /// <summary>Intensity with dimmers and the scene's light environment intensity applied. Negative lights darken.</summary>
@@ -101,7 +101,7 @@ public sealed class SceneLight
     /// <summary>How much of the scene's visible geometry the light reaches (0-1), set by <see cref="SceneLighting.Build"/>.</summary>
     public float Coverage { get; init; } = 1;
 
-    /// <summary>|Intensity| × colour luminance × <see cref="Coverage"/>: how much the light matters.</summary>
+    /// <summary>|Intensity| × color luminance × <see cref="Coverage"/>: how much the light matters.</summary>
     public float Importance => MathF.Abs(Intensity) * SceneLighting.Luminance(Color) * Coverage;
 
     /// <summary>True for lights a direct-light shader can draw (directional, point, spot).</summary>
@@ -109,7 +109,7 @@ public sealed class SceneLight
 
     /// <summary>
     /// The light as a <see cref="LightSource"/>. Cone angles are full apex angles in degrees;
-    /// colour is linear and intensity is carried separately.
+    /// color is linear and intensity is carried separately.
     /// </summary>
     public LightSource ToLightSource() => new(
         Type switch
@@ -147,13 +147,13 @@ public sealed class SceneLighting
     /// <summary>Every light agent, in scene order.</summary>
     public required IReadOnlyList<SceneLight> Lights { get; init; }
 
-    /// <summary>Ambient light that does not come from light agents (scene colour, light probe): sky term.</summary>
+    /// <summary>Ambient light that does not come from light agents (scene color, light probe): sky term.</summary>
     public Vector3 BaseAmbientSky { get; init; }
 
     /// <summary>Ambient light that does not come from light agents: ground term.</summary>
     public Vector3 BaseAmbientGround { get; init; }
 
-    /// <summary>Where <see cref="BaseAmbientSky"/> came from ("light probe", "scene ambient colour", "none").</summary>
+    /// <summary>Where <see cref="BaseAmbientSky"/> came from ("light probe", "scene ambient color", "none").</summary>
     public string AmbientSource { get; init; } = "none";
 
     /// <summary>The scene's name, used as the rig's source.</summary>
@@ -283,12 +283,12 @@ public sealed class SceneLighting
             lights.Add(share < 1 ? Copy(placed, placed.Coverage * share, placed.AffectedObjects, placed.IsCharacterLight) : placed);
         }
 
-        // Base ambient: the scene's ambient colour, then the light-probe snapshot if there is one.
+        // Base ambient: the scene's ambient color, then the light-probe snapshot if there is one.
         var sceneAmbient = First(sceneChain, s => s.GetColor(SceneLightKeys.AmbientColor)) is { } ac
             ? SrgbToLinear(new Vector3(ac.X, ac.Y, ac.Z))
             : Vector3.Zero;
         Vector3 sky = sceneAmbient, ground = sceneAmbient;
-        string source = sceneAmbient != Vector3.Zero ? "scene ambient colour" : "none";
+        string source = sceneAmbient != Vector3.Zero ? "scene ambient color" : "none";
         if (assets is not null && SceneProbeAmbient.Find(layout, assets) is { } probe)
         {
             sky += probe.Sky;

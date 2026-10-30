@@ -231,7 +231,7 @@ public class D3dMeshFileTests
         Assert.Contains(mesh.LegacyComponents, c => c.Semantic == LegacyVertexSemantic.BlendWeight &&
                                                     c.Type == LegacyVertexType.Float && c.Count == 3);
 
-        // The batch's diffuse slot points at the head colour texture's handle.
+        // The batch's diffuse slot points at the head color texture's handle.
         Assert.Equal(TelltaleModding.Core.Meta.TelltaleCrc64.HashSymbol("sk54_bigby_head.d3dtx"),
             mesh.TextureSymbols[batch.DiffuseTextureIndex]);
     }
@@ -322,13 +322,13 @@ public class D3dMeshFileTests
     public void Legacy_detail_stream_carries_the_ink_line_uvs()
     {
         // The Wolf Among Us draws its ink lines through a separate detail-map stream with
-        // its own UV scale (1), not through the colour UVs (scaled ~2 on U).
+        // its own UV scale (1), not through the color UVs (scaled ~2 on U).
         Assert.True(D3dMeshFile.TryLoad(File.ReadAllBytes(SampleData.Sample("sk54_bigby_head.d3dmesh")), out var mesh, out var error), error);
-        var colour = mesh!.GetGeometry().TexCoords;
+        var color = mesh!.GetGeometry().TexCoords;
         var detail = mesh.GetTexCoords(1);
         Assert.NotNull(detail);
-        Assert.Equal(colour.Length, detail!.Length);
+        Assert.Equal(color.Length, detail!.Length);
         Assert.InRange(detail.Max(uv => uv.X), 0.5f, 1.05f);
-        Assert.True(colour.Max(uv => uv.X) > 1.2f, "colour UVs keep their ×2 scale");
+        Assert.True(color.Max(uv => uv.X) > 1.2f, "color UVs keep their ×2 scale");
     }
 }

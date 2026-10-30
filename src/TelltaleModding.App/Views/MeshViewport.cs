@@ -31,19 +31,20 @@ public class MeshViewport : OpenGlControlBase
         GL_TEXTURE_WRAP_S = 0x2802, GL_TEXTURE_WRAP_T = 0x2803, GL_CLAMP_TO_EDGE = 0x812F,
         GL_TEXTURE_MAX_ANISOTROPY = 0x84FE, GL_EXTENSIONS = 0x1F03,
         GL_TEXTURE0 = 0x84C0, GL_BLEND = 0x0BE2, GL_SRC_ALPHA = 0x0302, GL_ONE_MINUS_SRC_ALPHA = 0x0303,
-        GL_FRAMEBUFFER = 0x8D40, GL_COLOR_ATTACHMENT0 = 0x8CE0, GL_COLOR_ATTACHMENT1 = 0x8CE1,
+        GL_FRAMEBUFFER = 0x8D40, GL_COLOR_ATTACHMENT0 = 0x8CE0, GL_COLOR_ATTACHMENT1 = 0x8CE1, GL_COLOR_ATTACHMENT2 = 0x8CE2,
         GL_DEPTH_ATTACHMENT = 0x8D00, GL_FRAMEBUFFER_COMPLETE = 0x8CD5, GL_COLOR = 0x1800,
         GL_DEPTH_COMPONENT = 0x1902, GL_DEPTH_COMPONENT24 = 0x81A6, GL_UNSIGNED_INT_DEPTH = 0x1405,
-        GL_FRAMEBUFFER_BINDING = 0x8CA6, GL_CULL_FACE = 0x0B44, GL_FRONT = 0x0404, GL_BACK = 0x0405;
+        GL_FRAMEBUFFER_BINDING = 0x8CA6, GL_CULL_FACE = 0x0B44, GL_FRONT = 0x0404, GL_BACK = 0x0405,
+        GL_LESS = 0x0201, GL_LEQUAL = 0x0203;
 
 
     private const int VertexFloats = 16; // pos3 + normal3 + uv2 + tangent4 + lightmap uv2 + ink uv2
     private const int SkinFloats = 8;    // bone indices 4 + weights 4 (a second buffer)
-    private const int GL_RGBA32F = 0x8814, BoneTextureUnit = 5,
+    private const int GL_RGBA32F = 0x8814, BoneTextureUnit = 5, EmissiveTextureUnit = 6,
         GL_DYNAMIC_DRAW = 0x88E8, GL_LINES = 0x0001, GL_POINTS = 0x0000, GL_PROGRAM_POINT_SIZE = 0x8642;
     private const int MaxLights = 8;
 
-    // Theme surface colour, the background behind the model.
+    // Theme surface color, the background behind the model.
     private Vector3 _background = new(0.082f, 0.094f, 0.118f);
 
     private float[]? _pendingVertices;
@@ -52,6 +53,7 @@ public class MeshViewport : OpenGlControlBase
     private IReadOnlyList<DdsImage?>? _pendingBatchNormalMaps;
     private IReadOnlyList<DdsImage?>? _pendingBatchSpecular;
     private IReadOnlyList<DdsImage?>? _pendingBatchInk;
+    private IReadOnlyList<DdsImage?>? _pendingBatchEmissive;
     private IReadOnlyList<MaterialShading?>? _pendingBatchParams;
     private IReadOnlyList<MaterialBlendMode?>? _pendingBatchBlendModes;
     private Vector3[] _batchCenters = Array.Empty<Vector3>();
@@ -87,8 +89,8 @@ public class MeshViewport : OpenGlControlBase
     private bool _glReady;
     private float _maxAnisotropy;
 
-    // Offscreen targets: colour, view-space normal and depth, read back by the post pass.
-    private int _fbo, _colorTex, _normalTex, _depthTex, _targetWidth, _targetHeight;
+    // Offscreen targets: color, view-space normal and depth, read back by the post pass.
+    private int _fbo, _colorTex, _normalTex, _lineTex, _depthTex, _targetWidth, _targetHeight;
     private bool _targetsFailed;
 
     private Vector3 _center, _homeCenter;
@@ -113,7 +115,7 @@ public class MeshViewport : OpenGlControlBase
         set => _flySpeed = Math.Clamp(value, 0.05f, 40f);
     }
 
-    /// <summary>The colour behind the model.</summary>
+    /// <summary>The color behind the model.</summary>
     public Vector3 BackgroundColor
     {
         get => _background;
@@ -381,7 +383,7 @@ public class MeshViewport : OpenGlControlBase
     }
 
     /// <summary>
-    /// Loads an assembled model with everything its materials provide: colour, normal,
+    /// Loads an assembled model with everything its materials provide: color, normal,
     /// specular and ink textures and shading values. See <see cref="SetMesh"/>.
     /// </summary>
     public void SetModel(AssembledModel model, bool keepCamera = false)
@@ -389,6 +391,7 @@ public class MeshViewport : OpenGlControlBase
         SetMesh(model.Geometry, model.BatchTextures, model.BatchNormalMaps, keepCamera);
         _pendingBatchSpecular = model.BatchSpecularMaps;
         _pendingBatchInk = model.BatchInkTextures;
+        _pendingBatchEmissive = model.BatchEmissiveMaps;
         _pendingBatchParams = model.BatchMaterialParams;
         _pendingBatchBlendModes = model.BatchBlendModes;
         if (model.InkTexCoords is { } ink && _pendingVertices is { } v && ink.Length * VertexFloats == v.Length)
@@ -474,6 +477,7 @@ public class MeshViewport : OpenGlControlBase
         _pendingBatchNormalMaps = batchNormalMaps;
         _pendingBatchSpecular = null;
         _pendingBatchInk = null;
+        _pendingBatchEmissive = null;
         _pendingBatchParams = null;
         _pendingBatchLightmaps = null;
         _meshDirty = _textureDirty = true;
@@ -572,6 +576,7 @@ public class MeshViewport : OpenGlControlBase
         _pendingBatchNormalMaps = null;
         _pendingBatchSpecular = null;
         _pendingBatchInk = null;
+        _pendingBatchEmissive = null;
         _pendingBatchParams = null;
         _pendingBatchLightmaps = null;
         _meshDirty = _textureDirty = true;
@@ -761,10 +766,10 @@ public class MeshViewport : OpenGlControlBase
             int fbo = _fbo;
             _x.DeleteFramebuffers(1, &fbo);
         }
-        foreach (var t in new[] { _colorTex, _normalTex, _depthTex })
+        foreach (var t in new[] { _colorTex, _normalTex, _lineTex, _depthTex })
             if (t != 0)
                 gl.DeleteTexture(t);
-        _fbo = _colorTex = _normalTex = _depthTex = 0;
+        _fbo = _colorTex = _normalTex = _lineTex = _depthTex = 0;
         _targetWidth = _targetHeight = 0;
     }
 
@@ -790,6 +795,7 @@ public class MeshViewport : OpenGlControlBase
         }
         _colorTex = Target(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST);
         _normalTex = Target(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST);
+        _lineTex = Target(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST);
         _depthTex = Target(GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT_DEPTH, GL_NEAREST);
 
         int fbo;
@@ -798,6 +804,7 @@ public class MeshViewport : OpenGlControlBase
         _x.BindFramebuffer(GL_FRAMEBUFFER, _fbo);
         _x.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _colorTex, 0);
         _x.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, _normalTex, 0);
+        _x.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, _lineTex, 0);
         _x.FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, _depthTex, 0);
         bool complete = _x.CheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
         if (!complete)
@@ -834,8 +841,8 @@ public class MeshViewport : OpenGlControlBase
         gl.Viewport(0, 0, width, height);
         if (offscreen)
         {
-            int* buffers = stackalloc int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-            _x.DrawBuffers(2, buffers);
+            int* buffers = stackalloc int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+            _x.DrawBuffers(3, buffers);
         }
         gl.ClearColor(_background.X, _background.Y, _background.Z, 1f);
         gl.ClearDepth(1f);
@@ -1093,7 +1100,8 @@ public class MeshViewport : OpenGlControlBase
             // Translucent: the texture has real alpha, the material is see-through glass, or
             // its blend mode says so (the opacity is already baked into the texture's alpha).
             var blend = _pendingBatchBlendModes is { } modes && b < modes.Count ? modes[b] : null;
-            bool glass = shading.Opacity < 0.999f;
+            // Batches drawn as one layer (hologram agents) are depth-sorted by a depth pass instead.
+            bool glass = shading.Opacity < 0.999f && !shading.DrawAsOneLayer;
             bool blended = blend is MaterialBlendMode.Alpha or MaterialBlendMode.AlphaAlphaTest or MaterialBlendMode.AlphaAdd;
             _draws[b] = new BatchDraw
             {
@@ -1117,25 +1125,36 @@ public class MeshViewport : OpenGlControlBase
                 SpecularColor = (shading.SpecularColor ?? Vector3.One) * intensity,
                 SpecularPower = Math.Clamp(shading.SpecularPower ?? 24f, 1f, 512f),
                 Lightmap = SlotFor(At(_pendingBatchLightmaps, b), lightmap: true),
+                Emissive = SlotFor(At(_pendingBatchEmissive, b)),
+                EmissiveColor = shading.EmissiveColor,
+                SelfLit = shading.SelfIllumination,
+                OneLayer = shading.DrawAsOneLayer,
+                Outline = shading.OutlineColor is { } line ? new Vector3(line.X, line.Y, line.Z) : null,
             };
         }
     }
 
     private struct BatchDraw
     {
-        public int Texture, NormalMap, Specular, Ink, Lightmap;
+        public int Texture, NormalMap, Specular, Ink, Lightmap, Emissive;
         public bool HasAlpha, InkInAlpha;
+
+        /// <summary>Translucent but showing only its nearest surface: its depth is drawn before its color.</summary>
+        public bool OneLayer;
 
         /// <summary>See-through (opacity below 1): drawn last, back to front, without depth writes.</summary>
         public bool Glass;
         public int NormalKind, SpecularLayout, InkKind;
-        public Vector3 Tint, SpecularColor;
+        public Vector3 Tint, SpecularColor, EmissiveColor, SelfLit;
         public float SpecularPower;
+
+        /// <summary>The material's own outline color (Handsome Jack's hologram is cyan); null draws the look's.</summary>
+        public Vector3? Outline;
     }
 
     private static readonly BatchDraw Untextured = new()
     {
-        Texture = -1, NormalMap = -1, Specular = -1, Ink = -1, Lightmap = -1, NormalKind = -1,
+        Texture = -1, NormalMap = -1, Specular = -1, Ink = -1, Lightmap = -1, Emissive = -1, NormalKind = -1,
         Tint = Vector3.One, SpecularColor = new Vector3(0.12f), SpecularPower = 24f,
     };
 
@@ -1161,6 +1180,7 @@ public class MeshViewport : OpenGlControlBase
         x.Uniform1i(p.Spec, 2);
         x.Uniform1i(p.InkTex, 3);
         x.Uniform1i(p.Lightmap, 4);
+        x.Uniform1i(p.Emissive, EmissiveTextureUnit);
         // Baked lighting belongs to the scene's own lights, not the studio rig.
         _lightmapsOn = !_rig.FollowCamera;
         gl.Uniform1f(p.LightmapScale, _lightmapScale);
@@ -1242,6 +1262,7 @@ public class MeshViewport : OpenGlControlBase
         x.Uniform3f(p.InkColor, inkColor.X, inkColor.Y, inkColor.Z);
         x.Uniform3f(p.InkFade, studio ? s.InkFadeNear : s.InkSceneFadeNear, studio ? s.InkFadeFar : s.InkSceneFadeFar, s.LineArtStrength);
         x.Uniform3f(p.Grade, s.Saturation, s.Contrast, 0f);
+        _styleLine = s.OutlineColor;
 
         x.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         gl.Enable(GL_BLEND);
@@ -1266,9 +1287,21 @@ public class MeshViewport : OpenGlControlBase
             for (int b = 0; b < _batches.Length; b++)
                 if (Shown(b) && !_draws[b].HasAlpha)
                     DrawBatch(b);
+            // Translucent batches drawn as one layer (the engine's "Render 3D Alpha", e.g. a
+            // hologram) lay down their depth first, so only their nearest surface blends in.
+            var layered = Enumerable.Range(0, _batches.Length).Where(b => Shown(b) && _draws[b].HasAlpha && _draws[b].OneLayer).ToList();
+            if (layered.Count > 0)
+            {
+                x.ColorMask(0, 0, 0, 0);
+                foreach (int b in layered)
+                    DrawBatch(b);
+                x.ColorMask(1, 1, 1, 1);
+                x.DepthFunc(GL_LEQUAL);
+            }
             for (int b = 0; b < _batches.Length; b++)
                 if (Shown(b) && _draws[b].HasAlpha && !_draws[b].Glass)
                     DrawBatch(b);
+            x.DepthFunc(GL_LESS);
             var glassBatches = Enumerable.Range(0, _batches.Length).Where(b => Shown(b) && _draws[b].Glass).ToList();
             if (glassBatches.Count > 0)
             {
@@ -1315,11 +1348,18 @@ public class MeshViewport : OpenGlControlBase
         x.CullFace(GL_FRONT);
         if (_batches.Length == 0)
             gl.DrawElements(GL_TRIANGLES, _indexCount, GL_UNSIGNED_INT, IntPtr.Zero);
+        var current = color;
         for (int b = 0; b < _batches.Length; b++)
         {
             // Cut-out cards (hair, lashes) would outline their quads.
             if (_batchVisible is { } shown && b < shown.Length && !shown[b] || _draws[b].HasAlpha)
                 continue;
+            var line = _draws[b].Outline ?? color;
+            if (line != current)
+            {
+                x.Uniform3f(h.Color, line.X, line.Y, line.Z);
+                current = line;
+            }
             // Keep the far side of the shell whichever way the batch is wound.
             x.CullFace(_batchClockwise[b] ? GL_BACK : GL_FRONT);
             gl.DrawElements(GL_TRIANGLES, _batches[b].PrimitiveCount * 3, GL_UNSIGNED_INT,
@@ -1357,6 +1397,7 @@ public class MeshViewport : OpenGlControlBase
         Texture(1, d.NormalMap);
         Texture(2, d.Specular);
         Texture(3, d.Ink);
+        Texture(EmissiveTextureUnit, d.Emissive);
         bool lightmapped = _lightmapsOn && d.Lightmap >= 0;
         if (lightmapped)
             Texture(4, d.Lightmap);
@@ -1368,11 +1409,19 @@ public class MeshViewport : OpenGlControlBase
         gl.Uniform1f(p.InkInAlpha, d.InkInAlpha ? 1f : 0f);
         x.Uniform3f(p.Tint, d.Tint.X, d.Tint.Y, d.Tint.Z);
         x.Uniform3f(p.SpecColor, d.SpecularColor.X, d.SpecularColor.Y, d.SpecularColor.Z);
+        var glow = d.Emissive >= 0 ? d.EmissiveColor : Vector3.Zero;
+        x.Uniform3f(p.EmissiveColor, glow.X, glow.Y, glow.Z);
+        x.Uniform3f(p.SelfLit, d.SelfLit.X, d.SelfLit.Y, d.SelfLit.Z);
         gl.Uniform1f(p.SpecPower, d.SpecularPower);
         gl.Uniform1f(p.HasLightmap, lightmapped ? 1f : 0f);
+        var line = d.Outline ?? _styleLine;
+        x.Uniform3f(p.LineColor, line.X, line.Y, line.Z);
     }
 
     private bool _lightmapsOn;
+
+    // The look's outline color, for batches whose material sets none.
+    private Vector3 _styleLine;
 
     // A batch's rest-pose centre, for sorting glass back to front.
     private Vector3 BatchCenter(int b) => b < _batchCenters.Length ? _batchCenters[b] : _center;
@@ -1390,17 +1439,20 @@ public class MeshViewport : OpenGlControlBase
         gl.BindTexture(GL_TEXTURE_2D, _normalTex);
         gl.ActiveTexture(GL_TEXTURE0 + 2);
         gl.BindTexture(GL_TEXTURE_2D, _depthTex);
+        gl.ActiveTexture(GL_TEXTURE0 + 3);
+        gl.BindTexture(GL_TEXTURE_2D, _lineTex);
         gl.ActiveTexture(GL_TEXTURE0);
         x.Uniform1i(p.Color, 0);
         x.Uniform1i(p.Normal, 1);
         x.Uniform1i(p.Depth, 2);
+        x.Uniform1i(p.Line, 3);
 
         var s = ActiveStyle;
         bool edges = _renderMode != RenderMode.Studio && s.OutlineWidth > 0 && s.OutlineOpacity > 0;
         x.Uniform2f(p.Texel, 1f / width, 1f / height);
         x.Uniform2f(p.Planes, camera.Near, camera.Far);
         x.Uniform4f(p.Outline, edges ? s.OutlineWidth * scaling : 0f, s.DepthThreshold, s.NormalThreshold, s.CreaseWidthScale);
-        x.Uniform4f(p.OutlineColor, s.OutlineColor.X, s.OutlineColor.Y, s.OutlineColor.Z, s.OutlineOpacity);
+        gl.Uniform1f(p.OutlineOpacity, s.OutlineOpacity);
         x.Uniform2f(p.Falloff, s.OutlineFalloffDistance * _radius, s.OutlineMinScale);
         x.DrawArrays(GL_TRIANGLES, 0, 3);
         gl.BindVertexArray(0);
@@ -1413,7 +1465,8 @@ public class MeshViewport : OpenGlControlBase
         public int Id, Mvp, View, Eye, Tex, Nmap, Spec, InkTex, HasTex, NmapKind, SpecLayout, InkKind, InkInAlpha,
             Tint, SpecColor, SpecPower, LightCount, LightPos, LightDir, LightColor, LightCone, AmbientSky, AmbientGround,
             Exposure, Bands, BandLevels, BandCount, BandShape, LightModel, ShadowTint, Rim, InkParams, InkColor, InkFade, Grade,
-            Lightmap, HasLightmap, LightmapScale, InkAmbient, InkKeyWrap, Skinned, Bones;
+            Lightmap, HasLightmap, LightmapScale, InkAmbient, InkKeyWrap, Skinned, Bones, Emissive, EmissiveColor, SelfLit,
+            LineColor;
 
         public SceneProgram(GlInterface gl, int id)
         {
@@ -1433,6 +1486,8 @@ public class MeshViewport : OpenGlControlBase
             InkParams = U("uInk"); InkColor = U("uInkColor"); InkFade = U("uInkFade"); Grade = U("uGrade");
             Lightmap = U("uLightmap"); HasLightmap = U("uHasLightmap"); LightmapScale = U("uLightmapScale");
             Skinned = U("uSkinned"); Bones = U("uBones");
+            Emissive = U("uEmissive"); EmissiveColor = U("uEmissiveColor"); SelfLit = U("uSelfLit");
+            LineColor = U("uLineColor");
         }
     }
 
@@ -1451,14 +1506,14 @@ public class MeshViewport : OpenGlControlBase
 
     private sealed class PostProgram
     {
-        public int Id, Color, Normal, Depth, Texel, Planes, Outline, OutlineColor, Falloff;
+        public int Id, Color, Normal, Depth, Line, Texel, Planes, Outline, OutlineOpacity, Falloff;
 
         public PostProgram(GlInterface gl, int id)
         {
             Id = id;
             int U(string name) => gl.GetUniformLocationString(id, name);
-            Color = U("uColor"); Normal = U("uNormal"); Depth = U("uDepth"); Texel = U("uTexel");
-            Planes = U("uPlanes"); Outline = U("uOutline"); OutlineColor = U("uOutlineColor"); Falloff = U("uFalloff");
+            Color = U("uColor"); Normal = U("uNormal"); Depth = U("uDepth"); Line = U("uLine"); Texel = U("uTexel");
+            Planes = U("uPlanes"); Outline = U("uOutline"); OutlineOpacity = U("uOutlineOpacity"); Falloff = U("uFalloff");
         }
     }
 
@@ -1475,6 +1530,8 @@ public class MeshViewport : OpenGlControlBase
         public readonly delegate* unmanaged[Stdcall]<int, void> GenerateMipmap;
         public readonly delegate* unmanaged[Stdcall]<int, int, float, void> TexParameterf;
         public readonly delegate* unmanaged[Stdcall]<byte, void> DepthMask;
+        public readonly delegate* unmanaged[Stdcall]<int, void> DepthFunc;
+        public readonly delegate* unmanaged[Stdcall]<byte, byte, byte, byte, void> ColorMask;
         public readonly delegate* unmanaged[Stdcall]<int, int, int, void> DrawArrays;
         public readonly delegate* unmanaged[Stdcall]<int, int*, void> GenFramebuffers;
         public readonly delegate* unmanaged[Stdcall]<int, int*, void> DeleteFramebuffers;
@@ -1505,6 +1562,8 @@ public class MeshViewport : OpenGlControlBase
             GenerateMipmap = (delegate* unmanaged[Stdcall]<int, void>)P("glGenerateMipmap");
             TexParameterf = (delegate* unmanaged[Stdcall]<int, int, float, void>)P("glTexParameterf");
             DepthMask = (delegate* unmanaged[Stdcall]<byte, void>)P("glDepthMask");
+            DepthFunc = (delegate* unmanaged[Stdcall]<int, void>)P("glDepthFunc");
+            ColorMask = (delegate* unmanaged[Stdcall]<byte, byte, byte, byte, void>)P("glColorMask");
             DrawArrays = (delegate* unmanaged[Stdcall]<int, int, int, void>)P("glDrawArrays");
             BindFramebuffer = (delegate* unmanaged[Stdcall]<int, int, void>)P("glBindFramebuffer");
             GenFramebuffers = (delegate* unmanaged[Stdcall]<int, int*, void>)Optional("glGenFramebuffers");
@@ -1515,7 +1574,7 @@ public class MeshViewport : OpenGlControlBase
             ClearBufferfv = (delegate* unmanaged[Stdcall]<int, int, float*, void>)Optional("glClearBufferfv");
         }
 
-        /// <summary>True when offscreen targets with several colour attachments can be used.</summary>
+        /// <summary>True when offscreen targets with several color attachments can be used.</summary>
         public bool HasFramebuffers =>
             GenFramebuffers != null && DeleteFramebuffers != null && FramebufferTexture2D != null &&
             CheckFramebufferStatus != null && DrawBuffers != null && ClearBufferfv != null;

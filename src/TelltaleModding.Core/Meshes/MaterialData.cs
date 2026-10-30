@@ -55,7 +55,7 @@ public readonly record struct MaterialTextureBinding(
 
 /// <summary>
 /// The engine data of a material embedded in a mesh (a PropertySet with a compiled
-/// <c>T3MaterialData</c>): its parent material, texture properties, scalar/colour
+/// <c>T3MaterialData</c>): its parent material, texture properties, scalar/color
 /// properties, and (from the compiled data) each texture's role and the main pass's
 /// blend mode. Parsed from Definitive Series (v55) and Michonne / Tales from the
 /// Borderlands era (v22-51) meshes. The values of a type it does not know are stepped over
@@ -220,7 +220,7 @@ public sealed class MaterialData
     /// <summary>Float properties by key symbol.</summary>
     public IReadOnlyDictionary<ulong, float> Floats { get; private init; } = new Dictionary<ulong, float>();
 
-    /// <summary>Colour properties (RGBA) by key symbol.</summary>
+    /// <summary>Color properties (RGBA) by key symbol.</summary>
     public IReadOnlyDictionary<ulong, Vector4> Colors { get; private init; } = new Dictionary<ulong, Vector4>();
 
     /// <summary>Bool properties by key symbol.</summary>
@@ -605,7 +605,7 @@ public enum InkMapKind
     /// </summary>
     Shadow,
 
-    /// <summary>Drawn line art (Tales from the Borderlands "Detail Texture", The Wolf Among Us ink lines): dark lines multiplied over the colour.</summary>
+    /// <summary>Drawn line art (Tales from the Borderlands "Detail Texture", The Wolf Among Us ink lines): dark lines multiplied over the color.</summary>
     LineArt,
 }
 
@@ -614,7 +614,7 @@ public enum SpecularMapLayout
 {
     None,
 
-    /// <summary>Colour is the specular intensity (older games).</summary>
+    /// <summary>Color is the specular intensity (older games).</summary>
     Intensity,
 
     /// <summary>Blue is gloss and alpha the intensity; red marks metal (Season 4 materials).</summary>
@@ -622,12 +622,12 @@ public enum SpecularMapLayout
 }
 
 /// <summary>
-/// The shading values a viewer needs from a material: diffuse tint, specular colour and
-/// power, outline colour, and how its specular map and ink texture are laid out.
+/// The shading values a viewer needs from a material: diffuse tint, specular color and
+/// power, outline color, and how its specular map and ink texture are laid out.
 /// </summary>
 public sealed record MaterialShading
 {
-    /// <summary>Key symbol of the engine's diffuse colour (a tint multiplied with the diffuse texture).</summary>
+    /// <summary>Key symbol of the engine's diffuse color (a tint multiplied with the diffuse texture).</summary>
     public static readonly ulong DiffuseColorKey = TelltaleCrc64.HashSymbol("Material - Diffuse Color");
     public static readonly ulong SpecularColorKey = TelltaleCrc64.HashSymbol("Material - Specular Color");
     public static readonly ulong SpecularIntensityKey = TelltaleCrc64.HashSymbol("Material - Specular Intensity");
@@ -639,7 +639,7 @@ public sealed record MaterialShading
     /// <summary>Linear RGB tint multiplied with the diffuse texture (white when the material sets none).</summary>
     public Vector3 DiffuseColor { get; init; } = Vector3.One;
 
-    /// <summary>Specular colour, or null when the material does not set one.</summary>
+    /// <summary>Specular color, or null when the material does not set one.</summary>
     public Vector3? SpecularColor { get; init; }
 
     /// <summary>Specular intensity, or null when unset.</summary>
@@ -648,7 +648,7 @@ public sealed record MaterialShading
     /// <summary>Blinn-Phong exponent, or null when unset.</summary>
     public float? SpecularPower { get; init; }
 
-    /// <summary>The material's toon outline colour, or null when unset.</summary>
+    /// <summary>The material's toon outline color, or null when unset.</summary>
     public Vector4? OutlineColor { get; init; }
 
     public SpecularMapLayout SpecularLayout { get; init; }
@@ -664,6 +664,25 @@ public sealed record MaterialShading
     /// the batch texture's alpha, so a renderer only needs it to order or classify draws.
     /// </summary>
     public float Opacity { get; init; } = 1f;
+
+    /// <summary>
+    /// Linear color the batch's emissive texture is added in, unaffected by light (black when
+    /// it has none or nothing makes it glow; see <see cref="Scene.AgentRenderSettings"/>).
+    /// </summary>
+    public Vector3 EmissiveColor { get; init; }
+
+    /// <summary>
+    /// True when the batch, if translucent, should show only its nearest surface: its depth is
+    /// drawn before its color, as the engine does for "Render 3D Alpha" agents (holograms).
+    /// </summary>
+    public bool DrawAsOneLayer { get; init; }
+
+    /// <summary>
+    /// Light the surface gives off in its own color (linear), added whatever the scene's
+    /// light: an agent's emission color, which makes a hologram as bright as the game shows
+    /// it. Black for everything else.
+    /// </summary>
+    public Vector3 SelfIllumination { get; init; }
 
     /// <summary>Shading values with nothing set: white tint, no specular data, no maps.</summary>
     public static MaterialShading Default { get; } = new();

@@ -67,6 +67,13 @@ public sealed class SceneObject
     /// <summary>The agent's own property set followed by its property files, nearest first (for inherited lookups).</summary>
     public IReadOnlyList<ScenePropertySet> PropertyChain { get; init; } = Array.Empty<ScenePropertySet>();
 
+    /// <summary>
+    /// How the agent asks for its meshes to be drawn (tint, glow, opacity), from its own set
+    /// or its property files; applied only when <see cref="AgentRenderSettings.IsEffect"/>, as
+    /// for a character on its own (Tales from the Borderlands' hologram Handsome Jack).
+    /// </summary>
+    public AgentRenderSettings Render { get; init; } = AgentRenderSettings.Default;
+
     public string Name => Agent.Name;
 
     public bool HasMeshes => VisibleMeshes.Count > 0;
@@ -145,6 +152,16 @@ public sealed record SceneAssemblerOptions
 
     /// <summary>Read baked lightmaps (UVs and atlases) into <see cref="AssembledScene.Lightmaps"/>.</summary>
     public bool Lightmaps { get; init; } = true;
+
+    /// <summary>
+    /// Budget for decoded meshes, textures and lightmaps kept between builds (default
+    /// <see cref="DefaultCacheBytes"/>); images get three quarters of it, the least recently
+    /// used dropped first.
+    /// </summary>
+    public long CacheBytes { get; init; } = DefaultCacheBytes;
+
+    /// <summary>1/8 of this machine's memory, 512 MB to 2 GB. Each location viewed otherwise adds hundreds of MB for good.</summary>
+    public static long DefaultCacheBytes { get; } = CacheBudget.For(1 / 8.0, 512L << 20, 2L << 30);
 }
 
 /// <summary>
@@ -152,7 +169,8 @@ public sealed record SceneAssemblerOptions
 /// kind) and assembles the chosen ones into one model, each mesh placed with its agent's
 /// world transform. Skinned meshes are placed in their bind pose. Decoded meshes, textures,
 /// property files and skeletons are cached, so rebuilding with a different selection is
-/// quick. Use one assembler from one thread at a time.
+/// quick; meshes and images within <see cref="SceneAssemblerOptions.CacheBytes"/>. Use one
+/// assembler from one thread at a time.
 /// </summary>
 public sealed class SceneAssembler
 {
@@ -166,15 +184,17 @@ public sealed class SceneAssembler
     private readonly ISceneAssetResolver _assets;
     private readonly SceneAssemblerOptions _options;
     private readonly ConcurrentDictionary<ulong, (string? Name, ScenePropertySet? Set)> _props = new();
-    private readonly ConcurrentDictionary<string, MeshPart?> _parts = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, DdsImage?> _textures = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, DdsImage?> _opaqueTextures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SizeBoundedCache<string, MeshPart?> _parts;
+    // Textures by file name, their opaque and translucent copies ("opaque|" / "opacity 0.850|" + name) and lightmaps ("lightmap|" + name).
+    private readonly SizeBoundedCache<string, DdsImage?> _images;
     private readonly ConcurrentDictionary<string, Dictionary<ulong, Matrix4x4>?> _skeletonNodes = new(StringComparer.OrdinalIgnoreCase);
 
     public SceneAssembler(ISceneAssetResolver assets, SceneAssemblerOptions? options = null)
     {
         _assets = assets;
         _options = options ?? new SceneAssemblerOptions();
+        _images = new(_options.CacheBytes / 4 * 3, image => image!.Rgba.LongLength + 64, StringComparer.OrdinalIgnoreCase);
+        _parts = new(_options.CacheBytes / 4, part => part!.ApproximateBytes, StringComparer.OrdinalIgnoreCase);
     }
 
     // ---- Resolving agents ---------------------------------------------------
@@ -221,6 +241,7 @@ public sealed class SceneAssembler
             if (!(Math.Abs(scale.X) > 1e-4f && Math.Abs(scale.Y) > 1e-4f && Math.Abs(scale.Z) > 1e-4f))
                 scale = Vector3.One;
 
+            var sets = chain.Select(c => c.Set).ToList();
             objects.Add(new SceneObject
             {
                 Agent = agent,
@@ -232,7 +253,8 @@ public sealed class SceneAssembler
                 PropertyFiles = files,
                 RenderScale = scale,
                 World = SceneFile.WorldTransform(agent, NodeOffset),
-                PropertyChain = chain.Select(c => c.Set).ToList(),
+                PropertyChain = sets,
+                Render = AgentRenderSettings.FromProperties(sets),
             });
         }
         return new SceneLayout { Scene = scene, Objects = objects };
@@ -372,9 +394,13 @@ public sealed class SceneAssembler
             progress?.Report(new SceneBuildProgress($"Loading meshes: {name}", n, meshNames.Count));
         });
 
-        // 2. Decode every texture they use.
-        var textureNames = meshNames.Select(n => _parts.GetValueOrDefault(n)).Where(p => p is not null)
-            .SelectMany(p => p!.Diffuse.Concat(_options.NormalMaps ? p.Normal : Enumerable.Empty<string?>()))
+        // 2. Decode every texture they use (emissive maps only where an agent makes them glow).
+        var glowMeshes = chosen.Where(i => Glow(layout.Objects[i]) != Vector3.Zero)
+            .SelectMany(i => layout.Objects[i].VisibleMeshes).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var textureNames = meshNames.Select(n => (Name: n, Part: LoadPart(n))).Where(p => p.Part is not null)
+            .SelectMany(p => p.Part!.Diffuse
+                .Concat(_options.NormalMaps ? p.Part.Normal : Enumerable.Empty<string?>())
+                .Concat(glowMeshes.Contains(p.Name) ? p.Part.Emissive : Enumerable.Empty<string?>()))
             .Where(n => n is not null).Select(n => n!)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         done = 0;
@@ -389,7 +415,7 @@ public sealed class SceneAssembler
         // 2b. Decode the lightmaps of meshes that carry lightmap UVs.
         if (_options.Lightmaps)
         {
-            var lightmapNames = meshNames.Select(n => _parts.GetValueOrDefault(n))
+            var lightmapNames = meshNames.Select(LoadPart)
                 .Where(p => p?.LightmapUv is not null && p.Lightmap is not null).Select(p => p!.Lightmap!)
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             Parallel.ForEach(lightmapNames, parallel, name => DecodeLightmap(name));
@@ -403,6 +429,8 @@ public sealed class SceneAssembler
         var batchNormals = new List<DdsImage?>();
         var lightmapUvs = new List<Vector2[]?>();
         var batchLightmaps = new List<DdsImage?>();
+        var batchParams = new List<MaterialShading?>();
+        var batchEmissive = new List<DdsImage?>();
         var details = new List<string>();
         var texturesUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var failures = new List<(string, string)>();
@@ -412,9 +440,18 @@ public sealed class SceneAssembler
             cancellationToken.ThrowIfCancellationRequested();
             var obj = layout.Objects[index];
             var transform = Matrix4x4.CreateScale(obj.RenderScale) * obj.World;
+            var render = obj.Render.IsEffect ? obj.Render : AgentRenderSettings.Default;
+            if (render.Opacity < 1f / 255f)
+            {
+                details.Add($"{obj.Name}: hidden (fully transparent)");
+                continue;
+            }
+            if (!render.IsDefault)
+                details.Add($"{obj.Name}: drawn as an effect · {EffectText(render)}");
+            var glow = Glow(obj);
             foreach (var meshName in obj.VisibleMeshes)
             {
-                var part = _parts.GetValueOrDefault(meshName);
+                var part = LoadPart(meshName);
                 if (part is null || part.Geometry is null)
                 {
                     failures.Add((meshName, part?.Error ?? "not found"));
@@ -433,9 +470,29 @@ public sealed class SceneAssembler
                     var diffuse = part.Diffuse[b] is { } d ? DiffuseFor(d, part.Blended[b]) : null;
                     if (diffuse is not null)
                         texturesUsed.Add(part.Diffuse[b]!);
+                    if (diffuse is not null && render.Opacity < 1f)
+                        // Keyed by the copy it was made from (the texture or its opaque copy).
+                        diffuse = TranslucentTexture((ReferenceEquals(diffuse, DecodeTexture(part.Diffuse[b]!)) ? "" : "opaque|") + part.Diffuse[b],
+                            diffuse, render.Opacity);
                     batchTextures.Add(diffuse);
-                    batchNormals.Add(_options.NormalMaps && part.Normal[b] is { } nm ? _textures.GetValueOrDefault(nm) : null);
+                    batchNormals.Add(_options.NormalMaps && part.Normal[b] is { } nm ? DecodeTexture(nm) : null);
                     batchLightmaps.Add(lightmap);
+                    // Emissive maps glow only in the agent's emission color (black by default).
+                    var emissive = glow != Vector3.Zero && part.Emissive[b] is { } e ? DecodeTexture(e) : null;
+                    if (emissive is not null)
+                        texturesUsed.Add(part.Emissive[b]!);
+                    batchEmissive.Add(emissive);
+                    // Shading values only where something differs from the plain look: an effect
+                    // agent's settings or the material's own outline color.
+                    batchParams.Add(render.IsDefault && part.Outline[b] is null ? null : MaterialShading.Default with
+                    {
+                        DiffuseColor = render.LinearTint,
+                        EmissiveColor = emissive is null ? Vector3.Zero : glow,
+                        SelfIllumination = glow,
+                        DrawAsOneLayer = render.DrawAsOneLayer,
+                        Opacity = render.Opacity,
+                        OutlineColor = part.Outline[b],
+                    });
                 }
                 instances++;
                 details.Add($"{obj.Name}: {meshName}: {part.Description}");
@@ -460,6 +517,8 @@ public sealed class SceneAssembler
                 Geometry = geometry,
                 BatchTextures = batchTextures,
                 BatchNormalMaps = batchNormals,
+                BatchMaterialParams = batchParams.Any(p => p is not null) ? batchParams : Array.Empty<MaterialShading?>(),
+                BatchEmissiveMaps = batchEmissive.Any(e => e is not null) ? batchEmissive : Array.Empty<DdsImage?>(),
                 Details = details,
                 TexturesUsed = texturesUsed.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList(),
                 Failures = failures,
@@ -477,6 +536,23 @@ public sealed class SceneAssembler
                 Intensity = LightmapIntensity(layout),
             } : null,
         };
+    }
+
+    /// <summary>The linear color an object's emissive maps and surfaces glow in (black unless it is drawn as an effect).</summary>
+    private static Vector3 Glow(SceneObject obj) => obj.Render.IsEffect ? obj.Render.LinearGlow : Vector3.Zero;
+
+    private static string EffectText(AgentRenderSettings render)
+    {
+        var notes = new List<string>();
+        if (render.DiffuseColor != Vector3.One)
+            notes.Add($"tinted {ModelAssembler.ColorText(new Vector4(render.DiffuseColor, 1f))}");
+        if (render.EmissionColor != Vector3.Zero)
+            notes.Add($"glowing {ModelAssembler.ColorText(new Vector4(render.EmissionColor, 1f))}");
+        if (render.Opacity < 1f)
+            notes.Add($"{render.Opacity:P0} opaque");
+        if (render.DrawAsOneLayer)
+            notes.Add("see-through as one layer");
+        return string.Join(", ", notes);
     }
 
     /// <summary>
@@ -549,10 +625,16 @@ public sealed class SceneAssembler
         public string?[] Diffuse { get; init; } = Array.Empty<string?>();
         public string?[] Normal { get; init; } = Array.Empty<string?>();
 
+        /// <summary>The emissive map each batch's material binds (drawn only when its agent glows).</summary>
+        public string?[] Emissive { get; init; } = Array.Empty<string?>();
+
+        /// <summary>The outline color each batch's material sets ("Material - Outline Color"), or null.</summary>
+        public Vector4?[] Outline { get; init; } = Array.Empty<Vector4?>();
+
         /// <summary>Batches that are clear overlays (eye wetness, cornea), hidden on characters.</summary>
         public bool[] Overlay { get; init; } = Array.Empty<bool>();
 
-        /// <summary>Batches whose material sets a blend mode (its colour texture's alpha is opacity).</summary>
+        /// <summary>Batches whose material sets a blend mode (its color texture's alpha is opacity).</summary>
         public bool[] Blended { get; init; } = Array.Empty<bool>();
 
         /// <summary>Batches drawn with a light-card texture (glows, beams), additive in the game, so left out.</summary>
@@ -566,6 +648,20 @@ public sealed class SceneAssembler
 
         public List<int> KeptBatches(bool hideOverlays) =>
             Enumerable.Range(0, Geometry?.Batches.Count ?? 0).Where(b => !LightCard[b] && (!hideOverlays || !Overlay[b])).ToList();
+
+        /// <summary>Roughly the memory this part holds (for the cache budget).</summary>
+        public long ApproximateBytes
+        {
+            get
+            {
+                long bytes = 512 + (LightmapUv?.LongLength ?? 0) * 8;
+                if (Geometry is { } g)
+                    bytes += g.Positions.LongLength * 12 + g.Normals.LongLength * 12 + g.TexCoords.LongLength * 8 +
+                             g.Tangents.LongLength * 16 + g.Indices.LongLength * 4 +
+                             (g.BlendWeights?.LongLength ?? 0) * 16 + (g.BlendIndices?.LongLength ?? 0) * 4;
+                return bytes;
+            }
+        }
     }
 
     private MeshPart? LoadPart(string name) => _parts.GetOrAdd(name, n =>
@@ -600,11 +696,12 @@ public sealed class SceneAssembler
         var diffuseByMaterial = payloads
             .Select(p => p is null ? null : MaterialTextureLocator.PickDiffuseTexture(p, lookup))
             .ToList();
+        var dataByMaterial = payloads.Select(p => p is null ? null : MaterialData.TryParse(p)).ToList();
         bool HasColor(string? diffuse) =>
             diffuse is not null && !MaterialTextureLocator.IsNonDiffuseMap(diffuse) && !ModelAssembler.IsClearEyeLayer(diffuse);
         bool anyColored = diffuseByMaterial.Any(HasColor);
         // Baked environments list their lightmap atlas (laid out on a second UV set) in the
-        // mesh's texture slots; the colour texture is then only in the material.
+        // mesh's texture slots; the color texture is then only in the material.
         string? Slot(int slot) =>
             slot >= 0 && slot < mesh.TextureSymbols.Count && lookup(mesh.TextureSymbols[slot]) is { } texture &&
             !IsLightmap(texture, n)
@@ -617,6 +714,8 @@ public sealed class SceneAssembler
         var overlay = new bool[count];
         var blended = new bool[count];
         var lightCard = new bool[count];
+        var emissive = new string?[count];
+        var outline = new Vector4?[count];
         for (int b = 0; b < count; b++)
         {
             var batch = geometry.Batches[b];
@@ -631,6 +730,11 @@ public sealed class SceneAssembler
                 overlay[b] = true;
             lightCard[b] = diffuse[b] is { } card && IsLightCard(card, batch.PrimitiveCount);
             normal[b] = hasPayload ? MaterialTextureLocator.PickNormalMap(payloads[material]!, lookup) : null;
+            if (hasPayload && dataByMaterial[material] is { } data)
+            {
+                emissive[b] = MaterialTextureLocator.PickEmissiveMap(data, lookup);
+                outline[b] = MaterialShading.FromMaterial(data).OutlineColor;
+            }
         }
         return new MeshPart
         {
@@ -640,6 +744,8 @@ public sealed class SceneAssembler
             LightmapUv = SceneLightmapReader.ReadUvs(bytes, mesh),
             Diffuse = diffuse,
             Normal = normal,
+            Emissive = emissive,
+            Outline = outline,
             Overlay = overlay,
             Blended = blended,
             LightCard = lightCard,
@@ -647,16 +753,16 @@ public sealed class SceneAssembler
     });
 
     /// <summary>
-    /// The colour texture for a batch. Without a blend mode in its material, a texture whose
+    /// The color texture for a batch. Without a blend mode in its material, a texture whose
     /// alpha is mostly partial (a specular or gloss mask, not a cut-out) is drawn opaque, so
     /// doors and walls do not turn see-through; glass keeps its alpha.
     /// </summary>
     private DdsImage? DiffuseFor(string name, bool blended)
     {
-        var found = _textures.GetValueOrDefault(name);
+        var found = DecodeTexture(name);
         if (found is not { } image || blended || name.Contains("glass", StringComparison.OrdinalIgnoreCase))
             return found;
-        return _opaqueTextures.GetOrAdd(name, key =>
+        return _images.GetOrAdd("opaque|" + name, DdsImage? (_) =>
         {
             var rgba = image.Rgba;
             int partial = 0, total = rgba.Length / 4;
@@ -668,9 +774,15 @@ public sealed class SceneAssembler
             var opaque = (byte[])rgba.Clone();
             for (int i = 3; i < opaque.Length; i += 4)
                 opaque[i] = 255;
-            return DdsImage.TryDecode(WrapRgba(opaque, image.Width, image.Height), out var result, out _) && result is not null ? result : image;
+            return DdsImage.TryDecode(WrapRgba(opaque, image.Width, image.Height), out DdsImage? result, out string? _) && result is not null
+                ? result
+                : image;
         });
     }
+
+    /// <summary>The color texture with its alpha scaled by an agent's opacity (cached).</summary>
+    private DdsImage TranslucentTexture(string name, DdsImage image, float opacity) =>
+        _images.GetOrAdd($"opacity {opacity:F3}|{name}", DdsImage? (_) => ModelAssembler.WithOpacity(image, opacity)) ?? image;
 
     private static bool ContainsSymbol(byte[] payload, ulong symbol)
     {
@@ -713,13 +825,11 @@ public sealed class SceneAssembler
                stem.EndsWith("_lm", StringComparison.OrdinalIgnoreCase);
     }
 
-    private readonly ConcurrentDictionary<string, DdsImage?> _lightmaps = new(StringComparer.OrdinalIgnoreCase);
-
-    private DdsImage? DecodeLightmap(string name) => _lightmaps.GetOrAdd(name, n =>
+    private DdsImage? DecodeLightmap(string name) => _images.GetOrAdd("lightmap|" + name, _ =>
     {
         try
         {
-            return _assets.TryRead(n) is { } bytes ? SceneLightmapReader.Decode(bytes, _options.MaxTextureSize) : null;
+            return _assets.TryRead(name) is { } bytes ? SceneLightmapReader.Decode(bytes, _options.MaxTextureSize) : null;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or ArgumentException)
         {
@@ -737,7 +847,7 @@ public sealed class SceneAssembler
         return 1;
     }
 
-    private DdsImage? DecodeTexture(string name) => _textures.GetOrAdd(name, n =>
+    private DdsImage? DecodeTexture(string name) => _images.GetOrAdd(name, n =>
     {
         try
         {

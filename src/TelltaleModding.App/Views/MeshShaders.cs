@@ -3,8 +3,8 @@ namespace TelltaleModding.App.Views;
 /// <summary>
 /// The <see cref="MeshViewport"/>'s shaders (GLSL 330 core / 300 es bodies; the version
 /// header is prepended at compile time). The scene pass shades in linear light and writes
-/// the tone-mapped colour plus the view-space normal; the post pass draws ink outlines
-/// from the depth and normal targets.
+/// the tone-mapped color, the view-space normal and the color of the surface's outline;
+/// the post pass draws ink outlines from the depth and normal targets in that color.
 /// </summary>
 internal static class MeshShaders
 {
@@ -104,9 +104,12 @@ internal static class MeshShaders
         uniform sampler2D uNmap;
         uniform sampler2D uSpec;
         uniform sampler2D uInkTex;
+        uniform sampler2D uEmissive;
+        uniform vec3 uEmissiveColor;   // linear; black = no emissive map
+        uniform vec3 uSelfLit;         // linear light the surface gives off in its own color
         uniform float uHasTex;
         uniform int uNmapKind;      // -1 none, 0 X in blue / Y in alpha, 1 X in red / Y in green, 2 RGB
-        uniform int uSpecLayout;    // 0 none, 1 colour = intensity, 2 blue = gloss, alpha = intensity, red = metal
+        uniform int uSpecLayout;    // 0 none, 1 color = intensity, 2 blue = gloss, alpha = intensity, red = metal
         uniform int uInkKind;       // 0 none, 1 shadow ink (white = ink), 2 line art (dark = line)
         uniform float uInkInAlpha;
         uniform vec3 uTint;
@@ -117,7 +120,7 @@ internal static class MeshShaders
         uniform int uLightCount;
         uniform vec4 uLightPos[8];    // xyz position, w kind (0 directional, 1 point, 2 spot)
         uniform vec4 uLightDir[8];    // xyz direction of travel, w range (0 = unlimited)
-        uniform vec4 uLightColor[8];  // linear colour × intensity, w = 1 when it also lights lightmapped surfaces
+        uniform vec4 uLightColor[8];  // linear color × intensity, w = 1 when it also lights lightmapped surfaces
         uniform vec4 uLightCone[8];   // cos inner, cos outer, weight relative to the brightest light
         uniform vec3 uAmbientSky;
         uniform vec3 uAmbientGround;
@@ -136,9 +139,11 @@ internal static class MeshShaders
         uniform float uInkKeyWrap;    // wrap of that key light (0 = black from the terminator on)
         uniform vec3 uInkFade;        // graphic black fade start, fade end (distance from the eye), line art strength
         uniform vec3 uGrade;          // saturation, contrast
+        uniform vec3 uLineColor;      // the outline color: the material's own, otherwise the look's
 
         layout(location = 0) out vec4 outColor;
         layout(location = 1) out vec4 outNormal;
+        layout(location = 2) out vec4 outLine;
 
         // The toon ramp: the level of the band the light falls in, edges blended by the softness.
         float band(float x)
@@ -156,7 +161,7 @@ internal static class MeshShaders
         }
 
         // Identity up to the shoulder, then a soft roll-off to white: lit textures keep their
-        // painted colour and only highlights compress.
+        // painted color and only highlights compress.
         vec3 toneMap(vec3 c)
         {
             const float knee = 0.75;
@@ -294,7 +299,7 @@ internal static class MeshShaders
             }
             if (uInk.x > 0.0)
             {
-                // Graphic black: black where the lit colour's luminance falls below the
+                // Graphic black: black where the lit color's luminance falls below the
                 // threshold, measured before the ink. Under a scene's rig it is the game's test,
                 // all light including ambient (baked light always counts). The studio rig's
                 // wrapped fill and rim lights leave nothing in shadow, so there the key light
@@ -309,6 +314,11 @@ internal static class MeshShaders
                 float fade = uInkFade.y > uInkFade.x ? clamp((length(uEye - vWorld) - uInkFade.x) / (uInkFade.y - uInkFade.x), 0.0, 1.0) : 1.0;
                 color = mix(color, uInkColor, fade * uInk.x * (1.0 - t));
             }
+            // Emission glows whatever the light, so graphic black does not cover it.
+            if (dot(uEmissiveColor, uEmissiveColor) > 0.0)
+                color += pow(texture(uEmissive, vUv).rgb, vec3(2.2)) * uEmissiveColor;
+            // A self-lit surface (a hologram) shows its own color at full strength.
+            color += albedo * uSelfLit;
 
             color = pow(toneMap(color * uExposure), vec3(1.0 / 2.2));
             float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
@@ -317,12 +327,13 @@ internal static class MeshShaders
             outColor = vec4(clamp(color, 0.0, 1.0), alpha);
             vec3 vn = length(vViewNormal) > 0.1 ? normalize(vViewNormal) : vec3(0.0, 0.0, 1.0);
             outNormal = vec4(vn * 0.5 + 0.5, alpha);
+            outLine = vec4(uLineColor, alpha);
         }
         """;
 
     /// <summary>
     /// The inverted hull: the mesh pushed out along its normals in clip space, drawn back
-    /// faces only in the outline colour (the games' SceneToonOutline2 vertex shader).
+    /// faces only in the outline color (the games' SceneToonOutline2 vertex shader).
     /// </summary>
     public const string HullVertex = Skinning + """
         in vec3 aPos;
@@ -352,14 +363,16 @@ internal static class MeshShaders
         uniform vec3 uColor;
         layout(location = 0) out vec4 outColor;
         layout(location = 1) out vec4 outNormal;
+        layout(location = 2) out vec4 outLine;
         void main()
         {
             outColor = vec4(uColor, 1.0);
             outNormal = vec4(0.5, 0.5, 1.0, 0.0);
+            outLine = vec4(uColor, 1.0);
         }
         """;
 
-    /// <summary>Flat-coloured lines and points (the skeleton overlay).</summary>
+    /// <summary>Flat-colored lines and points (the skeleton overlay).</summary>
     public const string LineVertex = """
         in vec3 aPos;
         uniform mat4 uMvp;
@@ -395,10 +408,11 @@ internal static class MeshShaders
         uniform sampler2D uColor;
         uniform sampler2D uNormal;
         uniform sampler2D uDepth;
+        uniform sampler2D uLine;      // each surface's outline color
         uniform vec2 uTexel;
         uniform vec2 uPlanes;         // near, far
         uniform vec4 uOutline;        // width (px), depth threshold, normal threshold, crease width scale
-        uniform vec4 uOutlineColor;   // rgb, opacity
+        uniform float uOutlineOpacity;
         uniform vec2 uFalloff;        // distance where lines start thinning (0 = never), thinnest scale
         out vec4 outColor;
 
@@ -446,7 +460,8 @@ internal static class MeshShaders
                         edge = max(edge, smoothstep(uOutline.z, uOutline.z + 0.2, bend) * 0.9);
                     }
                 }
-                c.rgb = mix(c.rgb, uOutlineColor.rgb, edge * uOutlineColor.a);
+                // Drawn on the nearer surface, in its color.
+                c.rgb = mix(c.rgb, texture(uLine, vUv).rgb, edge * uOutlineOpacity);
             }
             outColor = vec4(c.rgb, 1.0);
         }

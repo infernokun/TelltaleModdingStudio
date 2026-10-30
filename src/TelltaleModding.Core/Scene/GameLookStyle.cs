@@ -22,7 +22,7 @@ public enum RenderMode
 /// The parameters of a game's stylised look, following the games' shaders: an inverted-hull
 /// outline pushed out along the vertex normals, screen-space edge lines, the light model
 /// (wrapped diffuse, optionally through a toon ramp), ink textures, graphic black and a
-/// final colour grade. Colours are sRGB 0-1; screen widths are logical pixels (scaled by
+/// final color grade. Colors are sRGB 0-1; screen widths are logical pixels (scaled by
 /// the display's DPI); distances are scene units (metres).
 /// </summary>
 public sealed record GameLookStyle
@@ -54,7 +54,7 @@ public sealed record GameLookStyle
     /// <summary>Screen-space edge line width in logical pixels (0 = none).</summary>
     public float OutlineWidth { get; init; } = 1.5f;
 
-    /// <summary>Colour of hull and edge lines (the material's "Outline Color").</summary>
+    /// <summary>Color of hull and edge lines (the material's "Outline Color").</summary>
     public Vector3 OutlineColor { get; init; } = Vector3.Zero;
 
     /// <summary>How opaque the edge lines are (0-1).</summary>
@@ -113,7 +113,7 @@ public sealed record GameLookStyle
     /// <summary>How much normal-map detail shapes the light (0 = the smooth surface, 1 = every bump).</summary>
     public float NormalMapInfluence { get; init; } = 1f;
 
-    /// <summary>Multiplies ambient light, the colour of shadowed areas.</summary>
+    /// <summary>Multiplies ambient light, the color of shadowed areas.</summary>
     public Vector3 ShadowTint { get; init; } = Vector3.One;
 
     /// <summary>Strength of a view-facing rim highlight on the silhouette (0 = none).</summary>
@@ -144,7 +144,7 @@ public sealed record GameLookStyle
     public float LineArtStrength { get; init; } = 1f;
 
     /// <summary>
-    /// Graphic-black alpha (0 = off): where the lit colour's luminance (linear,
+    /// Graphic-black alpha (0 = off): where the lit color's luminance (linear,
     /// <c>dot(c, (0.3, 0.59, 0.11))</c>) is below <see cref="InkThreshold"/> it turns black.
     /// </summary>
     public float InkStrength { get; init; }
@@ -177,7 +177,7 @@ public sealed record GameLookStyle
     /// <summary>Graphic-black edge width under a scene's lights (the scenes' "Graphic Black Softness", 0 → the shader's 0.001).</summary>
     public float InkSceneSoftness { get; init; } = 0.001f;
 
-    /// <summary>Colour of ink lines and graphic black (the materials' "Ink Color", black).</summary>
+    /// <summary>Color of ink lines and graphic black (the materials' "Ink Color", black).</summary>
     public Vector3 InkColor { get; init; } = Vector3.Zero;
 
     /// <summary>
@@ -203,7 +203,7 @@ public sealed record GameLookStyle
 
     // ---- Grade --------------------------------------------------------------------
 
-    /// <summary>Colour saturation (1 = unchanged).</summary>
+    /// <summary>Color saturation (1 = unchanged).</summary>
     public float Saturation { get; init; } = 1f;
 
     /// <summary>Contrast around mid grey (1 = unchanged).</summary>

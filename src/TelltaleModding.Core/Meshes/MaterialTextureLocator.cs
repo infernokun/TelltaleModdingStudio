@@ -26,7 +26,10 @@ public static class MaterialTextureLocator
     /// <summary>Key symbol of the detail texture property (line art or ink, by its role).</summary>
     public static readonly ulong DetailTextureKey = TelltaleCrc64.HashSymbol("Material - Detail Texture");
 
-    /// <summary>Texture roles that are never a surface's colour.</summary>
+    /// <summary>Key symbol of the emissive (glow) texture property, e.g. Tales from the Borderlands' hologram <c>*_glow</c> maps.</summary>
+    public static readonly ulong EmissiveTextureKey = TelltaleCrc64.HashSymbol("Material - Emissive Texture");
+
+    /// <summary>Texture roles that are never a surface's color.</summary>
     private const MaterialTextureTypes NonColorTypes =
         MaterialTextureTypes.NormalMap | MaterialTextureTypes.NormalXYMap | MaterialTextureTypes.NormalDxDyMap |
         MaterialTextureTypes.ObjectNormalMap | MaterialTextureTypes.Vector2Map | MaterialTextureTypes.SingleChannelDetailMap |
@@ -57,7 +60,7 @@ public static class MaterialTextureLocator
         {
             // The diffuse the material names is not shipped (generic NPCs in Tales from the
             // Borderlands). Its maps are named after it (face_nm → face), so try the stem of
-            // the normal map; failing that, no texture beats painting a map on as colour.
+            // the normal map; failing that, no texture beats painting a map on as color.
             foreach (var map in material.Textures.Where(t => t.Key == NormalMapKey && t.TextureSymbol != 0))
             {
                 if (textureForSymbol(map.TextureSymbol) is not { } normal)
@@ -67,9 +70,9 @@ public static class MaterialTextureLocator
                 {
                     if (!stem.EndsWith(marker, StringComparison.OrdinalIgnoreCase))
                         continue;
-                    var colour = stem[..^marker.Length];
-                    if ((textureForSymbol(TelltaleCrc64.HashSymbol(colour + ".d3dtx")) ??
-                         textureForSymbol(TelltaleCrc64.HashSymbol(colour))) is { } found)
+                    var color = stem[..^marker.Length];
+                    if ((textureForSymbol(TelltaleCrc64.HashSymbol(color + ".d3dtx")) ??
+                         textureForSymbol(TelltaleCrc64.HashSymbol(color))) is { } found)
                         return found;
                 }
             }
@@ -96,6 +99,12 @@ public static class MaterialTextureLocator
     /// <summary>The texture bound to the material's specular map property, or null.</summary>
     public static string? PickSpecularMap(MaterialData material, Func<ulong, string?> textureForSymbol) =>
         material.Textures.Where(t => t.Key == SpecularMapKey && t.TextureSymbol != 0)
+            .Select(t => textureForSymbol(t.TextureSymbol))
+            .FirstOrDefault(n => n is not null && !IsEnginePlaceholder(n));
+
+    /// <summary>The texture bound to the material's emissive texture property, or null.</summary>
+    public static string? PickEmissiveMap(MaterialData material, Func<ulong, string?> textureForSymbol) =>
+        material.Textures.Where(t => t.Key == EmissiveTextureKey && t.TextureSymbol != 0)
             .Select(t => textureForSymbol(t.TextureSymbol))
             .FirstOrDefault(n => n is not null && !IsEnginePlaceholder(n));
 
@@ -129,7 +138,7 @@ public static class MaterialTextureLocator
 
     /// <summary>
     /// For meshes without material data (The Wolf Among Us, Game of Thrones), the normal map
-    /// and drawn line art among <paramref name="meshTextures"/> that belong to the colour
+    /// and drawn line art among <paramref name="meshTextures"/> that belong to the color
     /// texture <paramref name="diffuse"/>, judged by name: <c>head</c> → <c>head_nm</c> or
     /// <c>head_brushnormal</c>, and <c>head_lines</c>, <c>head_detail</c> or the character's
     /// <c>inkLinesHead</c>.
@@ -178,7 +187,7 @@ public static class MaterialTextureLocator
     /// </summary>
     public static string? PickDiffuseTexture(byte[] payload, Func<ulong, string?> textureForSymbol)
     {
-        // Engine placeholders (solid colours filling unused slots) can be listed before
+        // Engine placeholders (solid colors filling unused slots) can be listed before
         // the real diffuse, so they only win over normal/detail/spec maps.
         string? placeholder = null, fallback = null;
         var all = EnumerateTextures(payload, textureForSymbol).ToList();
@@ -196,8 +205,8 @@ public static class MaterialTextureLocator
         if (candidates.Count <= 1)
             return candidates.FirstOrDefault() ?? placeholder ?? fallback;
 
-        // Telltale names a material's maps after its colour texture (head → head_nm,
-        // head_spec, head303_damageMask…), so the colour texture is the stem the most
+        // Telltale names a material's maps after its color texture (head → head_nm,
+        // head_spec, head303_damageMask…), so the color texture is the stem the most
         // other textures extend; damage/blood overlays listed earlier lose to it.
         var stems = all.Select(p => Path.GetFileNameWithoutExtension(p).ToLowerInvariant()).Distinct().ToList();
         string best = candidates[0];
@@ -259,7 +268,7 @@ public static class MaterialTextureLocator
 
     /// <summary>
     /// Finds the material's tangent-space normal map, resolving symbols through a function:
-    /// the one named after the colour texture (head → head_nm) when present. Wrinkle maps
+    /// the one named after the color texture (head → head_nm) when present. Wrinkle maps
     /// (headWrinkle_nm) are never used; the game blends them in only for expressions,
     /// and applied permanently they age the face.
     /// </summary>
