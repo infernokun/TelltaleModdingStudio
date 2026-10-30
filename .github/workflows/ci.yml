@@ -17,24 +17,27 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Build native engine (enables end-to-end integration tests)
+      - name: Build native engine (enables end-to-end integration tests) and Oodle loader
         run: |
           sudo apt-get update
           sudo apt-get install -y zlib1g-dev
           make -C engine/ttarchext
+          make -C engine/oodle
 
       - name: Build
         run: dotnet build TelltaleModding.sln --configuration Release
 
       - name: Test
-        run: dotnet test tests/TelltaleModding.Core.Tests --configuration Release --no-build
+        run: |
+          dotnet test tests/TelltaleModding.Core.Tests --configuration Release --no-build
+          dotnet test tests/TelltaleModding.App.Tests --configuration Release --no-build --filter "FullyQualifiedName~SteamLibraryScannerTests|FullyQualifiedName~ShaderSourceTests"
 
   publish-windows:
     runs-on: windows-latest
     needs: build-test
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     permissions:
-      contents: write
+      contents: read
       id-token: write
       attestations: write
     steps:
@@ -59,7 +62,9 @@ jobs:
           dotnet publish src/TelltaleModding.App -c Release -r win-x64 --self-contained true @props -o publish/TelltaleModdingStudio
 
       - name: Bundle engine
-        run: Copy-Item -Recurse engine publish/TelltaleModdingStudio/engine
+        run: |
+          New-Item -ItemType Directory -Force publish/TelltaleModdingStudio/engine | Out-Null
+          Copy-Item -Recurse engine/ttarchext publish/TelltaleModdingStudio/engine/ttarchext
 
       - name: Zip
         shell: pwsh
@@ -74,8 +79,8 @@ jobs:
         run: |
           $files = @($env:ZIP, 'publish/TelltaleModdingStudio/TelltaleModding.App.exe')
           $lines = foreach ($f in $files) { '{0}  {1}' -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path $f -Leaf) }
-          [IO.File]::WriteAllText('SHA256SUMS.txt', ($lines -join "`n") + "`n")
-          Get-Content SHA256SUMS.txt
+          [IO.File]::WriteAllText('SHA256SUMS-win-x64.txt', ($lines -join "`n") + "`n")
+          Get-Content SHA256SUMS-win-x64.txt
 
       # Signed record that these files were built by this workflow from this commit
       # (check with: gh attestation verify <file> --repo <owner>/<repo>).
@@ -90,16 +95,94 @@ jobs:
           name: TelltaleModdingStudio-win-x64
           path: |
             ${{ env.ZIP }}
-            SHA256SUMS.txt
+            SHA256SUMS-win-x64.txt
 
-      # On a tag, attach the zip to that tag's release (created with generated notes if missing).
+  publish-linux:
+    runs-on: ubuntu-latest
+    needs: build-test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"; else echo "VERSION=" >> "$GITHUB_ENV"; fi
+
+      # The native ttarchext (classic archives, patch building) and the Oodle loader,
+      # which lets the app use a game's own oo2core DLL on Linux.
+      - name: Build native engine and Oodle loader
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev
+          make -C engine/ttarchext
+          make -C engine/oodle
+
+      - name: Publish self-contained linux-x64
+        run: |
+          props="-p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none"
+          if [ -n "$VERSION" ]; then props="$props -p:Version=$VERSION"; fi
+          dotnet publish src/TelltaleModding.App -c Release -r linux-x64 --self-contained true $props -o publish/TelltaleModdingStudio
+          test -f publish/TelltaleModdingStudio/libtelltale_oodle.so
+
+      - name: Bundle engine
+        run: |
+          mkdir -p publish/TelltaleModdingStudio/engine/ttarchext
+          cp engine/ttarchext/ttarchext publish/TelltaleModdingStudio/engine/ttarchext/
+
+      # A tarball keeps the executable bits that a zip would lose.
+      - name: Tarball
+        run: |
+          if [ -n "$VERSION" ]; then name="TelltaleModdingStudio-$VERSION-linux-x64.tar.gz"; else name="TelltaleModdingStudio-linux-x64.tar.gz"; fi
+          tar -czf "$name" -C publish TelltaleModdingStudio
+          echo "TARBALL=$name" >> "$GITHUB_ENV"
+
+      - name: Checksums
+        run: |
+          sha256sum "$TARBALL" > SHA256SUMS-linux-x64.txt
+          (cd publish/TelltaleModdingStudio && sha256sum TelltaleModding.App) >> SHA256SUMS-linux-x64.txt
+          cat SHA256SUMS-linux-x64.txt
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            ${{ env.TARBALL }}
+            publish/TelltaleModdingStudio/TelltaleModding.App
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TelltaleModdingStudio-linux-x64
+          path: |
+            ${{ env.TARBALL }}
+            SHA256SUMS-linux-x64.txt
+
+  # On a tag, attach both builds and one SHA256SUMS.txt to that tag's release
+  # (created with generated notes if missing).
+  release:
+    runs-on: ubuntu-latest
+    needs: [publish-windows, publish-linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
       - name: Attach to release
-        if: github.ref_type == 'tag'
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          gh release view $env:GITHUB_REF_NAME 2>$null
-          if ($LASTEXITCODE -ne 0) { gh release create $env:GITHUB_REF_NAME --title "Telltale Modding Studio $env:VERSION" --generate-notes }
-          gh release upload $env:GITHUB_REF_NAME $env:ZIP SHA256SUMS.txt --clobber
+          cat dist/SHA256SUMS-*.txt > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Telltale Modding Studio ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz SHA256SUMS.txt --clobber

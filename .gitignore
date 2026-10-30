@@ -17,8 +17,9 @@ artifacts/
 [Tt]est[Rr]esults/
 *.trx
 
-# Native engine build (produced by engine/ttarchext/Makefile)
+# Native builds (produced by engine/ttarchext/Makefile and engine/oodle/Makefile)
 engine/ttarchext/ttarchext
+engine/oodle/libtelltale_oodle.so
 *.o
 .artifacts/
 

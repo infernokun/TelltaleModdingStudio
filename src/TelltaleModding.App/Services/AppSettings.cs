@@ -4,7 +4,8 @@ namespace TelltaleModding.App.Services;
 
 /// <summary>
 /// The user's game library and last session, persisted as JSON under
-/// <c>%LOCALAPPDATA%\TelltaleModdingStudio\settings.json</c>.
+/// <c>%LOCALAPPDATA%\TelltaleModdingStudio\settings.json</c> (on Linux,
+/// <c>~/.local/share/TelltaleModdingStudio/settings.json</c>).
 /// </summary>
 public sealed class AppSettings
 {
