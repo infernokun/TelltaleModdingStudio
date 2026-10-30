@@ -4,7 +4,13 @@
              x:Class="TelltaleModding.App.Views.ConversationView"
              x:DataType="vm:ConversationViewModel">
 
-    <Grid ColumnDefinitions="300,*">
+    <!-- The list and the tree share the width; drag the gap between them to resize. -->
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="0.42*" MinWidth="210" MaxWidth="440" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="*" MinWidth="260" />
+        </Grid.ColumnDefinitions>
 
         <!-- Scene and its conversations -->
         <Border Classes="panel" Padding="12">
@@ -30,7 +36,7 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <ProgressBar Grid.Row="4" IsIndeterminate="True" VerticalAlignment="Top" Margin="0,8"
+                <ProgressBar Grid.Row="4" IsIndeterminate="{Binding IsLoading}" VerticalAlignment="Top" Margin="0,8"
                              IsVisible="{Binding IsLoading}" />
                 <TextBlock Grid.Row="4" Classes="muted" Margin="4,8" IsVisible="{Binding !HasSource}"
                            Text="Open a game to browse its conversations." TextWrapping="Wrap" />
@@ -38,7 +44,8 @@
         </Border>
 
         <!-- The selected conversation -->
-        <Border Grid.Column="1" Classes="panel" Margin="12,0,0,0" Padding="12">
+        <GridSplitter Grid.Column="1" Classes="gap" ResizeDirection="Columns" ToolTip.Tip="Drag to resize" />
+        <Border Grid.Column="2" Classes="panel" Padding="12">
             <Grid RowDefinitions="Auto,*">
                 <Grid ColumnDefinitions="*,Auto" Margin="2,0,0,6">
                     <TextBlock Classes="h2" Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
@@ -56,7 +63,13 @@
                     <!-- Tree -->
                     <TabItem Header="Tree" FontSize="14">
                         <Grid RowDefinitions="Auto,*">
-                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                            <!-- Wraps onto a second row when the panel is narrow rather than cutting off. -->
+                            <WrapPanel Margin="0,0,0,6">
+                                <WrapPanel.Styles>
+                                    <Style Selector="WrapPanel > :is(Control)">
+                                        <Setter Property="Margin" Value="0,0,6,4" />
+                                    </Style>
+                                </WrapPanel.Styles>
                                 <Button Classes="ghost" FontSize="12" Content="Expand all" Command="{Binding ExpandAllCommand}" />
                                 <Button Classes="ghost" FontSize="12" Content="Collapse all" Command="{Binding CollapseAllCommand}" />
                                 <ToggleSwitch IsChecked="{Binding ShowLogic}" OnContent="Logic shown" OffContent="Logic hidden"
@@ -69,7 +82,7 @@
                                         <TextBlock Text="Play from here" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
-                            </StackPanel>
+                            </WrapPanel>
                             <TreeView Grid.Row="1" x:Name="NodeTree" ItemsSource="{Binding Tree}" SelectedItem="{Binding SelectedNode}"
                                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <TreeView.Styles>

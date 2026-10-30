@@ -26,6 +26,9 @@ public sealed record DialogueLine(uint Id, string Speaker, string RawText, IRead
 
     /// <summary>The direction tags (<c>v-o</c>, <c>confused</c>, …) in the order written.</summary>
     public IReadOnlyList<string> Directions => LandbFile.Directions(RawText);
+
+    /// <summary>The line's resource name symbol, which chores use to place the line on their timeline.</summary>
+    public ulong NameSymbol { get; init; }
 }
 
 /// <summary>
@@ -58,7 +61,10 @@ public static partial class LandbFile
                 pos++;
                 continue;
             }
-            result.Add(new DialogueLine(id, speaker, text, LinkedSymbols(span, pos + 16)));
+            result.Add(new DialogueLine(id, speaker, text, LinkedSymbols(span, pos + 16))
+            {
+                NameSymbol = BinaryPrimitives.ReadUInt64LittleEndian(span[(pos + 4)..]),
+            });
             pos = next;
         }
 

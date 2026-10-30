@@ -45,6 +45,11 @@ public static class KnownTypeNames
         "T3Texture", "T3SamplerStateBlock", "EnumPlatformType",
         "RenderSwizzleParams", "T3Texture::RegionStreamHeader",
 
+        // Confirmed as chore resource types (embedded data in Definitive Series chores).
+        "Animation", "Chore", "LanguageRes", "Procedural_LookAt", "PointOfInterestBlocking",
+        "StyleIdleTransitionsRes", "ParticleInverseKinematics", "BlendCameraResource",
+        "ProceduralEyes", "CameraSelect",
+
         // Same-era types expected in other files.
         "Vector3", "Vector4", "Quaternion", "Transform", "String", "BinaryBuffer",
         "ToolProps", "LocationInfo", "T3MeshBoneEntry", "T3MeshLocalTransformEntry",

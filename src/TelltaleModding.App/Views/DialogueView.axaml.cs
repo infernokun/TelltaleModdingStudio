@@ -8,6 +8,7 @@ public partial class DialogueView : UserControl
 {
     private DialogueViewModel? _vm;
     private IDisposable? _look;
+    private GridLength _speakerWidth = new(0.45, GridUnitType.Star);
 
     public DialogueView()
     {
@@ -20,6 +21,7 @@ public partial class DialogueView : UserControl
                 _vm.Speaker.ModelCleared -= SpeakerViewport.Clear;
                 _vm.Speaker.PoseReady -= SpeakerViewport.UpdateSkinMatrices;
                 _vm.Speaker.FaceFramingReady -= OnSpeakerHead;
+                _vm.PropertyChanged -= OnViewModelChanged;
                 _look?.Dispose();
             }
             _vm = DataContext as DialogueViewModel;
@@ -29,7 +31,9 @@ public partial class DialogueView : UserControl
                 _vm.Speaker.ModelCleared += SpeakerViewport.Clear;
                 _vm.Speaker.PoseReady += SpeakerViewport.UpdateSkinMatrices;
                 _vm.Speaker.FaceFramingReady += OnSpeakerHead;
+                _vm.PropertyChanged += OnViewModelChanged;
                 _look = LookToggle.Attach(SpeakerViewport, _vm.Look);
+                FoldSpeaker(_vm.IsSpeakerVisible);
             }
         };
         SpeakerHost.PointerPressed += (_, e) => SpeakerViewport.HandlePointerPressed(e);
@@ -50,6 +54,33 @@ public partial class DialogueView : UserControl
             if (DataContext is DialogueViewModel vm && vm.SelectedLine is { } line)
                 vm.PlayLineCommand.Execute(line);
         };
+    }
+
+    private void OnViewModelChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DialogueViewModel.IsSpeakerVisible) && _vm is not null)
+            FoldSpeaker(_vm.IsSpeakerVisible);
+    }
+
+    // A hidden speaker gives its width (and the gap before it) back to the list; showing
+    // it again restores the width it had, including any the user dragged it to.
+    private void FoldSpeaker(bool visible)
+    {
+        var gap = Columns.ColumnDefinitions[2];
+        var speaker = Columns.ColumnDefinitions[3];
+        if (visible)
+        {
+            gap.Width = new GridLength(12);
+            speaker.MinWidth = 240;
+            speaker.Width = _speakerWidth;
+        }
+        else if (speaker.MinWidth > 0)
+        {
+            _speakerWidth = speaker.Width;
+            gap.Width = new GridLength(0);
+            speaker.MinWidth = 0;
+            speaker.Width = new GridLength(0);
+        }
     }
 
     private void OnSpeakerHead(System.Numerics.Vector3 headTop, float height) =>

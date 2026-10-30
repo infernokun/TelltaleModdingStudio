@@ -123,7 +123,8 @@ public static partial class PhonemePoses
 
 /// <summary>
 /// Animates a talking character: an optional body clip loops underneath, an optional
-/// expression clip sets the face, and the line's phoneme keys blend the mouth between
+/// expression clip sets the face, an optional chore performance plays the line's body
+/// language from the game over that, and the line's phoneme keys blend the mouth between
 /// the character's phoneme poses (the <c>default</c> pose is the closed mouth they
 /// blend from).
 /// </summary>
@@ -137,14 +138,21 @@ public sealed class LipSyncPlayer
     private readonly Dictionary<ulong, (Vector3 Pos, Quaternion Rot)> _expression = new();
     private readonly AnimationPlayer? _body;
     private readonly float _bodyLength;
+    private readonly ChorePerformance? _performance;
+    private readonly float _performanceStart;
     private IReadOnlyList<PhonemeKey> _keys = Array.Empty<PhonemeKey>();
 
     /// <param name="poses">Phoneme symbol → its single-frame pose clip.</param>
     /// <param name="expression">A facial expression clip, sampled at its first frame.</param>
     /// <param name="body">A body clip (idle) that loops under the face.</param>
+    /// <param name="performance">The line's chore performance, layered over the idle and expression.</param>
+    /// <param name="performanceStart">Where the line starts in the chore, in seconds.</param>
     public LipSyncPlayer(MeshGeometry geometry, SkeletonFile skeleton, IReadOnlyDictionary<ulong, AnimationFile> poses,
-        AnimationFile? expression = null, (AnimationFile Clip, string Name)? body = null)
+        AnimationFile? expression = null, (AnimationFile Clip, string Name)? body = null,
+        ChorePerformance? performance = null, float performanceStart = 0)
     {
+        _performance = performance;
+        _performanceStart = performanceStart;
         _skeleton = skeleton;
         _skinner = new MeshSkinner(geometry, skeleton);
         Geometry = geometry;
@@ -208,6 +216,8 @@ public sealed class LipSyncPlayer
             var local = _body?.SampleLocal(bone, bodyTime) ?? (bone.LocalPosition, bone.LocalRotation);
             if (_expression.TryGetValue(bone.JointSymbol, out var face))
                 local = face;
+            if (_performance is not null)
+                local = _performance.SampleLocal(bone, _performanceStart + time, local);
             if (_poses.TryGetValue(DefaultPhoneme, out var closed) && closed.TryGetValue(bone.JointSymbol, out var rest))
                 local = rest;
 

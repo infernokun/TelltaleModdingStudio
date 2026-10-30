@@ -5,7 +5,16 @@
              x:Class="TelltaleModding.App.Views.DialogueView"
              x:DataType="vm:DialogueViewModel">
 
-    <Grid ColumnDefinitions="280,*,Auto" RowDefinitions="*,Auto" Margin="12">
+    <!-- Filters · lines or conversations · speaker. The speaker takes a share of the width
+         and can be dragged wider or narrower; DialogueView.axaml.cs folds its column away
+         when it is hidden. -->
+    <Grid x:Name="Columns" RowDefinitions="*,Auto" Margin="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280" />
+            <ColumnDefinition Width="*" MinWidth="520" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="0.45*" MinWidth="240" />
+        </Grid.ColumnDefinitions>
 
         <!-- Filters: language, episode, speakers -->
         <Border Grid.RowSpan="2" Classes="panel" Padding="12">
@@ -105,7 +114,7 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <ProgressBar Grid.Row="1" IsIndeterminate="True" Width="200" VerticalAlignment="Center"
+                <ProgressBar Grid.Row="1" IsIndeterminate="{Binding Music.IsLoadingAlbum}" Width="200" VerticalAlignment="Center"
                              IsVisible="{Binding Music.IsLoadingAlbum}" />
             </Grid>
             <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsLinesMode}">
@@ -157,7 +166,7 @@
                 </ListBox>
                 <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
                             IsVisible="{Binding IsIndexing}">
-                    <ProgressBar IsIndeterminate="True" Width="200" />
+                    <ProgressBar IsIndeterminate="{Binding IsIndexing}" Width="200" />
                     <TextBlock Classes="muted" Text="{Binding IndexStatus}" HorizontalAlignment="Center" />
                 </StackPanel>
             </Grid>
@@ -165,7 +174,9 @@
         </Border>
 
         <!-- Speaker, lip-synced -->
-        <Border Grid.Column="2" Classes="panel" Margin="12,0,0,0" Padding="0" Width="400"
+        <GridSplitter Grid.Column="2" Classes="gap" ResizeDirection="Columns" IsVisible="{Binding IsSpeakerVisible}"
+                      ToolTip.Tip="Drag to resize the speaker" />
+        <Border Grid.Column="3" Classes="panel" Padding="0"
                 IsVisible="{Binding IsSpeakerVisible}" ClipToBounds="True">
             <Panel>
                 <Panel x:Name="SpeakerHost" Background="Transparent">
@@ -174,7 +185,7 @@
                 <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
                            Margin="24" TextAlignment="Center" IsVisible="{Binding !Speaker.HasModel}"
                            Text="The speaker appears here, lip-synced to the line." />
-                <ProgressBar IsIndeterminate="True" Width="140" VerticalAlignment="Top" Margin="0,14"
+                <ProgressBar IsIndeterminate="{Binding Speaker.IsLoading}" Width="140" VerticalAlignment="Top" Margin="0,14"
                              IsVisible="{Binding Speaker.IsLoading}" />
                 <Panel Margin="10" HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding Speaker.HasModel}">
                     <views:LookToggle DataContext="{Binding Look}" />
@@ -186,8 +197,9 @@
             </Panel>
         </Border>
 
-        <!-- Now playing -->
-        <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Classes="panel" Margin="12,12,0,0" Padding="14,10">
+        <!-- Now playing: the player across the top, the line and the switches under it, so a
+             narrow window still leaves the timeline room. -->
+        <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Classes="panel" Margin="12,12,0,0" Padding="14,10">
             <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
                 <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                     <Button Classes="icon" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous line">
@@ -197,12 +209,19 @@
                         <PathIcon Data="{StaticResource IconNext}" />
                     </Button>
                 </StackPanel>
-                <views:AudioPlayerBar Grid.Column="1" DataContext="{Binding Player}" />
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center">
+                <views:AudioPlayerBar Grid.Column="1" Grid.ColumnSpan="2" DataContext="{Binding Player}" />
+                <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,8,0,0" VerticalAlignment="Top">
                     <ToggleButton IsChecked="{Binding ShowSpeaker}" Classes="ghost" ToolTip.Tip="Show the speaker, lip-synced">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <PathIcon Data="{StaticResource IconFace}" Width="14" Height="14" />
                             <TextBlock Text="Speaker" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton IsChecked="{Binding PlayPerformance}" Classes="ghost" IsEnabled="{Binding ShowSpeaker}"
+                                  ToolTip.Tip="Play the speaker's body language from the game: the turns, poses, gestures and blinks the scene's chore plays with the line">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconPerson}" Width="14" Height="14" />
+                            <TextBlock Text="Performance" FontSize="12" VerticalAlignment="Center" />
                         </StackPanel>
                     </ToggleButton>
                     <ToggleButton IsChecked="{Binding AutoPlayNext}" Classes="ghost" ToolTip.Tip="Keep playing the next line">
@@ -220,19 +239,19 @@
                     <Button Command="{Binding ExportWavCommand}" FontSize="12" Content="Save as WAV…" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="4,8,0,0" Spacing="2">
-                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsMusicMode}">
-                        <TextBlock Text="♪" Foreground="{StaticResource Accent}" />
-                        <TextBlock Text="{Binding Music.NowPlaying.Title}" TextTrimming="CharacterEllipsis" MaxWidth="900" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !IsMusicMode}">
-                        <TextBlock Text="{Binding NowPlaying.Speaker}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
-                        <TextBlock Text="{Binding NowPlaying.Text}" TextTrimming="CharacterEllipsis" MaxWidth="900" />
-                    </StackPanel>
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="4,8,0,0" Spacing="2">
+                    <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding IsMusicMode}">
+                        <TextBlock Text="♪" Foreground="{StaticResource Accent}" Margin="0,0,8,0" />
+                        <TextBlock Grid.Column="1" Text="{Binding Music.NowPlaying.Title}" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding !IsMusicMode}">
+                        <TextBlock Text="{Binding NowPlaying.Speaker}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,0,8,0" />
+                        <TextBlock Grid.Column="1" Text="{Binding NowPlaying.Text}" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                     <TextBlock Text="{Binding Player.Error}" Foreground="{StaticResource Warn}" TextWrapping="Wrap"
                                IsVisible="{Binding Player.Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     <TextBlock Classes="faint" Text="Pick a line to hear it. Enter replays; Continuous plays the scene through."
-                               IsVisible="{Binding IsLinesMode}" />
+                               IsVisible="{Binding IsLinesMode}" TextWrapping="Wrap" />
                 </StackPanel>
             </Grid>
         </Border>

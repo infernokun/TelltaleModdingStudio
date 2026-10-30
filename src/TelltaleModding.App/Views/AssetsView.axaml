@@ -6,7 +6,25 @@
              x:Class="TelltaleModding.App.Views.AssetsView"
              x:DataType="vm:AssetsViewModel">
 
-    <Grid ColumnDefinitions="*,460" Margin="12">
+    <UserControl.Styles>
+        <Style Selector="views|ChoreBar">
+            <Setter Property="Fill" Value="{StaticResource Accent}" />
+        </Style>
+        <Style Selector="views|ChoreBar.gesture">
+            <Setter Property="Fill" Value="{StaticResource Muted}" />
+        </Style>
+        <Style Selector="views|ChoreBar.voice">
+            <Setter Property="Fill" Value="{StaticResource Success}" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Results and preview; drag the gap between them to give either more room. -->
+    <Grid Margin="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="360" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="460" MinWidth="320" />
+        </Grid.ColumnDefinitions>
 
         <!-- Search + results -->
         <Border Classes="panel" Padding="12">
@@ -15,7 +33,7 @@
                     <TextBlock Classes="h2" Text="Assets" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
                     <CheckBox IsChecked="{Binding ConvertOnExport}" FontSize="12" Content="Convert"
-                              ToolTip.Tip="Textures → PNG, sounds → MP3/Ogg, scripts → decompiled Lua, subtitles → transcript" />
+                              ToolTip.Tip="Textures → PNG, sounds → MP3/Ogg, scripts → decompiled Lua, subtitles → transcript, chores → text timeline" />
                     <Button Command="{Binding ExportResultsCommand}" FontSize="12" Padding="10,4"
                             ToolTip.Tip="Export every file in the results to a folder">
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -62,7 +80,8 @@
         </Border>
 
         <!-- Preview -->
-        <Border Grid.Column="1" Classes="panel" Margin="12,0,0,0" Padding="14">
+        <GridSplitter Grid.Column="1" Classes="gap" ResizeDirection="Columns" ToolTip.Tip="Drag to resize the preview" />
+        <Border Grid.Column="2" Classes="panel" Padding="14">
             <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
                 <TextBlock Classes="h2" Text="{Binding PreviewTitle}" TextTrimming="CharacterEllipsis"
                            ToolTip.Tip="{Binding PreviewTitle}" />
@@ -91,6 +110,37 @@
                         <Panel x:Name="ViewportHost" Background="Transparent" IsVisible="{Binding IsMeshPreview}">
                             <views:MeshViewport x:Name="Viewport" />
                         </Panel>
+                        <!-- A chore: what each agent plays and when, with a bar across the chore's length. -->
+                        <ScrollViewer IsVisible="{Binding IsChorePreview}" Padding="12,10">
+                            <ItemsControl ItemsSource="{Binding ChoreTracks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ChoreTrackViewModel">
+                                        <StackPanel Margin="0,0,0,14" Spacing="3">
+                                            <TextBlock Text="{Binding Agent}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Summary}" Classes="faint" FontSize="11" Margin="0,0,0,3" />
+                                            <ItemsControl ItemsSource="{Binding Rows}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:ChoreRowViewModel">
+                                                        <Grid ColumnDefinitions="78,68,*,72" Background="Transparent"
+                                                              ToolTip.Tip="{Binding ToolTip}" Margin="0,1">
+                                                            <TextBlock Text="{Binding Time}" FontFamily="Consolas,Menlo,monospace" FontSize="11"
+                                                                       Foreground="{StaticResource Muted}" VerticalAlignment="Center" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding Kind}" FontSize="11"
+                                                                       Foreground="{StaticResource Faint}" VerticalAlignment="Center" />
+                                                            <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="12"
+                                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                            <views:ChoreBar Grid.Column="3" Height="12" VerticalAlignment="Center"
+                                                                            Spans="{Binding Spans}" Track="{StaticResource Line}"
+                                                                            Classes.voice="{Binding IsVoice}" Classes.gesture="{Binding IsGesture}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
                         <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center"
                                    IsVisible="{Binding !HasPreview}" Text="Select a file to preview it." />
                     </Panel>
