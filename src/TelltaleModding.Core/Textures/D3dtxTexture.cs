@@ -33,6 +33,12 @@ public sealed class D3dtxTexture
     public int Height { get; private init; }
     public int MipCount { get; private init; }
     public T3SurfaceFormat SurfaceFormat { get; private init; }
+
+    /// <summary>
+    /// The channel each of X, Y, Z and W reads from (0-3 for red to alpha, 4 zero, 5 one), or
+    /// null for the older textures that have none. See <see cref="NormalMapSwizzle"/>.
+    /// </summary>
+    public IReadOnlyList<byte>? Swizzle { get; private init; }
     public IReadOnlyList<D3dtxRegion> Regions { get; private init; } = Array.Empty<D3dtxRegion>();
 
     private byte[] _pixelData = Array.Empty<byte>();
@@ -134,6 +140,7 @@ public sealed class D3dtxTexture
         if (v9)
             off += 4 * 2;   // mDepth, mArraySize
         var format = (T3SurfaceFormat)I32();
+        byte[]? swizzle = null;
         if (v4 || v5)
         {
             // The MSV5 games have no swizzle; V4 also lacks layout, gamma and one of
@@ -151,6 +158,9 @@ public sealed class D3dtxTexture
             if (v9)
                 off += 4;   // mSurfaceMultisample
             off += 4 * 3;   // mResourceUsage, mType, mSwizzleSize
+            if (off + 4 > payloadEnd)
+                throw new InvalidDataException("payload truncated");
+            swizzle = file.AsSpan(off, 4).ToArray();
             off += 4;       // mSwizzle
             off += 4 * 3;   // mSpecularGlossExponent, mHDRLightmapScale, mToonGradientCutoff
             off += 4 * 2;   // mAlphaMode, mColorMode
@@ -204,6 +214,7 @@ public sealed class D3dtxTexture
             Height = height,
             MipCount = mips,
             SurfaceFormat = format,
+            Swizzle = swizzle,
             Regions = regions,
             _pixelData = file.AsSpan(pixelsStart, pixelsLength).ToArray(),
         };

@@ -109,7 +109,7 @@ internal static class MeshShaders
         uniform vec3 uSelfLit;         // linear light the surface gives off in its own color
         uniform float uHasTex;
         uniform int uNmapKind;      // -1 none, 0 X in blue / Y in alpha, 1 X in red / Y in green, 2 RGB
-        uniform int uSpecLayout;    // 0 none, 1 color = intensity, 2 blue = gloss, alpha = intensity, red = metal
+        uniform int uSpecLayout;    // 0 none, 1 color = intensity, 2 blue = gloss, alpha = intensity, red = metal, 3 color = intensity, alpha = gloss
         uniform int uInkKind;       // 0 none, 1 shadow ink (white = ink), 2 line art (dark = line)
         uniform float uInkInAlpha;
         uniform vec3 uTint;
@@ -121,7 +121,7 @@ internal static class MeshShaders
         uniform vec4 uLightPos[8];    // xyz position, w kind (0 directional, 1 point, 2 spot)
         uniform vec4 uLightDir[8];    // xyz direction of travel, w range (0 = unlimited)
         uniform vec4 uLightColor[8];  // linear color × intensity, w = 1 when it also lights lightmapped surfaces
-        uniform vec4 uLightCone[8];   // cos inner, cos outer, weight relative to the brightest light
+        uniform vec4 uLightCone[8];   // cos inner, cos outer, weight relative to the brightest light, 1 for a rim light
         uniform vec3 uAmbientSky;
         uniform vec3 uAmbientGround;
 
@@ -223,6 +223,17 @@ internal static class MeshShaders
                 specColor = mix(specColor * sm.a, sm.a * albedo * 3.0, sm.r) * 0.5;
                 power = mix(12.0, 96.0, sm.b);
             }
+            else if (uSpecLayout == 3)
+            {
+                // Roughness 1 - gloss, as the game reads these maps. A rough surface's highlight
+                // is broad and dim: the lobe's sharpness and peak follow the roughness (a Blinn
+                // lobe matched to GGX: power 2 / a^2 - 2, peak 1 / (4 pi a^2), a = roughness^2).
+                vec4 sm = texture(uSpec, vUv);
+                float rough = 1.0 - sm.a;
+                float a2 = max(rough * rough * rough * rough, 1e-4);
+                power = max(1.0, 2.0 / a2 - 2.0);
+                specColor *= sm.rgb * min(2.0, 1.0 / (12.566 * a2));
+            }
 
             float wrap = uLightModel.x;
             vec3 diffuse = vec3(0.0);
@@ -258,7 +269,11 @@ internal static class MeshShaders
                 vec3 c = uLightColor[i].rgb;
                 bool key = uLightCone[i].z > 0.999;
                 if (uLightModel.y < 0.5 || key)
-                    diffuse += c * band(clamp((ndl + wrap) / (1.0 + wrap), 0.0, 1.0) * att);
+                {
+                    // A rim light keeps to the silhouette: the look's wrap would spread it over the whole side.
+                    float w = uLightCone[i].w > 0.5 ? 0.0 : wrap;
+                    diffuse += c * band(clamp((ndl + w) / (1.0 + w), 0.0, 1.0) * att);
+                }
                 if (key)
                     keyLight += c * max((dot(geo, L) + uInkKeyWrap) / (1.0 + uInkKeyWrap), 0.0) * att;   // shadow edges follow the shape, not the bumps
                 vec3 H = normalize(L + V);

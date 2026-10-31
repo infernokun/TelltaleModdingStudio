@@ -619,6 +619,13 @@ public enum SpecularMapLayout
 
     /// <summary>Blue is gloss and alpha the intensity; red marks metal (Season 4 materials).</summary>
     Packed,
+
+    /// <summary>
+    /// Color is the specular intensity and alpha the gloss (the Definitive Series' earlier
+    /// seasons): the game's shader takes 1 - alpha as the roughness, so a low alpha spreads the
+    /// highlight broad and dim.
+    /// </summary>
+    ColorGloss,
 }
 
 /// <summary>
