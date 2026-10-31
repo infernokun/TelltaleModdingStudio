@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.4.0 (2026-10-31)
+
+### Dialogue
+
+- **Follow camera:** with **Follow** on (next to **Performance**), the speaker's camera follows the performance through each line. It frames the face and shoulders, widens when the hands come up to gesture, drops with a character who crouches or leans, and turns with one who turns. It is worked out for the whole line ahead of time, so it moves with a gesture instead of after it. Orbiting keeps following from your angle; panning or zooming hands the camera to you until Follow is turned back on.
+- **Game camera:** with **Game camera** on (with Follow), a line is shown from the camera the game itself uses for it, when its chore has one: the scene's camera, moved and zoomed the way the chore and the cutscene pieces it plays key it, with the game's handheld drift and shake, and placed against where the speaker has walked or turned to. It is used while that shot shows the speaker's face; when the game cuts away to whoever they are talking to, or shoots over their shoulder, the follow camera takes over. In a view narrower than the game's, the speaker keeps their place across the frame. About a quarter of lines get a game shot; conversations in talk trees use the game's free-roaming camera, so they keep the follow camera.
+
+### Fixes
+
+- **Mouths that did not move in Dialogue now lip-sync.** In a sample of The Walking Dead Definitive Series lines, about one in three mouths stayed still; now only lines whose recording has no lip-sync track do.
+  - The phonemes AH and SS (Season 3 on) are read.
+  - Characters whose mouth shapes only come in moods (Louis, Paige, Bonnie, Sam, Michonne and others) use them, the calmest mood when the line names none.
+  - Each set of mouth shapes is checked against the model's face. The Definitive Series keeps one character's shapes from several seasons under one name, and the wrong season's shapes left Season 4 Clementine, Lilly and others with a still mouth.
+  - Characters with no mouth shapes of their own (Mariana, Lonnie) use the game's shared ones.
+- **Bonnie** no longer talks with a wide-open, fearful mouth on every line. Her phoneme table names shapes that do not fit her face, and the app fell back to her fearful set.
+- **Eyes and mouths drawn black** on characters that use the shared eye and mouth parts (Mike, Luke and others). Their blank detail maps were read as ink covering the whole surface.
+- **The Walking Dead: Michonne's animations play.** Nearly all of its clips (and a few of Game of Thrones') store poses in a format the app could not read, so its characters stood still and never lip-synced.
+- A line the game voices from someone else (Javier talking over a zombie he is looking at) shows the speaker, not the other character.
+- **Performances play at the strength the chore gives them.** A chore keys, for every clip it plays, how much it counts and which moment of it plays. The app ignored both, so every glance and expression played in full from its first frame, and glances the game keeps at zero (Clementine's "head turns zero") stacked on top of each other, leaving eyes wide open and rolled back. Clips now follow the chore's curves in every game: a glance can hold half way, an expression can show at half strength.
+- **Performances mix the way the game's animation mixer does** (read from the game's own code):
+  - A clip of higher priority wins over a lower one on the bones they share, whichever starts first. A face mood is no longer covered by a full-body action that starts after it (about a quarter of characters with overlapping clips). Clips of one priority blend by how much each counts.
+  - Each clip moves only the parts of the body the chore gives it. Chores limit a clip to resource groups (a head gesture to the head without the face, an idle to everything but the face), and the app ignored them, so a head gesture also moved the brows. Clementine's Season 1 head gestures each hold her brows in a frown, and several at once bulged her forehead.
+  - Gestures in The Walking Dead Definitive Series move bones whose rest pose is turned in the right direction (an arm, a hand). Their offsets were read without the bone's own turn.
+- The Dialogue speaker moves at the display's frame rate instead of about 25 frames a second, and keeps time with the sound as it is heard. On Windows it ran up to a tenth of a second ahead; on Linux it moved in small steps between the sound server's updates.
+
 ## 1.3.1 (2026-10-30)
 
 ### Fixes
