@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.1 (2026-10-30)
+
+### Fixes
+
+- The Dialogue speaker uses the model the scene stages for the line, read from the scene's agent and its character `.prop`. Before, any character with the speaker's name could be picked, such as Clementine's Season 2 model in a Season 4 scene. Lines with no scene to go on prefer a model from the line's season.
+- The speaker's idle, resting face and mouth shapes come from the character's `.prop` ("Walk Animation - Idle", "Walk Animation - Idle Face" and its phoneme table) instead of being picked by name. Characters whose `.prop` leaves one out keep the old choice.
+- Characters in the Definitive Series no longer look shiny or plastic. Their specular maps keep gloss in the alpha channel, which the app ignored, so dull cloth and skin (gloss around 0.1 to 0.3) got a sharp highlight. Gloss now sets how sharp and how strong the highlight is, as in the game: matte clothes stay matte, and glass, metal, eyes and wet surfaces still shine.
+- Normal maps in the Definitive Series, Tales from the Borderlands and Michonne are read with the channel layout each texture declares (sideways in alpha, up-down in blue). They were read the older games' way, so bumps caught the light in the wrong places.
+- The studio light rig's rim lights only light the silhouette. In a fully wrapped look such as the Definitive Series' they spread a pale wash over the side of a character.
+
 ## 1.3.0 (2026-10-30)
 
 ### Dialogue
