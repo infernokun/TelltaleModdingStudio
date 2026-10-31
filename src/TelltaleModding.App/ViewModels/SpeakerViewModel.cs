@@ -23,6 +23,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
     // Where each scene's lines play; a scene's dialog and chores are read once, in the background.
     private readonly Dictionary<string, Task<SceneChoreLines>> _choreLines = new(StringComparer.OrdinalIgnoreCase);
     private const int MaxIndexedScenes = 6;
+    private SceneCharacters? _sceneCharacters;
     private IReadOnlyList<ArchiveEntryRef> _chores = Array.Empty<ArchiveEntryRef>();
     private readonly SizeBoundedCache<string, (AnimationFile? Clip, long Bytes)> _clips =
         new(64L * 1024 * 1024, c => c.Bytes + 512, StringComparer.OrdinalIgnoreCase);
@@ -62,6 +63,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         _assembler = models ?? new ModelAssembler(new CatalogAssetResolver(catalog));
         _models.Clear();
         _choreLines.Clear();
+        _sceneCharacters = new SceneCharacters(catalog);
         _clips.Clear();
         _chores = catalog.Entries.Where(e => e.Name.EndsWith(".chore", StringComparison.OrdinalIgnoreCase)).ToList();
         _phonemePrefixes = PhonemePoses.Prefixes(catalog.Entries.Select(e => e.Name));
@@ -85,7 +87,18 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         if (_catalog is null || _assembler is null)
             return;
         int generation = ++_generation;
+        // The chore that plays the line, and the scene it is staged in, name the speaker's
+        // exact model (Clementine 402 in the barn, not whichever Clementine fits the name).
+        var lines = await ChoreLinesFor(line.Scene);
+        if (generation != _generation)
+            return;
+        var choreLine = lines.Find(line);
+        var staged = await Task.Run(() => StagedCharacter(lines, choreLine, line.Line.Speaker));
+        if (generation != _generation)
+            return;
         var candidates = FindCharacters(line.Line.Speaker, line.Episode);
+        if (staged is not null)
+            candidates = candidates.Where(c => c.Id != staged.Id).Prepend(staged).ToList();
         var character = candidates.FirstOrDefault();
         if (character is null)
         {
@@ -132,19 +145,9 @@ public sealed partial class SpeakerViewModel : ViewModelBase
             }
 
             var mood = model.Prefix is null ? null : FindMood(model.Prefix, line.Line.Directions);
-            ChoreLine? choreLine = null;
             ChorePerformance? performance = null;
-            if (PlayPerformance && model.Model.CanAnimate)
-            {
-                var lines = await ChoreLinesFor(line.Scene);
-                if (generation != _generation)
-                    return;
-                if (lines.Find(line) is { } found)
-                {
-                    choreLine = found;
-                    performance = await Task.Run(() => BuildPerformance(model, found));
-                }
-            }
+            if (PlayPerformance && model.Model.CanAnimate && choreLine is not null)
+                performance = await Task.Run(() => BuildPerformance(model, choreLine));
             var player = await Task.Run(() => BuildLipSync(model, mood, performance, choreLine?.Start ?? 0));
             if (generation != _generation)
                 return;
@@ -196,12 +199,30 @@ public sealed partial class SpeakerViewModel : ViewModelBase
 
     private const int MaxModelTries = 3;
 
+    // The character the scene places under the line's speaker: the chore's own scene first,
+    // then the scenes the line's other chores are staged in.
+    private CharacterEntry? StagedCharacter(SceneChoreLines lines, ChoreLine? choreLine, string speaker)
+    {
+        if (_sceneCharacters is not { } scenes)
+            return null;
+        var agent = choreLine?.Agent ?? speaker;
+        var files = new List<string>();
+        if (choreLine?.Chore.SceneFile is { Length: > 0 } own)
+            files.Add(own);
+        files.AddRange(lines.SceneFiles);
+        foreach (var file in files.Distinct(StringComparer.OrdinalIgnoreCase).Take(4))
+            if ((scenes.Find(file, agent) ?? (agent == speaker ? null : scenes.Find(file, speaker))) is { } character)
+                return character;
+        return null;
+    }
+
     private static bool IsTextured(AssembledModel model) => model.BatchTextures.Any(t => t is not null);
 
-    // The speaker's characters, best first: names compared without spaces or case
-    // ("LADYFORRESTER"), preferring one with mouth poses, then the variant made for the
-    // line's episode ("AI 102" for a line from Borderlands102), then the plain variant,
-    // then the fullest outfit. Subtitles often use a short name ("JACK" for Handsome
+    // The speaker's characters, best first, for when no scene names the model: names compared
+    // without spaces or case ("LADYFORRESTER"), preferring one with mouth poses, then the
+    // variant made for the line's episode ("AI 102" for a line from Borderlands102), then one
+    // from the line's season (by its variant or the episode its skeleton ships in), then the
+    // plain variant, then the fullest outfit. Subtitles often use a short name ("JACK" for Handsome
     // Jack), so when nothing matches in full, a character whose name ends with the
     // speaker's stands in.
     private IReadOnlyList<CharacterEntry> FindCharacters(string speaker, string episode)
@@ -220,6 +241,9 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         return matches
             .OrderByDescending(c => PhonemePrefixFor(c) is not null)
             .ThenByDescending(c => c.Variant is { } v && EpisodeNumber().Matches(v).Any(m => episode.Contains(m.Value)))
+            .ThenByDescending(c => Season(episode) is { } season &&
+                                   (Season(c.Variant) == season ||
+                                    Season(c.Skeleton is { } skl ? DialogueIndex.EpisodeOf(skl.ArchivePath) : null) == season))
             .ThenBy(c => c.Variant is null ? 0 : 1)
             .ThenByDescending(c => c.Parts.Count(p => p.DefaultOn))
             .ToList();
@@ -234,6 +258,10 @@ public sealed partial class SpeakerViewModel : ViewModelBase
             : _phonemePrefixes.FirstOrDefault(p => Normalize(p).StartsWith(Normalize(character.DisplayName)));
     }
 
+    // The season digit of an episode number: '4' for WalkingDead404 or a "402" variant.
+    private static char? Season(string? text) =>
+        text is not null && EpisodeNumber().Match(text) is { Success: true } m ? m.Value[0] : null;
+
     [System.Text.RegularExpressions.GeneratedRegex(@"\d{3}")]
     private static partial System.Text.RegularExpressions.Regex EpisodeNumber();
 
@@ -246,7 +274,12 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         return underscore > 0 && id.StartsWith("sk", StringComparison.OrdinalIgnoreCase) ? id[(underscore + 1)..] : id;
     }
 
-    private sealed record SpeakerModel(AssembledModel Model, string? Prefix, (AnimationFile Clip, string Name)? Idle);
+    private sealed record SpeakerModel(AssembledModel Model, string? Prefix, (AnimationFile Clip, string Name)? Idle,
+        AnimationFile? Face = null);
+
+    // What a character's .prop names: its idle, its resting face and the prefix of its
+    // phoneme table's mouth poses ("clementine" for clementine_phoneme_AA.anm).
+    private sealed record PropReferenceSet(string? Idle, AnimationFile? Face, string? PhonemePrefix);
 
     private SpeakerModel? BuildModel(CharacterEntry character)
     {
@@ -256,12 +289,20 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         if (!model.CanAnimate)
             return new SpeakerModel(model, null, null);
 
-        var prefix = PhonemePrefixFor(character);
+        // The character's .prop names its idle, resting face and phoneme table; the guesses
+        // below are for characters whose .prop leaves them out.
+        var named = PropReferencesFor(character);
+        var prefix = named.PhonemePrefix ?? PhonemePrefixFor(character);
+        (AnimationFile, string)? idle = null;
+        if (named.Idle is { } idleName && catalog.Find(idleName) is { } idleEntry &&
+            AnimationFile.TryLoad(catalog.Read(idleEntry), out var namedIdle, out _) && namedIdle!.IsSkeletal)
+            idle = (namedIdle, idleName);
+        if (idle is not null)
+            return new SpeakerModel(model, prefix, idle, named.Face);
 
         // A standing idle keeps the body out of its bind pose. Many idles sit, kneel or
         // crouch, which would drop the head below the face-framed camera: keep the first
         // (preferring "stand" in the name) whose top stays near the rest pose's height.
-        (AnimationFile, string)? idle = null;
         var candidates = catalog.AnimationsFor(character)
             .Where(a => a.NamedForCharacter && a.File.Name.Contains("idle", StringComparison.OrdinalIgnoreCase) &&
                         !a.File.Name.Contains("_add", StringComparison.OrdinalIgnoreCase))
@@ -284,7 +325,59 @@ public sealed partial class SpeakerViewModel : ViewModelBase
                 break;
             }
         }
-        return new SpeakerModel(model, prefix, idle);
+        return new SpeakerModel(model, prefix, idle, named.Face);
+    }
+
+    private PropReferenceSet PropReferencesFor(CharacterEntry character)
+    {
+        var catalog = _catalog!;
+        string? NameOf(ulong symbol) => catalog.FindBySymbol(symbol)?.Name;
+        byte[]? Read(string name) => catalog.Find(name) is { } entry ? catalog.Read(entry) : null;
+        try
+        {
+            if (Read(character.Id + ".prop") is not { } prop)
+                return new PropReferenceSet(null, null, null);
+            var idle = MainAnimation(PropertyReferences.Find(prop, PropertyReferences.IdleAnimation, NameOf, Read, ".anm", ".chore"));
+            AnimationFile? face = null;
+            if (MainAnimation(PropertyReferences.Find(prop, PropertyReferences.IdleFace, NameOf, Read, ".chore", ".anm")) is { } faceName &&
+                Read(faceName) is { } faceBytes && AnimationFile.TryLoad(faceBytes, out var faceClip, out _))
+                face = faceClip;
+            string? prefix = null;
+            if (PropertyReferences.Find(prop, PropertyReferences.PhonemeTable, NameOf, Read, ".ptable") is { } tableName &&
+                Read(tableName) is { } table)
+                prefix = PropertyReferences.PhonemeClips(table, PhonemePoses.Phonemes, NameOf).Values
+                    .Select(PhonemeClipPrefix).FirstOrDefault(p => p is not null);
+            return new PropReferenceSet(idle, face, prefix);
+
+            // An animation, or the one a chore plays throughout: its longest-playing animation
+            // that is not layered on top (an idle chore adds breaths and glances over its stand).
+            string? MainAnimation(string? name)
+            {
+                if (name is null || name.EndsWith(".anm", StringComparison.OrdinalIgnoreCase))
+                    return name;
+                if (Read(name) is not { } bytes || !ChoreFile.TryRead(bytes, out var chore, out _))
+                    return null;
+                return chore!.Resources
+                    .Where(r => r.Type == ChoreFile.AnimationType && r.Enabled)
+                    .Select(r => (Name: NameOf(r.Name), Span: r.Blocks.Sum(b => b.End - b.Start)))
+                    .Where(x => x.Name is not null &&
+                                !Path.GetFileNameWithoutExtension(x.Name).EndsWith("_add", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(x => x.Span)
+                    .Select(x => x.Name)
+                    .FirstOrDefault();
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            return new PropReferenceSet(null, null, null);
+        }
+    }
+
+    // "clementine_phoneme_AA.anm" -> "clementine"
+    private static string? PhonemeClipPrefix(string clip)
+    {
+        int at = clip.IndexOf("_phoneme_", StringComparison.OrdinalIgnoreCase);
+        return at > 0 ? clip[..at] : null;
     }
 
     // The first direction tag the character has mouth poses for ("smugA").
@@ -307,7 +400,8 @@ public sealed partial class SpeakerViewModel : ViewModelBase
                     poses[phoneme] = clip!;
             }
         }
-        AnimationFile? expression = null;
+        // The mood the line's directions name, otherwise the resting face the character's .prop names.
+        AnimationFile? expression = speaker.Face;
         if (speaker.Prefix is { } p && mood is not null && catalog.Find($"{p}_phonemes_{mood}.anm") is { } face &&
             AnimationFile.TryLoad(catalog.Read(face), out var faceClip, out _))
             expression = faceClip;

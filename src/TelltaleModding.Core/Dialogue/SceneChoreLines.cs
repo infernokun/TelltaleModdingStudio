@@ -16,14 +16,21 @@ public sealed class SceneChoreLines
 {
     private readonly Dictionary<ulong, ChoreLine> _bySymbol = new();
     private readonly Dictionary<uint, List<ChoreFile>> _exchanges = new();
+    private readonly Dictionary<string, int> _sceneFiles = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Number of chores read for the scene.</summary>
     public int ChoreCount { get; private set; }
+
+    /// <summary>The scene files (<c>adv_forestBarn.scene</c>) the chores are staged in, most used first.</summary>
+    public IReadOnlyList<string> SceneFiles =>
+        _sceneFiles.OrderByDescending(s => s.Value).Select(s => s.Key).ToList();
 
     /// <summary>Indexes the voice lines of <paramref name="chore"/> and the chores embedded in it; earlier chores win.</summary>
     public void Add(ChoreFile chore)
     {
         ChoreCount++;
+        if (chore.SceneFile.Length > 0)
+            _sceneFiles[chore.SceneFile] = _sceneFiles.GetValueOrDefault(chore.SceneFile) + 1;
         foreach (var line in ChorePerformance.Lines(chore))
             _bySymbol.TryAdd(line.Chore.Resources[line.Resource].Name, line);
     }
