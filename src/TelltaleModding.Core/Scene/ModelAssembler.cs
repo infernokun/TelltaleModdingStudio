@@ -357,6 +357,11 @@ public sealed class ModelAssembler
                 }
                 var specular = DecodeTexture(specularName);
                 var inkImage = ink is { } inkMap ? DecodeTexture(inkMap.Name) : null;
+                // 8-bit alpha detail maps are line art whatever the material calls them: white
+                // paper with dark strokes, or blank (the shared eyes and mouths). Read as shadow
+                // ink, where white is ink, they paint the whole surface black.
+                if (inkImage is not null && _alphaTextures.Contains(ink!.Value.Name))
+                    ink = (ink.Value.Name, InkMapKind.LineArt);
                 // Emissive maps glow only in the agent's emission color (black by default).
                 string? emissiveName = data is not null && agentGlow != Vector3.Zero
                     ? MaterialTextureLocator.PickEmissiveMap(data, textureLookup) : null;

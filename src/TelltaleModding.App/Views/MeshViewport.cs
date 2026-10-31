@@ -563,6 +563,87 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
+    /// <summary>
+    /// True while the camera follows shots handed to <see cref="FrameShot"/>. Orbiting keeps
+    /// following from the angle dragged to; panning, zooming or flying hands the camera to
+    /// the user and raises <see cref="FollowStopped"/>.
+    /// </summary>
+    public bool Following { get; set; }
+
+    /// <summary>Raised when the user takes the camera over from <see cref="Following"/>.</summary>
+    public event Action? FollowStopped;
+
+    // While following, how far the user has orbited from the shot's own angle.
+    private float _followYaw;
+
+    /// <summary>
+    /// Points the camera at a shot (see <see cref="SpeakerShot"/>): looks at its target from its
+    /// yaw (plus any orbit the user added), close enough that its region fills the view with a
+    /// little room around it. Ignored unless <see cref="Following"/>.
+    /// </summary>
+    public void FrameShot(SpeakerShot shot)
+    {
+        if (!Following)
+            return;
+        FieldOfView = DefaultFieldOfView;
+        float aspect = Bounds.Height > 0 ? (float)(Bounds.Width / Bounds.Height) : 1f;
+        float tan = MathF.Tan(FieldOfView * MathF.PI / 360f);
+        // The height always fits; a narrow view may crop the sides of a wide gesture a little.
+        float distance = 1.15f * Math.Max(shot.Height / 2 / tan, 0.75f * shot.Width / 2 / (tan * Math.Max(0.2f, aspect)));
+        _center = shot.Target;
+        _yaw = shot.Yaw + _followYaw;
+        _zoom = Math.Max(MinZoom, distance / _radius);
+        RequestNextFrameRendering();
+    }
+
+    private const float DefaultFieldOfView = 45f;
+
+    /// <summary>
+    /// Looks from a camera placed in the model's space (see <see cref="CameraView"/>), with its
+    /// field of view. A view narrower or wider than the game's 16:9 turns so that
+    /// <paramref name="subject"/> sits as far across it as it does across the game's frame.
+    /// Ignored unless <see cref="Following"/>.
+    /// </summary>
+    public void ViewFrom(CameraView view, Vector3 subject)
+    {
+        if (!Following)
+            return;
+        FieldOfView = view.FieldOfView;
+        var back = -view.Forward;
+        float yaw = MathF.Atan2(back.X, back.Z), pitch = MathF.Asin(Math.Clamp(back.Y, -1f, 1f));
+
+        float aspect = Bounds.Height > 0 ? (float)(Bounds.Width / Bounds.Height) : 1f;
+        float tan = MathF.Tan(FieldOfView * MathF.PI / 360f);
+        var toSubject = subject - view.Eye;
+        float off = MathF.IEEERemainder(MathF.Atan2(toSubject.X, toSubject.Z) - MathF.Atan2(view.Forward.X, view.Forward.Z), 2 * MathF.PI);
+        float across = Math.Clamp(MathF.Tan(off) / (tan * 16f / 9f), -0.9f, 0.9f);   // -1 left edge, 1 right edge
+        yaw += off - MathF.Atan(across * tan * aspect);
+
+        _yaw = yaw + _followYaw;
+        _pitch = pitch;
+        var forward = -new Vector3(MathF.Cos(_pitch) * MathF.Sin(_yaw), MathF.Sin(_pitch), MathF.Cos(_pitch) * MathF.Cos(_yaw));
+        float depth = Math.Max(0.3f, Vector3.Dot(subject - view.Eye, forward));
+        _center = view.Eye + forward * depth;
+        _zoom = Math.Max(MinZoom, depth / _radius);
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>Starts following from the shot's own angle, at eye level.</summary>
+    public void StartFollowing()
+    {
+        Following = true;
+        _followYaw = 0;
+        _pitch = 0.05f;
+    }
+
+    private void StopFollowing()
+    {
+        if (!Following)
+            return;
+        Following = false;
+        FollowStopped?.Invoke();
+    }
+
     /// <summary>Removes the mesh; the viewport shows its background only.</summary>
     public void Clear()
     {
@@ -1618,6 +1699,7 @@ public class MeshViewport : OpenGlControlBase
 
         if (e.ClickCount == 2)
         {
+            StopFollowing();
             ResetView();
             return;
         }
@@ -1628,6 +1710,8 @@ public class MeshViewport : OpenGlControlBase
         _rotating = props.IsLeftButtonPressed && !shift;
         _panning = props.IsMiddleButtonPressed || (props.IsLeftButtonPressed && shift);
         _flying = props.IsRightButtonPressed;
+        if (_panning || _flying)
+            StopFollowing();
         _lastPointer = e.GetPosition(this);
         e.Pointer.Capture(this);
         Focus();
@@ -1656,6 +1740,8 @@ public class MeshViewport : OpenGlControlBase
         else if (_rotating)
         {
             _yaw -= dx * 0.01f * OrbitSpeed;
+            if (Following)
+                _followYaw -= dx * 0.01f * OrbitSpeed;
             _pitch += dy * 0.01f * OrbitSpeed * (InvertLook ? -1f : 1f);
             _pitch = Math.Clamp(_pitch, -1.5f, 1.5f);
         }
@@ -1694,6 +1780,8 @@ public class MeshViewport : OpenGlControlBase
             _flySpeed = Math.Clamp(_flySpeed * (e.Delta.Y > 0 ? 1.25f : 0.8f), 0.05f, 40f);
             return;
         }
+
+        StopFollowing();
 
         // Dolly by a steady step (a share of the distance, never less than a fixed
         // minimum) so zooming never crawls to a halt; at the pivot, keep going by

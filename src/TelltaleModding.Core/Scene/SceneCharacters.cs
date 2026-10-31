@@ -46,6 +46,15 @@ public sealed class SceneCharacters
         }
     }
 
+    /// <summary>A scene file, read once and kept with the others, or null when it cannot be read.</summary>
+    public SceneFile? Scene(string sceneFile)
+    {
+        if (sceneFile.Length == 0)
+            return null;
+        lock (_gate)
+            return Load(sceneFile);
+    }
+
     // The first character among the props an agent inherits, nearest first.
     private CharacterEntry? FromProps(IReadOnlyList<ulong> parents)
     {

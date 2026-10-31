@@ -41,7 +41,25 @@ public sealed class WaveOutAudioOutput : IAudioOutput
         }
     }
 
-    public TimeSpan Position => _stream?.CurrentTime ?? TimeSpan.Zero;
+    // Where in the clip the device started counting from: the stream's read position runs
+    // up to a buffer ahead of what is heard and moves a buffer at a time, so the position
+    // is the device's own count of samples played, from here.
+    private TimeSpan _origin;
+
+    public TimeSpan Position
+    {
+        get
+        {
+            if (_stream is null)
+                return TimeSpan.Zero;
+            var position = _origin + Played;
+            return position < _stream.TotalTime ? position : _stream.TotalTime;
+        }
+    }
+
+    private TimeSpan Played => _device is null
+        ? TimeSpan.Zero
+        : TimeSpan.FromSeconds(_device.GetPosition() / (double)_device.OutputWaveFormat.AverageBytesPerSecond);
 
     public void Play(short[] pcm, int channels, int sampleRate, TimeSpan startAt)
     {
@@ -66,6 +84,7 @@ public sealed class WaveOutAudioOutput : IAudioOutput
         long bytes = (long)(position.TotalSeconds * _stream.WaveFormat.AverageBytesPerSecond);
         bytes -= bytes % _stream.WaveFormat.BlockAlign;
         _stream.Position = Math.Clamp(bytes, 0, _stream.Length);
+        _origin = _stream.CurrentTime - Played;
     }
 
     public void Stop()

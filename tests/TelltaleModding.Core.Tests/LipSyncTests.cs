@@ -52,6 +52,62 @@ public class LipSyncTests
         Assert.Equal(2, clips.Count);
     }
 
+    [Fact]
+    public void Lists_neutral_and_mood_sets_with_the_newer_phonemes()
+    {
+        var files = new[]
+        {
+            "lee_phoneme_AA.anm", "lee_phoneme_AA_happyA.anm",
+            "louis_phoneme_AH_normalA.anm", "louis_phoneme_SS_normalA.anm", "louis_phoneme_AA_fearC.anm",
+            "louis_phonemes_normalA.anm", "x.anm",
+        };
+        var sets = PhonemePoses.Sets(files);
+
+        Assert.Equal(new string?[] { null, "happyA" }, sets["lee"]);
+        Assert.Equal(new string?[] { "normalA", "fearC" }, sets["louis"]);
+        Assert.Equal(2, sets.Count);
+        Assert.Contains("AH", PhonemePoses.Phonemes);
+        Assert.Contains("SS", PhonemePoses.Phonemes);
+    }
+
+    [Fact]
+    public void Chooses_the_first_prefix_whose_set_moves_the_face()
+    {
+        var sets = new Dictionary<string, IReadOnlyList<string?>>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Lilly's neutral set is Season 1's face rig; her moods are Season 4's.
+            ["lilly"] = new string?[] { null, "angryB", "normalA" },
+            ["lilly200"] = new string?[] { null },
+        };
+        int Season4(string clip) => clip.Contains("normalA") || clip.Contains("angryB") ? 64 : 0;
+
+        Assert.Equal(("lilly", "normalA"), PhonemePoses.ChooseSet(new[] { "lilly", "lilly200" }, sets, Season4)!.Value);
+        Assert.Equal(("lilly", (string?)null), PhonemePoses.ChooseSet(new[] { "lilly" }, sets, _ => 18)!.Value);
+        Assert.Null(PhonemePoses.ChooseSet(new[] { "lilly200", "nobody" }, sets, Season4));
+    }
+
+    [Fact]
+    public void Without_a_neutral_set_the_calmest_mood_is_chosen()
+    {
+        // Bonnie only has fearful, happy, pained and surprised mouths.
+        var sets = new Dictionary<string, IReadOnlyList<string?>>
+        {
+            ["bonnie"] = new string?[] { "fearD", "happyA", "happyD", "painA", "surpriseA" },
+        };
+        Assert.Equal(("bonnie", "happyA"), PhonemePoses.ChooseSet(new[] { "bonnie" }, sets, _ => 18)!.Value);
+    }
+
+    [Fact]
+    public void Mood_clips_fall_back_to_the_base_set()
+    {
+        var files = new[] { "louis_phoneme_AA_normalA.anm", "louis_phoneme_EE_normalA.anm", "louis_phoneme_AA_angryA.anm", "louis_phoneme_EE.anm" };
+        var clips = PhonemePoses.ClipNames("louis", "angryA", files.Contains, baseMood: "normalA");
+
+        Assert.Equal("louis_phoneme_AA_angryA.anm", clips[TelltaleCrc64.HashSymbol("AA")]);
+        Assert.Equal("louis_phoneme_EE_normalA.anm", clips[TelltaleCrc64.HashSymbol("EE")]);
+        Assert.Equal(2, clips.Count);
+    }
+
     [SkippableFact]
     public void Png_encodes_pixels_losslessly()
     {

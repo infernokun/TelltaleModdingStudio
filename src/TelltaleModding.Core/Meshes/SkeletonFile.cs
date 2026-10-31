@@ -20,6 +20,12 @@ public readonly record struct SkeletonBone(
     /// <see cref="CspkDecoder.TranslationFrame"/>).
     /// </summary>
     public Vector3 AnimTranslationScale { get; init; }
+
+    /// <summary>
+    /// The entry's mResourceGroupMembership: the resource groups this bone belongs to (group
+    /// name symbol) and how much, or null when it lists none.
+    /// </summary>
+    public IReadOnlyDictionary<ulong, float>? ResourceGroups { get; init; }
 }
 
 /// <summary>
@@ -113,12 +119,24 @@ public sealed class SkeletonFile
             off = restEnd;
             off += 24;                                // global/local translation scales
             var animScale = new Vector3(F32(), F32(), F32());
-            off = Block();                            // resource group membership map
+            // Resource group membership: how much each named group (a chore resource can
+            // include only some, such as the head) covers this bone.
+            int groupsEnd = Block();
+            int groupCount = I32();
+            Dictionary<ulong, float>? groups = null;
+            if (groupCount > 0 && off + groupCount * 12 == groupsEnd)
+            {
+                groups = new Dictionary<ulong, float>(groupCount);
+                for (int g = 0; g < groupCount; g++)
+                    groups[U64()] = F32();
+            }
+            off = groupsEnd;
             off = Block();                            // bone constraints
             U32();                                    // flags
             bones[i] = new SkeletonBone(joint, parentName, parentIndex, pos, rot, restPos, restRot)
             {
                 AnimTranslationScale = animScale,
+                ResourceGroups = groups,
             };
         }
         if (off != entriesEnd || off != sectionEnd)

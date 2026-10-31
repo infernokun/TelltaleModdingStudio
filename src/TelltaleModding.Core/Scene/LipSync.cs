@@ -75,49 +75,112 @@ public static class PhonemeTrack
 /// <summary>
 /// A character's mouth shapes: one single-frame pose clip per phoneme
 /// (<c>rhys_phoneme_AA.anm</c>, or a mood variant such as <c>rhys_phoneme_AA_smugA.anm</c>)
-/// and optional facial expressions (<c>rhys_phonemes_smugA.anm</c>).
+/// and optional facial expressions (<c>rhys_phonemes_smugA.anm</c>). Some characters only
+/// have mood sets (Louis, Paige), and in The Walking Dead: The Telltale Definitive Series
+/// one name can hold sets for two face rigs (Lilly's neutral set is Season 1's, her moods
+/// Season 4's), so a set is only of use if its clips drive the model's skeleton.
 /// </summary>
 public static partial class PhonemePoses
 {
-    /// <summary>The phoneme names the games use.</summary>
+    /// <summary>The phoneme names the games use (AH and SS from Season 3 of The Walking Dead on).</summary>
     public static readonly IReadOnlyList<string> Phonemes =
-        new[] { "default", "AA", "EE", "FV", "I", "LL", "MM", "NN", "O", "SH", "TH", "U" };
+        new[] { "default", "AA", "AH", "EE", "FV", "I", "LL", "MM", "NN", "O", "SH", "SS", "TH", "U" };
 
     /// <summary>
     /// The prefixes that have phoneme clips among <paramref name="fileNames"/>
-    /// (<c>rhys</c> for <c>rhys_phoneme_AA.anm</c>).
+    /// (<c>rhys</c> for <c>rhys_phoneme_AA.anm</c> or <c>rhys_phoneme_AA_smugA.anm</c>).
     /// </summary>
-    public static IReadOnlySet<string> Prefixes(IEnumerable<string> fileNames)
+    public static IReadOnlySet<string> Prefixes(IEnumerable<string> fileNames) =>
+        new HashSet<string>(Sets(fileNames).Keys, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Each prefix's sets of mouth poses among <paramref name="fileNames"/>: null for its
+    /// neutral set (<c>rhys_phoneme_AA.anm</c>), otherwise the mood (<c>smugA</c>).
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string?>> Sets(IEnumerable<string> fileNames)
     {
-        var prefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sets = new Dictionary<string, List<string?>>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in fileNames)
         {
             var m = PoseName().Match(name);
-            if (m.Success)
-                prefixes.Add(m.Groups[1].Value);
+            if (!m.Success)
+                continue;
+            if (!sets.TryGetValue(m.Groups[1].Value, out var moods))
+                sets[m.Groups[1].Value] = moods = new List<string?>();
+            string? mood = m.Groups[2].Success ? m.Groups[2].Value : null;
+            if (!moods.Contains(mood, StringComparer.OrdinalIgnoreCase))
+                moods.Add(mood);
         }
-        return prefixes;
+        return sets.ToDictionary(s => s.Key, s => (IReadOnlyList<string?>)s.Value, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The clip that tells a set's face rig: its open mouth (<c>rhys_phoneme_AA_smugA.anm</c>).</summary>
+    public static string ProbeClip(string prefix, string? mood) => ClipName(prefix, "AA", mood);
+
+    /// <summary>
+    /// The set to lip-sync with: the first of <paramref name="prefixes"/> (best first) with a
+    /// set that drives the skeleton, and of its sets the one that drives the most bones,
+    /// preferring the neutral set, then a "normal" mood. Null when none fits.
+    /// </summary>
+    /// <param name="bonesDriven">How many of the skeleton's bones a pose clip drives (0 when it is missing).</param>
+    public static (string Prefix, string? Mood)? ChooseSet(IEnumerable<string> prefixes,
+        IReadOnlyDictionary<string, IReadOnlyList<string?>> sets, Func<string, int> bonesDriven)
+    {
+        foreach (var prefix in prefixes)
+        {
+            if (!sets.TryGetValue(prefix, out var moods))
+                continue;
+            var best = moods
+                .Select(mood => (Mood: mood, Bones: bonesDriven(ProbeClip(prefix, mood))))
+                .Where(s => s.Bones > 0)
+                .OrderByDescending(s => s.Bones)
+                .ThenBy(s => Calmness(s.Mood))
+                .ThenBy(s => s.Mood, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (best.Count > 0)
+                return (prefix, best[0].Mood);
+        }
+        return null;
     }
 
     /// <summary>
     /// The pose clip file name for each phoneme of <paramref name="prefix"/> in the mood
-    /// <paramref name="mood"/> (falling back to the neutral clip per phoneme).
+    /// <paramref name="mood"/>, falling back per phoneme to the set <paramref name="baseMood"/>
+    /// (null for the neutral set).
     /// </summary>
-    public static Dictionary<ulong, string> ClipNames(string prefix, string? mood, Func<string, bool> exists)
+    public static Dictionary<ulong, string> ClipNames(string prefix, string? mood, Func<string, bool> exists, string? baseMood = null)
     {
         var clips = new Dictionary<ulong, string>();
         foreach (var phoneme in Phonemes)
         {
-            var neutral = $"{prefix}_phoneme_{phoneme}.anm";
-            var moody = mood is null ? null : $"{prefix}_phoneme_{phoneme}_{mood}.anm";
-            var name = moody is not null && exists(moody) ? moody : exists(neutral) ? neutral : null;
+            var fallback = ClipName(prefix, phoneme, baseMood);
+            var moody = mood is null ? null : ClipName(prefix, phoneme, mood);
+            var name = moody is not null && exists(moody) ? moody : exists(fallback) ? fallback : null;
             if (name is not null)
                 clips[TelltaleCrc64.HashSymbol(phoneme)] = name;
         }
         return clips;
     }
 
-    [GeneratedRegex(@"^(.+?)_phoneme_(?:default|AA|EE|FV|I|LL|MM|NN|O|SH|TH|U)\.anm$", RegexOptions.IgnoreCase)]
+    // Moods from calm to strained, for characters without a neutral set: Bonnie's sets are
+    // fear, happy, pain and surprise, and a fearful mouth gapes on every line.
+    private static readonly string[] CalmMoods = { "normal", "neutral", "think", "happy", "smug", "sad", "worr", "stern" };
+    private static readonly string[] StrainedMoods = { "fear", "pain", "surprise", "shock", "angry", "shout", "crazy", "dying" };
+
+    private static int Calmness(string? mood)
+    {
+        if (mood is null)
+            return -1;
+        int calm = Array.FindIndex(CalmMoods, m => mood.StartsWith(m, StringComparison.OrdinalIgnoreCase));
+        if (calm >= 0)
+            return calm;
+        return StrainedMoods.Any(m => mood.StartsWith(m, StringComparison.OrdinalIgnoreCase)) ? CalmMoods.Length + 1 : CalmMoods.Length;
+    }
+
+    private static string ClipName(string prefix, string phoneme, string? mood) =>
+        mood is null ? $"{prefix}_phoneme_{phoneme}.anm" : $"{prefix}_phoneme_{phoneme}_{mood}.anm";
+
+    [GeneratedRegex(@"^(.+?)_phoneme_(?:default|AA|AH|EE|FV|I|LL|MM|NN|O|SH|SS|TH|U)(?:_([A-Za-z0-9]+))?\.anm$", RegexOptions.IgnoreCase)]
     private static partial Regex PoseName();
 }
 
@@ -173,6 +236,26 @@ public sealed class LipSyncPlayer
     }
 
     public MeshGeometry Geometry { get; }
+
+    /// <summary>The skeleton the player poses.</summary>
+    public SkeletonFile Skeleton => _skeleton;
+
+    /// <summary>
+    /// How far the performance has moved the character <paramref name="time"/> seconds into the
+    /// line, which <see cref="Pose"/> leaves out to keep them in frame: the change from the root
+    /// bone's rest transform to where the chore's clips put it, in the model's space
+    /// (row-vector convention: a point posed here is at <c>p · RootMotion</c> in the game).
+    /// </summary>
+    public Matrix4x4 RootMotion(float time)
+    {
+        if (_performance is null || _skeleton.Bones.Count == 0 || _skeleton.Bones[0].ParentIndex >= 0)
+            return Matrix4x4.Identity;
+        var root = _skeleton.Bones[0];
+        var moved = _performance.SampleRoot(root, _performanceStart + time, (root.LocalPosition, root.LocalRotation));
+        var rest = Matrix4x4.CreateFromQuaternion(root.LocalRotation) * Matrix4x4.CreateTranslation(root.LocalPosition);
+        Matrix4x4.Invert(rest, out var restInverse);
+        return restInverse * (Matrix4x4.CreateFromQuaternion(moved.Rot) * Matrix4x4.CreateTranslation(moved.Pos));
+    }
 
     /// <summary>Number of phoneme poses that move at least one bone.</summary>
     public int PoseCount => _poses.Count(p => p.Value.Count > 0);
