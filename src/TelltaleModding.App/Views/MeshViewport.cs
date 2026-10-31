@@ -1218,7 +1218,7 @@ public class MeshViewport : OpenGlControlBase
             cone[i * 4] = MathF.Cos(inner * MathF.PI / 360f);
             cone[i * 4 + 1] = MathF.Cos(outer * MathF.PI / 360f);
             cone[i * 4 + 2] = Luma(c) / maxLuma;
-            cone[i * 4 + 3] = 0;
+            cone[i * 4 + 3] = l.Rim ? 1f : 0f;
         }
         x.Uniform1i(p.LightCount, count);
         x.Uniform4fv(p.LightPos, MaxLights, pos);
@@ -1382,6 +1382,7 @@ public class MeshViewport : OpenGlControlBase
     }
 
     private static float Luma(Vector3 c) => 0.2126f * c.X + 0.7152f * c.Y + 0.0722f * c.Z;
+
 
     private unsafe void Bind(GlInterface gl, SceneProgram p, BatchDraw d)
     {

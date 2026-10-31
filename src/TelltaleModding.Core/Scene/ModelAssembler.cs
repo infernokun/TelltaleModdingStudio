@@ -388,7 +388,7 @@ public sealed class ModelAssembler
                 if (diffuse is not null && opacity < 1f)
                     diffuse = TranslucentTexture(diffuseName!, diffuse, opacity);
                 batchTextures.Add(diffuse);
-                batchNormalMaps.Add(DecodeTexture(normalName));
+                batchNormalMaps.Add(DecodeNormalMap(normalName));
                 batchBlendModes.Add(data?.BlendMode);
                 batchSpecular.Add(specular);
                 batchInk.Add(inkImage);
@@ -969,7 +969,10 @@ public sealed class ModelAssembler
         }
         if (n == 0)
             return SpecularMapLayout.Intensity;
-        return r / n < 32 && b / n > 2 * Math.Max(1, r / n) ? SpecularMapLayout.Packed : SpecularMapLayout.Intensity;
+        if (r / n < 32 && b / n > 2 * Math.Max(1, r / n))
+            return SpecularMapLayout.Packed;
+        // A map with an alpha channel keeps its gloss there; one without (BC1) is intensity only.
+        return image.Format is DdsPixelFormat.Bc3 or DdsPixelFormat.Bc2 ? SpecularMapLayout.ColorGloss : SpecularMapLayout.Intensity;
     }
 
     /// <summary>
@@ -996,6 +999,23 @@ public sealed class ModelAssembler
     /// <summary>Textures decoded from 8-bit alpha: their value is in the alpha channel.</summary>
     private readonly HashSet<string> _alphaTextures = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Swizzles of the textures decoded so far (null for textures without one).</summary>
+    private readonly Dictionary<string, IReadOnlyList<byte>?> _swizzles = new(StringComparer.OrdinalIgnoreCase);
+
+    // A normal map with its channels where the viewer reads them (see NormalMapSwizzle).
+    private DdsImage? DecodeNormalMap(string? fileName)
+    {
+        if (fileName is null)
+            return null;
+        var key = fileName + "|normal";
+        if (_textures.TryGetValue(key, out var cached))
+            return cached;
+        var image = DecodeTexture(fileName);
+        if (image is not null)
+            image = NormalMapSwizzle.Apply(image, _swizzles.GetValueOrDefault(fileName));
+        return _textures[key] = image;
+    }
+
     private DdsImage? DecodeTexture(string? fileName)
     {
         if (fileName is null)
@@ -1009,6 +1029,7 @@ public sealed class ModelAssembler
             DdsImage.TryDecode(dds!, out var decoded, out _))
         {
             image = decoded;
+            _swizzles[fileName] = tex.Swizzle;
             // Alpha-only textures (e.g. Season 2 eyelash cards) decode to grey for
             // previewing; the GPU samples them as black with the value as alpha.
             if (tex.SurfaceFormat == T3SurfaceFormat.A8)

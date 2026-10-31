@@ -26,6 +26,13 @@ public sealed record LightSource(
     /// surfaces without one.
     /// </summary>
     public bool AffectsLightmapped { get; init; } = true;
+
+    /// <summary>
+    /// True for a rim light from behind: it lights only the silhouette, so a look's wrapped
+    /// light (which spreads a light past the side it faces) is not applied to it. Wrapped, a
+    /// rim light washes the whole side of a character in a pale sheen.
+    /// </summary>
+    public bool Rim { get; init; }
 }
 
 /// <summary>
@@ -58,9 +65,9 @@ public sealed record LightRig(IReadOnlyList<LightSource> Lights, Vector3 Ambient
         new LightSource(LightKind.Directional, Vector3.Zero, Vector3.Normalize(new Vector3(0.85f, -0.1f, -0.5f)),
             new Vector3(0.70f, 0.80f, 1.0f), 0.4f, Name: "Fill"),
         new LightSource(LightKind.Directional, Vector3.Zero, Vector3.Normalize(new Vector3(0.55f, -0.45f, 0.70f)),
-            new Vector3(0.85f, 0.92f, 1.0f), 0.45f, Name: "Rim left"),
+            new Vector3(0.85f, 0.92f, 1.0f), 0.45f, Name: "Rim left") { Rim = true },
         new LightSource(LightKind.Directional, Vector3.Zero, Vector3.Normalize(new Vector3(-0.6f, -0.3f, 0.75f)),
-            new Vector3(1.0f, 0.9f, 0.8f), 0.2f, Name: "Rim right"),
+            new Vector3(1.0f, 0.9f, 0.8f), 0.2f, Name: "Rim right") { Rim = true },
     }, new Vector3(0.30f, 0.31f, 0.34f), new Vector3(0.14f, 0.12f, 0.11f))
     {
         Source = "studio",

@@ -29,6 +29,9 @@ public sealed class DdsImage
     private const uint MagicDds = 0x20534444; // "DDS "
 
     /// <summary>Decodes a DDS image, throwing on unsupported input.</summary>
+    /// <summary>The same image with other pixels (same size and source format), e.g. with its channels rearranged.</summary>
+    public DdsImage WithPixels(byte[] rgba) => new(Width, Height, rgba, Format);
+
     public static DdsImage Decode(byte[] data)
     {
         if (!TryDecode(data, out var image, out var error))

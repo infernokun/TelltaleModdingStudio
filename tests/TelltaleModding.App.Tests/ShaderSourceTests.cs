@@ -38,6 +38,17 @@ public class ShaderSourceTests
         (string)typeof(App).Assembly.GetType("TelltaleModding.App.Views.MeshShaders")!.GetField(name)!.GetRawConstantValue()!;
 
     [Fact]
+    public void Gloss_maps_and_rim_lights_keep_dull_surfaces_matte()
+    {
+        var scene = Shaders().Single(s => (string)s[0] == "SceneFragment")[1] as string ?? "";
+        // Gloss in a specular map's alpha sets the highlight's sharpness and strength.
+        Assert.Contains("uSpecLayout == 3", scene);
+        Assert.Contains("1.0 - sm.a", scene);
+        // A rim light is not wrapped round the side it faces.
+        Assert.Contains("uLightCone[i].w > 0.5 ? 0.0 : wrap", scene);
+    }
+
+    [Fact]
     public void Outlines_are_drawn_in_each_surface_s_own_color()
     {
         // The scene pass writes every surface's outline color (the material's, or the look's)

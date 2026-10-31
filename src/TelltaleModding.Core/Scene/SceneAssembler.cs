@@ -475,7 +475,7 @@ public sealed class SceneAssembler
                         diffuse = TranslucentTexture((ReferenceEquals(diffuse, DecodeTexture(part.Diffuse[b]!)) ? "" : "opaque|") + part.Diffuse[b],
                             diffuse, render.Opacity);
                     batchTextures.Add(diffuse);
-                    batchNormals.Add(_options.NormalMaps && part.Normal[b] is { } nm ? DecodeTexture(nm) : null);
+                    batchNormals.Add(_options.NormalMaps && part.Normal[b] is { } nm ? DecodeNormalMap(nm) : null);
                     batchLightmaps.Add(lightmap);
                     // Emissive maps glow only in the agent's emission color (black by default).
                     var emissive = glow != Vector3.Zero && part.Emissive[b] is { } e ? DecodeTexture(e) : null;
@@ -847,6 +847,14 @@ public sealed class SceneAssembler
         return 1;
     }
 
+    /// <summary>Swizzles of the textures decoded so far (null for textures without one).</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<byte>?> _swizzles =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    // A normal map with its channels where the viewer reads them (see NormalMapSwizzle).
+    private DdsImage? DecodeNormalMap(string name) => _images.GetOrAdd("normal|" + name, _ =>
+        DecodeTexture(name) is { } image ? NormalMapSwizzle.Apply(image, _swizzles.GetValueOrDefault(name)) : null);
+
     private DdsImage? DecodeTexture(string name) => _images.GetOrAdd(name, n =>
     {
         try
@@ -856,6 +864,7 @@ public sealed class SceneAssembler
                 !texture!.TryToDds(out var dds, out _) ||
                 !DdsImage.TryDecode(dds!, out var image, out _))
                 return null;
+            _swizzles[n] = texture.Swizzle;
             var rgba = image!.Rgba;
             int width = image.Width, height = image.Height;
             // Alpha-only textures sample as black with the value as alpha.
