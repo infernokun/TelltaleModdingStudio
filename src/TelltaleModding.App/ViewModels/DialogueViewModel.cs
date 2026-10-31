@@ -51,12 +51,25 @@ public sealed partial class DialogueViewModel : ViewModelBase
                 ExportWavCommand.NotifyCanExecuteChanged();
             }
         };
-        // The speaker's mouth follows the recording.
+        // The speaker's mouth follows the recording: on each tick and seek here, and on every
+        // display frame while it plays (see RenderSpeakerFrame).
         Player.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(AudioPlayerViewModel.Position) && IsSpeakerVisible)
                 Speaker.Render(Player.Position);
         };
+    }
+
+    /// <summary>
+    /// Poses the speaker at the moment the recording is at; the view calls it once per display
+    /// frame while the line plays. Returns false when there is nothing to animate.
+    /// </summary>
+    public bool RenderSpeakerFrame()
+    {
+        if (!IsSpeakerVisible || !Player.IsPlaying)
+            return false;
+        Speaker.Render(Player.LivePosition);
+        return true;
     }
 
     /// <summary>Each scene's conversations as trees, with a click-through mode.</summary>

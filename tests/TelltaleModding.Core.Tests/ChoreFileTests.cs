@@ -81,6 +81,118 @@ public class ChoreFileTests
         Assert.NotEmpty(chore.Resources[index].Blocks);
     }
 
+    [Fact]
+    public void Curves_hold_their_ends_ease_flat_keys_and_step()
+    {
+        var linear = new ChoreCurve(new[] { new ChoreCurveKey(1, 0, 2), new ChoreCurveKey(3, 1, 2) });
+        Assert.Equal(0f, linear.Evaluate(0));
+        Assert.Equal(0.25f, linear.Evaluate(1.5f), 1e-4f);
+        Assert.Equal(1f, linear.Evaluate(9));
+
+        var flat = new ChoreCurve(new[] { new ChoreCurveKey(0, 0, 4), new ChoreCurveKey(1, 1, 4) });
+        Assert.Equal(0.5f, flat.Evaluate(0.5f), 1e-4f);
+        Assert.True(flat.Evaluate(0.25f) < 0.25f);
+
+        var stepped = new ChoreCurve(new[] { new ChoreCurveKey(0, 0.3f, 1), new ChoreCurveKey(1, 1, 1) });
+        Assert.Equal(0.3f, stepped.Evaluate(0.9f));
+    }
+
+    [Fact]
+    public void A_nested_resource_follows_the_chore_that_plays_it()
+    {
+        // The outer chore holds its nested chore at half way, at 60%, from 2 s to 4 s.
+        var outer = new ResourceControl(2, 4, 10, 1,
+            Time: new ChoreCurve(new[] { new ChoreCurveKey(2, 0.5f, 2) }),
+            Contribution: new ChoreCurve(new[] { new ChoreCurveKey(2, 0.6f, 2) }), Parent: null);
+        var inner = new ResourceControl(4, 8, 3, 1, Time: null,
+            Contribution: new ChoreCurve(new[] { new ChoreCurveKey(4, 0.5f, 2) }), Parent: outer);
+
+        var (time, weight) = inner.At(3, hold: false);
+        Assert.Equal(1f, time, 1e-4f);                 // 5 s into the nested chore, 1 s into its clip
+        Assert.Equal(0.3f, weight, 1e-4f);
+        Assert.Equal(0f, inner.At(5, hold: false).Weight);
+        Assert.Equal(0.3f, inner.At(5, hold: true).Weight, 1e-4f);
+        Assert.Equal(0f, inner.At(1, hold: true).Weight);
+    }
+
+    [SkippableFact]
+    public void Reads_each_resources_time_and_contribution_curves()
+    {
+        var chore = Read("env_civilWarMemorialCenterMorning_cs_saritaBitten_15.chore");
+        var wide = chore.Resources[IndexOf(chore, "clementine200_face_eyesWide_add.anm")];
+
+        // Clementine's eyes widen to about half strength, then relax.
+        Assert.Equal(0f, wide.Contribution!.Evaluate(0.5f));
+        Assert.Equal(0.4755f, wide.Contribution.Evaluate(1.3f), 1e-3f);
+        Assert.Equal(0f, wide.Contribution.Evaluate(2.5f));
+        Assert.Equal(0f, wide.TimeCurve!.Evaluate(0.589f), 1e-3f);
+        Assert.Equal(1f, wide.TimeCurve.Evaluate(1.98f), 1e-3f);
+        Assert.Equal(1.4f, wide.Length, 1e-3f);
+    }
+
+    [SkippableFact]
+    public void Reads_the_camera_moves_a_chore_keys()
+    {
+        // The chore swings the station camera's rig round between 23 and 25.3 s and zooms the
+        // camera from 35 to 25 degrees and back.
+        var chore = Read("env_lodgeExteriorAndMainRoom_cs_hideCouch_1.chore");
+        ChoreResource Keyed(string agent) => chore.Agents.First(a => a.Name == agent).Resources
+            .Select(i => chore.Resources[i]).First(r => r.Transform is not null || r.FieldOfView is not null);
+
+        var rig = Keyed("cam_station1_parent").Transform!;
+        Assert.Equal(3, rig.Keys.Count);
+        Assert.Equal(21f, rig.Keys[0].Time, 1e-3f);
+        Assert.Equal(11.61f, rig.Keys[0].Position.X, 1e-2f);
+        Assert.Equal(5.897f, rig.Keys[0].Position.Z, 1e-2f);
+        var (rotation, position) = rig.Evaluate(30);
+        Assert.Equal(12.367f, position.X, 1e-2f);
+        Assert.Equal(1f, rotation.Length(), 1e-3f);
+
+        var zoom = Keyed("cam_station1").FieldOfView!;
+        Assert.Equal(35f, zoom.Evaluate(10), 1e-3f);
+        Assert.Equal(25f, zoom.Evaluate(22), 1e-3f);
+        Assert.Equal(35f, zoom.Evaluate(26), 1e-3f);
+    }
+
+    [SkippableFact]
+    public void Reads_the_resource_groups_a_resource_is_limited_to()
+    {
+        // The glance moves the head and eyes but leaves the face (brows, cheeks) alone.
+        var chore = Read("clementine200_headGesture_lookUp_add.chore");
+        var groups = chore.Resources[0].GroupInclude!;
+        Assert.Equal(6, groups.Count);
+        Assert.Equal(-1f, groups[0x6533c11bb1c71cb4]);
+        Assert.Equal(1f, groups[0x16fc55ce88d82bdd]);
+        Assert.Equal(1f, groups[0x600e10e7529b1ff2]);
+        Assert.Null(Read("clementine200_headturns_zero.chore").Resources[0].GroupInclude);
+    }
+
+    [SkippableFact]
+    public void A_chore_at_zero_contribution_adds_nothing_while_a_held_glance_does()
+    {
+        SampleData.Require("clementine200_headturns_zero.chore", "clementine200_headGesture_lookUp_add.chore");
+        var chore = Read("env_civilWarMemorialCenterMorning_cs_saritaBitten_15.chore");
+        var known = new[]
+        {
+            "clementine200_headturns_zero.chore", "clementine200_headGesture_lookUp_add.chore",
+            "clementine200_headGesture_lookUp_add.anm", "clementine200_eyes_lookUp_add.anm",
+        }.ToDictionary(TelltaleCrc64.HashSymbol);
+        var clips = ChorePerformance.Collect(chore, "Clementine", s => known.GetValueOrDefault(s),
+            name => Path.Combine(SampleData.SamplesDir, name) is var path && File.Exists(path) &&
+                    ChoreFile.TryRead(File.ReadAllBytes(path), out var c, out _) ? c : null);
+
+        // "Head turns zero" plays the glances with no weight at all.
+        var zeroed = clips.Where(c => c.Name == "clementine200_eyes_lookUp_add.anm" && c.Priority == 100).ToList();
+        Assert.NotEmpty(zeroed);
+        Assert.All(zeroed, c => Assert.Equal(0f, c.Control!.At(1.5f, hold: false).Weight));
+
+        // The glance up is held near its peak, at about three quarters.
+        var glance = Assert.Single(clips, c => c.Name == "clementine200_headGesture_lookUp_add.anm" && c.Priority == 1);
+        var (time, weight) = glance.Control!.At(2f, hold: false);
+        Assert.Equal(0.77f, weight, 0.02f);
+        Assert.InRange(time, 1.1f, 1.3f);
+    }
+
     [SkippableFact]
     public void Rejects_files_that_are_not_chores()
     {

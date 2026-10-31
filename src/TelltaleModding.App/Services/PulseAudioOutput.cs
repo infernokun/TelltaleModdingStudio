@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace TelltaleModding.App.Services;
@@ -25,6 +26,8 @@ public sealed class PulseAudioOutput : IAudioOutput
     private volatile bool _finished = true;
     private long _seekFrame = -1; // set by Seek, taken by the writer thread
     private long _heardFrame;     // the frame playing now, kept by the writer thread
+    private long _heardAt;        // when _heardFrame was set (Stopwatch timestamp)
+    private readonly object _heardLock = new();
     private float _volume = 1f;
 
     public float Volume
@@ -35,7 +38,26 @@ public sealed class PulseAudioOutput : IAudioOutput
 
     public bool IsPlaying => _thread is not null && !_paused && !_finished;
 
-    public TimeSpan Position => TimeSpan.FromSeconds(Interlocked.Read(ref _heardFrame) / (double)_rate);
+    public TimeSpan Position
+    {
+        get
+        {
+            long frame, at;
+            lock (_heardLock)
+                (frame, at) = (_heardFrame, _heardAt);
+            double seconds = frame / (double)_rate;
+            // The writer moves the frame on once a chunk; in between, time runs on with the sound.
+            if (IsPlaying && Interlocked.Read(ref _seekFrame) < 0)
+                seconds += Math.Min(Stopwatch.GetElapsedTime(at).TotalSeconds, ChunkMs / 1000.0);
+            return TimeSpan.FromSeconds(Math.Min(seconds, Frames / (double)_rate));
+        }
+    }
+
+    private void SetHeard(long frame)
+    {
+        lock (_heardLock)
+            (_heardFrame, _heardAt) = (frame, Stopwatch.GetTimestamp());
+    }
 
     private long Frames => _pcm.Length / _channels;
 
@@ -86,7 +108,7 @@ public sealed class PulseAudioOutput : IAudioOutput
         if (_pcm.Length == 0)
             return;
         long frame = ClampFrame(position);
-        Interlocked.Exchange(ref _heardFrame, frame);
+        SetHeard(frame);
         Interlocked.Exchange(ref _seekFrame, frame);
     }
 
@@ -95,7 +117,7 @@ public sealed class PulseAudioOutput : IAudioOutput
         EndThread();
         _pcm = Array.Empty<short>();
         _paused = false;
-        Interlocked.Exchange(ref _heardFrame, 0);
+        SetHeard(0);
         Interlocked.Exchange(ref _seekFrame, -1);
     }
 
@@ -106,7 +128,7 @@ public sealed class PulseAudioOutput : IAudioOutput
     private void Start(long frame)
     {
         EndThread();
-        Interlocked.Exchange(ref _heardFrame, frame);
+        SetHeard(frame);
         Interlocked.Exchange(ref _seekFrame, -1);
         _stop = false;
         _finished = false;
@@ -165,7 +187,7 @@ public sealed class PulseAudioOutput : IAudioOutput
                     pa_simple_drain(s, out _);
                     if (_stop || _paused || Interlocked.Read(ref _seekFrame) >= 0)
                         continue;
-                    Interlocked.Exchange(ref _heardFrame, frames);
+                    SetHeard(frames);
                     return;
                 }
 
@@ -177,7 +199,7 @@ public sealed class PulseAudioOutput : IAudioOutput
                 ulong latencyUs = pa_simple_get_latency(s, out _);
                 long heard = frame - (long)(latencyUs * (ulong)rate / 1_000_000);
                 if (Interlocked.Read(ref _seekFrame) < 0)
-                    Interlocked.Exchange(ref _heardFrame, Math.Clamp(heard, 0, frames));
+                    SetHeard(Math.Clamp(heard, 0, frames));
             }
             pa_simple_flush(s, out _);
         }

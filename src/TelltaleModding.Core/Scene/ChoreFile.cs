@@ -1,10 +1,91 @@
 using System.Buffers.Binary;
+using System.Numerics;
 using TelltaleModding.Core.Meta;
 
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>When a chore resource plays: seconds into the chore, and whether it loops in that span.</summary>
 public readonly record struct ChoreBlock(float Start, float End, bool Looping, float Scale);
+
+/// <summary>A key of a chore curve: its value at a time (seconds into the chore), and how it eases.</summary>
+public readonly record struct ChoreCurveKey(float Time, float Value, int TangentMode);
+
+/// <summary>
+/// A float curve a chore keys for one of its resources (KeyframedValue&lt;float&gt;): how much
+/// the resource contributes, or where in the resource the chore is at each moment.
+/// </summary>
+public sealed class ChoreCurve
+{
+    private const int Stepped = 1, Flat = 4;
+
+    public ChoreCurve(IReadOnlyList<ChoreCurveKey> keys) => Keys = keys;
+
+    public IReadOnlyList<ChoreCurveKey> Keys { get; }
+
+    /// <summary>
+    /// The value at <paramref name="time"/>, holding the end keys beyond them. Flat keys ease
+    /// in and out, stepped ones hold until the next key, others run in a straight line.
+    /// </summary>
+    public float Evaluate(float time)
+    {
+        if (Keys.Count == 0)
+            return 0;
+        if (time <= Keys[0].Time)
+            return Keys[0].Value;
+        for (int i = 1; i < Keys.Count; i++)
+        {
+            var (a, b) = (Keys[i - 1], Keys[i]);
+            if (time > b.Time)
+                continue;
+            if (a.TangentMode == Stepped || b.Time <= a.Time)
+                return a.Value;
+            float t = (time - a.Time) / (b.Time - a.Time);
+            if (a.TangentMode == Flat || b.TangentMode == Flat)
+                t = t * t * (3 - 2 * t);
+            return a.Value + (b.Value - a.Value) * t;
+        }
+        return Keys[^1].Value;
+    }
+}
+
+/// <summary>A key of a chore's transform track: the rotation and position at a time, and how it eases.</summary>
+public readonly record struct ChoreTransformKey(float Time, Quaternion Rotation, Vector3 Position, int TangentMode);
+
+/// <summary>
+/// An agent's transform keyed in a chore (KeyframedValue&lt;Transform&gt;): where a camera rig,
+/// for one, moves over the chore, relative to what it is attached to.
+/// </summary>
+public sealed class ChoreTransformTrack
+{
+    public ChoreTransformTrack(IReadOnlyList<ChoreTransformKey> keys) => Keys = keys;
+
+    public IReadOnlyList<ChoreTransformKey> Keys { get; }
+
+    /// <summary>The transform at <paramref name="time"/>, eased between keys like <see cref="ChoreCurve"/>.</summary>
+    public (Quaternion Rotation, Vector3 Position) Evaluate(float time)
+    {
+        float t = 0;
+        var (a, b) = (Keys[0], Keys[0]);
+        if (time > Keys[0].Time)
+        {
+            a = b = Keys[^1];
+            for (int i = 1; i < Keys.Count; i++)
+            {
+                if (time > Keys[i].Time)
+                    continue;
+                (a, b) = (Keys[i - 1], Keys[i]);
+                if (a.TangentMode != 1 && b.Time > a.Time)
+                {
+                    t = (time - a.Time) / (b.Time - a.Time);
+                    if (a.TangentMode == 4 || b.TangentMode == 4)
+                        t = t * t * (3 - 2 * t);
+                }
+                break;
+            }
+        }
+        return (Quaternion.Normalize(Quaternion.Slerp(a.Rotation, b.Rotation, t)), Vector3.Lerp(a.Position, b.Position, t));
+    }
+}
 
 /// <summary>
 /// One resource a chore plays: an animation, a voice line (<c>LanguageRes</c>), a nested
@@ -21,6 +102,27 @@ public sealed record ChoreResource(
 {
     /// <summary>The chore stored inside this resource, for an embedded chore.</summary>
     public ChoreFile? EmbeddedChore { get; init; }
+
+    /// <summary>
+    /// Where in the resource the chore is at each moment, as a fraction of <see cref="Length"/>
+    /// (the chore can slow a resource down, speed it up or hold one frame of it), or null.
+    /// </summary>
+    public ChoreCurve? TimeCurve { get; init; }
+
+    /// <summary>How much the resource counts at each moment (0 to 1), or null for fully.</summary>
+    public ChoreCurve? Contribution { get; init; }
+
+    /// <summary>
+    /// For a resource that keys its agent itself (a camera), the "Field of View" the chore gives
+    /// it over time (degrees), or null.
+    /// </summary>
+    public ChoreCurve? FieldOfView { get; init; }
+
+    /// <summary>For a resource that keys its agent itself, the agent's transform over time, or null.</summary>
+    public ChoreTransformTrack? Transform { get; init; }
+
+    /// <summary>The resource groups the resource is limited to, or null for all.</summary>
+    public IReadOnlyDictionary<ulong, float>? GroupInclude { get; init; }
 }
 
 /// <summary>A character or object a chore drives, with the indices of its resources.</summary>
@@ -176,7 +278,7 @@ public sealed class ChoreFile
         var (handleStart, handleEnd) = r.Block();
         ulong type = handleEnd - handleStart >= 16 ? r.U64At(handleStart + 8) : 0;
 
-        r.Block(); // control animation (contribution and time curves)
+        var (controlStart, controlEnd) = r.Block();
         var (blocksStart, blocksEnd) = r.Block();
         int count = (int)r.U32At(blocksStart);
         if (count < 0 || 4 + count * 13 != blocksEnd - blocksStart)
@@ -192,13 +294,143 @@ public sealed class ChoreFile
         for (int k = 3; k < r.Layout.ResourceFlags; k++)
             r.Bool(); // agent resource, view graphs, view empty graphs, view properties, view groups
         r.Block(); // resource properties
-        r.Block(); // resource group include
+        var (includeStart, includeEnd) = r.Block();
         if (r.Layout.StatusBlock)
             r.Block(); // auto-act status
         else
             r.U32();
-        return new ChoreResource(name, type, length, priority, flags, embedded, enabled, noPose, blocks);
+        var control = ReadControlValues(r, controlStart, controlEnd);
+        var include = ReadGroupInclude(r, includeStart, includeEnd);
+        return new ChoreResource(name, type, length, priority, flags, embedded, enabled, noPose, blocks)
+        {
+            TimeCurve = control.Time,
+            Contribution = control.Contribution,
+            FieldOfView = control.FieldOfView,
+            Transform = control.Transform,
+            GroupInclude = include,
+        };
     }
+
+    // The control animation is a small animation of keyframed values: "time" and
+    // "contribution" for any resource, and for a resource that keys an agent itself (a camera)
+    // its transform and values such as "Field of View". It holds a table of value types with
+    // a count each, then the values of each type in turn. Each value:
+    //   [u32 size [u32 size, u64 name, u32 flags]] min, max,
+    //   [u32 size, u32 count, count x (f32 time, bool, u32 tangent mode, value)]
+    // A type this reader does not know ends the reading with what it has so far.
+    private static ControlValues ReadControlValues(Reader r, int start, int end)
+    {
+        var values = new ControlValues();
+        try
+        {
+            int table = start + 4, types = 0;
+            for (; table + 12 <= end; table++)
+            {
+                types = (int)r.U32At(table - 4);
+                if (types is > 0 and <= 16 && Enumerable.Range(0, types).All(i =>
+                        table + 12 * (i + 1) <= end && ValueSizes.ContainsKey(r.U64At(table + 12 * i))))
+                    break;
+            }
+            if (table + 12 > end)
+                return values;
+            int at = table + 12 * types;
+            for (int i = 0; i < types; i++)
+            {
+                ulong type = r.U64At(table + 12 * i);
+                int count = (int)r.U32At(table + 12 * i + 8);
+                for (int v = 0; v < count; v++)
+                {
+                    int header = (int)r.U32At(at);
+                    if (header is < 16 or > 64 || r.U32At(at + 4) != header - 4)
+                        return values;
+                    ulong valueName = r.U64At(at + 8);
+                    at += header;
+                    at += ValueSize(r, type, at);                     // min
+                    at += ValueSize(r, type, at);                     // max
+                    int size = (int)r.U32At(at), keyCount = (int)r.U32At(at + 4);
+                    if (keyCount < 0 || size < 8 || size > end - at)
+                        return values;
+                    if (type == KeyframedFloatType && size == 8 + 13 * keyCount && keyCount > 0)
+                    {
+                        var keys = new ChoreCurveKey[keyCount];
+                        for (int k = 0; k < keyCount; k++)
+                        {
+                            int key = at + 8 + 13 * k;
+                            keys[k] = new ChoreCurveKey(r.F32At(key), r.F32At(key + 9), (int)r.U32At(key + 5));
+                        }
+                        if (valueName == TimeValue)
+                            values.Time = new ChoreCurve(keys);
+                        else if (valueName == ContributionValue)
+                            values.Contribution = new ChoreCurve(keys);
+                        else if (valueName == FieldOfViewValue)
+                            values.FieldOfView = new ChoreCurve(keys);
+                    }
+                    else if (type == KeyframedTransformType && keyCount > 0)
+                    {
+                        var keys = new ChoreTransformKey[keyCount];
+                        int key = at + 8;
+                        for (int k = 0; k < keyCount; k++)
+                        {
+                            int value = key + 9;                     // time, bool, tangent mode
+                            keys[k] = new ChoreTransformKey(r.F32At(key),
+                                new Quaternion(r.F32At(value + 4), r.F32At(value + 8), r.F32At(value + 12), r.F32At(value + 16)),
+                                new Vector3(r.F32At(value + 20), r.F32At(value + 24), r.F32At(value + 28)),
+                                (int)r.U32At(key + 5));
+                            key = value + ValueSize(r, type, value);
+                        }
+                        values.Transform ??= new ChoreTransformTrack(keys);
+                    }
+                    at += size;
+                }
+            }
+        }
+        catch (FormatException)
+        {
+        }
+        return values;
+    }
+
+    private sealed class ControlValues
+    {
+        public ChoreCurve? Time, Contribution, FieldOfView;
+        public ChoreTransformTrack? Transform;
+    }
+
+    // Bytes one value of a keyframed type takes; a transform is a sized block.
+    private static int ValueSize(Reader r, ulong type, int at) =>
+        ValueSizes[type] is > 0 and var size ? size
+        : r.U32At(at) is var block and >= 4 and <= 64 ? (int)block : throw new FormatException("bad transform");
+
+    private static readonly ulong KeyframedTransformType = TelltaleCrc64.HashSymbol("KeyframedValue<Transform>");
+    private static readonly Dictionary<ulong, int> ValueSizes = new()
+    {
+        [TelltaleCrc64.HashSymbol("KeyframedValue<float>")] = 4,
+        [TelltaleCrc64.HashSymbol("KeyframedValue<bool>")] = 1,
+        [TelltaleCrc64.HashSymbol("KeyframedValue<int>")] = 4,
+        [TelltaleCrc64.HashSymbol("KeyframedValue<Symbol>")] = 8,
+        [TelltaleCrc64.HashSymbol("KeyframedValue<Vector2>")] = 8,
+        [TelltaleCrc64.HashSymbol("KeyframedValue<Vector3>")] = 12,
+        [TelltaleCrc64.HashSymbol("KeyframedValue<Quaternion>")] = 16,
+        [TelltaleCrc64.HashSymbol("KeyframedValue<Color>")] = 16,
+        [TelltaleCrc64.HashSymbol("KeyframedValue<Transform>")] = 0,
+    };
+    private static readonly ulong FieldOfViewValue = TelltaleCrc64.HashSymbol("Field of View");
+
+    // mResourceGroupInclude: after the block size, (u64 group symbol, f32 weight) per group.
+    private static IReadOnlyDictionary<ulong, float>? ReadGroupInclude(Reader r, int start, int end)
+    {
+        int bytes = end - start - 4;
+        if (bytes <= 0 || bytes % 12 != 0)
+            return null;
+        var groups = new Dictionary<ulong, float>(bytes / 12);
+        for (int at = start + 4; at < end; at += 12)
+            groups[r.U64At(at)] = r.F32At(at + 8);
+        return groups;
+    }
+
+    private static readonly ulong KeyframedFloatType = TelltaleCrc64.HashSymbol("KeyframedValue<float>");
+    private static readonly ulong TimeValue = TelltaleCrc64.HashSymbol("time");
+    private static readonly ulong ContributionValue = TelltaleCrc64.HashSymbol("contribution");
 
     private static ChoreAgent ReadAgent(ref Reader r, int resourceCount)
     {

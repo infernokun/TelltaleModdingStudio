@@ -5,8 +5,9 @@ namespace TelltaleModding.Core.Scene;
 
 /// <summary>
 /// Poses a skeleton from one animation clip and skins a model with it. Handles the
-/// three clip encodings: keyframed transform tracks, compressed pose keys (GoT /
-/// Tales from the Borderlands era) and compressed pose keys 2 (Definitive Series).
+/// clip encodings: keyframed transform tracks, uncompressed skeleton poses (Michonne),
+/// compressed pose keys (GoT / Tales from the Borderlands era) and compressed pose keys 2
+/// (Definitive Series).
 /// The clip plays on its own over the rest pose: the engine's runtime IK, layering of
 /// several clips and root motion (the mover node) are not reproduced, so foot-planted or
 /// layered clips can differ from the game.
@@ -61,7 +62,8 @@ public sealed class AnimationPlayer
 
         bool cspkAdditive = clip.Channels.Any(c => c.TypeHash == KnownAnimationTypes.CompressedSkeletonPoseKeys
                                                    && (c.Flags & CspkDecoder.AdditiveFlag) != 0);
-        _cspk = clip.PoseKeysPayload is { } blob ? CspkDecoder.TryDecode(blob, cspkAdditive) : null;
+        // An uncompressed skeleton pose holds the same values compressed pose keys decode to.
+        _cspk = clip.SkeletonPose ?? (clip.PoseKeysPayload is { } blob ? CspkDecoder.TryDecode(blob, cspkAdditive) : null);
         _cspkBoneIndex = _cspk is null ? null : IndexBySymbol(_cspk.BoneSymbols);
 
         _pose2 = clip.PoseKeys2Payload is { } blob2 ? Cspk2Decoder.TryDecode(blob2) : null;
@@ -132,8 +134,9 @@ public sealed class AnimationPlayer
             float restLength = bone.LocalPosition.Length();
             var rot2 = clip2.HasRotation(pi) ? clip2.SampleRotation(pi, time) : bone.LocalRotation;
             var pos2 = clip2.HasTranslation(pi) ? clip2.SampleTranslation(pi, time) * restLength : bone.LocalPosition;
+            // An additive translation is in the bone's own frame, as with compressed pose keys.
             if (_additive)
-                return (bone.LocalPosition + (clip2.HasTranslation(pi) ? pos2 : default),
+                return (bone.LocalPosition + (clip2.HasTranslation(pi) ? Vector3.Transform(pos2, bone.LocalRotation) : default),
                         Quaternion.Normalize(Quaternion.Multiply(bone.LocalRotation, rot2)));
             return (pos2, rot2);
         }

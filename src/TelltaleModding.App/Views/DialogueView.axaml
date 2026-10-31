@@ -224,6 +224,22 @@
                             <TextBlock Text="Performance" FontSize="12" VerticalAlignment="Center" />
                         </StackPanel>
                     </ToggleButton>
+                    <ToggleButton IsChecked="{Binding Speaker.FollowCamera}" Classes="ghost" IsEnabled="{Binding ShowSpeaker}"
+                                  ToolTip.Tip="Follow the speaker: the camera frames the face, widens for gestures and turns with the character. Pan or zoom the speaker to take the camera over."
+                                  AutomationProperties.Name="Follow the speaker">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconRecenter}" Width="14" Height="14" />
+                            <TextBlock Text="Follow" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton IsChecked="{Binding Speaker.UseGameCamera}" Classes="ghost" IsEnabled="{Binding Speaker.FollowCamera}"
+                                  ToolTip.Tip="Show the speaker from the camera the game uses for the line, when its chore has one that frames them. Lines without one use the follow camera."
+                                  AutomationProperties.Name="Use the game's camera">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconLandscape}" Width="14" Height="14" />
+                            <TextBlock Text="Game camera" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
                     <ToggleButton IsChecked="{Binding AutoPlayNext}" Classes="ghost" ToolTip.Tip="Keep playing the next line">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <PathIcon Data="{StaticResource IconLoop}" Width="14" Height="14" />

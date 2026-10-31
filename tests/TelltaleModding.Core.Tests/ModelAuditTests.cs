@@ -2,6 +2,7 @@ using System.Numerics;
 using TelltaleModding.Core.Archives;
 using TelltaleModding.Core.Catalog;
 using TelltaleModding.Core.Scene;
+using TelltaleModding.Core.Textures;
 
 namespace TelltaleModding.Core.Tests;
 
@@ -240,5 +241,24 @@ public class ModelAuditTests
             Assert.Equal(opacity, model.BatchMaterialParams[lens]!.Opacity, 0.002f);
             Assert.Equal(Meshes.MaterialBlendMode.Alpha, model.BatchBlendModes[lens]);
         }
+    }
+
+    [GameFact(DefinitiveSeries)]
+    public async Task Mike_s_eyes_are_not_inked_over_by_their_blank_detail_maps()
+    {
+        // The shared eyes and mouths carry a blank 8-bit alpha detail map. Read as shadow ink
+        // (white = ink) it painted them black; it is line art, and blank paper draws nothing.
+        using var catalog = await Open(DefinitiveSeries);
+        var model = Build(catalog, "sk54_mike");
+        int eyeAndMouthBatches = 0;
+        for (int b = 0; b < model.BatchInkTextures.Count; b++)
+        {
+            if (model.BatchInkTextures[b] is not { Format: DdsPixelFormat.Luminance8 } ink || ink.Width != 64)
+                continue;
+            eyeAndMouthBatches++;
+            Assert.Equal(Meshes.InkMapKind.LineArt, model.BatchMaterialParams[b]!.InkKind);
+            Assert.True(model.BatchMaterialParams[b]!.InkInAlpha);
+        }
+        Assert.Equal(4, eyeAndMouthBatches);
     }
 }

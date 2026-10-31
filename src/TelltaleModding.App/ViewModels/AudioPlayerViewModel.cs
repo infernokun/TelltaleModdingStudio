@@ -55,6 +55,12 @@ public sealed partial class AudioPlayerViewModel : ViewModelBase
 
     public string TimeText => $"{Format(Position)} / {Format(Duration)}";
 
+    /// <summary>
+    /// Where playback is at this moment, read from the output; <see cref="Position"/> only
+    /// moves on each tick of the transport.
+    /// </summary>
+    public double LivePosition => _active == this && IsPlaying ? Math.Min(_output.Position.TotalSeconds, Duration) : Position;
+
     public string FormatText => Clip is null ? "" :
         $"{Clip.Codec} · {Clip.SampleRate / 1000.0:0.#} kHz · {(Clip.Channels == 1 ? "mono" : Clip.Channels == 2 ? "stereo" : $"{Clip.Channels} ch")}";
 
