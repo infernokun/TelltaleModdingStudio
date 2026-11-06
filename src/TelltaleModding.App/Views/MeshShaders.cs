@@ -28,8 +28,9 @@ internal static class MeshShaders
         {
             if (uSkinned == 0)
                 return;
+            // Slots naming no bone carry no weight (MeshViewport.SetSkinning clears them).
             float total = aWeights.x + aWeights.y + aWeights.z + aWeights.w;
-            if (total < 1e-4 || aBones.x < 0.0)
+            if (total < 1e-4)
                 return;
             vec3 sp = vec3(0.0), sn = vec3(0.0), st = vec3(0.0);
             for (int k = 0; k < 4; k++)

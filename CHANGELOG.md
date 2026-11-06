@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **Exported bones have their real names.** Skeletons store only a hash of each bone's name, and the app knew about 70 names, so most finger, face, hair, cloth and accessory bones were exported as `bone_` and a number. It now knows about 19,500 names, from the bone name list collected by RandomTBush. The export message says how many bones are still unnamed. You can name the rest yourself in `BoneNames.txt` in the app's data folder (`%LocalAppData%\TelltaleModdingStudio`): one name per line, or a bone's number from an export followed by the name to give it (`bone_E0E3EEDD9B630B88 shoeLace_L`).
+- **Feet and shoes keep their shape in The Walking Dead Definitive Series animations.** Its clips store each bone's offset turned slightly to the bone's animation space, the same way the older compressed clips do, and the app read them without turning them back. Legs and feet have the largest turns (up to about 13 degrees), so heel, ball and toe joints landed a few centimetres off and shoes crumpled while the rest of the body looked right. Additive (`_add`) clips also no longer turn bones they leave alone.
+- **Parts skinned to bones the skeleton lacks follow the animation.** A mesh can use bones its character's skeleton does not have (extra shoe or accessory bones, or a part made for another rig). Its vertices stayed in their rest pose, or were pulled toward the character's feet, while the rest of the body moved. Each such bone now moves with the skeleton bone nearest the vertices it moves, and the character's details list which bones were affected.
+
 ## 1.4.0 (2026-10-31)
 
 ### Dialogue

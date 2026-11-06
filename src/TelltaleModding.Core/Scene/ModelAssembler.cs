@@ -1,5 +1,6 @@
 using System.Numerics;
 using TelltaleModding.Core.Catalog;
+using TelltaleModding.Core.Export;
 using TelltaleModding.Core.Meshes;
 using TelltaleModding.Core.Meta;
 using TelltaleModding.Core.Textures;
@@ -438,6 +439,14 @@ public sealed class ModelAssembler
             }
         }
         var geometry = MeshGeometry.Combine(parts);
+        if (skeleton is not null && matched < bones.Count)
+        {
+            // Bones the skeleton lacks move with the nearest bone it has (see MeshSkinner.StandInBones).
+            var standIns = MeshSkinner.StandInBones(geometry, skeleton);
+            if (standIns.Count > 0)
+                details.Add($"Not in {skeletonName}, moved with the nearest bone: " + string.Join(", ",
+                    standIns.Select(s => $"{BoneNames.For(s.Key)} with {BoneNames.For(skeleton.Bones[s.Value].JointSymbol)}")));
+        }
         if (bones.Count > 0)
             details.Insert(0, skeleton is null
                 ? $"Skeleton: none found for {bones.Count} bones"

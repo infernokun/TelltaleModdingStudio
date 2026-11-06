@@ -43,8 +43,9 @@ public sealed record GltfClip(string Name, AnimationPlayer Player)
 }
 
 /// <summary>What an export wrote.</summary>
+/// <param name="UnnamedJoints">Skeleton bones whose name is not known, written as <c>bone_</c> and their symbol in hex.</param>
 public sealed record GltfExportSummary(
-    int Primitives, int Materials, int Textures, int Joints, int Animations, long Bytes);
+    int Primitives, int Materials, int Textures, int Joints, int Animations, long Bytes, int UnnamedJoints = 0);
 
 /// <summary>
 /// Writes an assembled model to glTF 2.0 binary (.glb): the visible batches with normals,
@@ -94,7 +95,7 @@ public static class GltfExporter
         private readonly MemoryStream _bin = new();
         private readonly JsonArray _bufferViews = new(), _accessors = new(), _nodes = new(), _meshes = new(),
             _materials = new(), _textures = new(), _images = new(), _skins = new(), _animations = new();
-        private int _primitiveCount;
+        private int _primitiveCount, _unnamedBones;
 
         public Builder(AssembledModel model, GltfExportOptions options)
         {
@@ -105,7 +106,7 @@ public static class GltfExporter
 
         public GltfExportSummary Summary(long bytes) => new(
             _primitiveCount, _materials.Count, _images.Count,
-            _skins.Count > 0 ? _skins[0]!["joints"]!.AsArray().Count : 0, _animations.Count, bytes);
+            _skins.Count > 0 ? _skins[0]!["joints"]!.AsArray().Count : 0, _animations.Count, bytes, _unnamedBones);
 
         // ---- Scene ----------------------------------------------------------
 
@@ -173,8 +174,15 @@ public static class GltfExporter
             return _nodes.Count - 1;
         }
 
-        private string BoneName(SkeletonBone bone) =>
-            _options.BoneName?.Invoke(bone.JointSymbol) ?? BoneNames.For(bone.JointSymbol);
+        private string BoneName(SkeletonBone bone)
+        {
+            if (_options.BoneName?.Invoke(bone.JointSymbol) is { } custom)
+                return custom;
+            if (BoneNames.TryGet(bone.JointSymbol) is { } known)
+                return known;
+            _unnamedBones++;
+            return BoneNames.For(bone.JointSymbol);
+        }
 
         /// <summary>One node per bone at its rest transform, parented under the armature node.</summary>
         private int[] AddBones(SkeletonFile skeleton, int armature, bool needsStaticJoint, out int? staticNode)
@@ -291,7 +299,7 @@ public static class GltfExporter
                 var bw = _geometry.BlendWeights![v];
                 (w[0], w[1], w[2], w[3]) = (bw.X, bw.Y, bw.Z, bw.W);
                 float total = w[0] + w[1] + w[2] + w[3];
-                if (total < 1e-4f || bones[v * 4] < 0)
+                if (total < 1e-4f)
                 {
                     needsStatic = true;
                     joints[v * 4] = (ushort)staticJoint;

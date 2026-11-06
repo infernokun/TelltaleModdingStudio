@@ -122,4 +122,34 @@ public class Cspk2DecoderTests
         BitConverter.TryWriteBytes(blob.AsSpan(80), (ulong)0x1000); // symbol table past the end
         Assert.Null(Cspk2Decoder.TryDecode(blob));
     }
+
+    [SampleFact(Clip, Rig)]
+    public void Translations_lie_along_the_bones_animation_space_direction()
+    {
+        // As in compressed pose keys (see SkeletonAnimationTests), a stored translation
+        // points along the bone's rest offset divided by its animation translation scale,
+        // not along the rest offset itself; the difference is the retarget rotation, largest
+        // on legs and feet. Bones whose retarget rotation is too small to tell apart are skipped.
+        var (clip, _) = Decode(Clip);
+        Assert.True(SkeletonFile.TryLoad(File.ReadAllBytes(SampleData.Sample(Rig)), out var skl, out _));
+        var bones = skl!.Bones.GroupBy(b => b.JointSymbol).ToDictionary(g => g.Key, g => g.First());
+
+        int compared = 0, closerToAnimation = 0;
+        for (int s = 0; s < clip.BoneSymbols.Count; s++)
+        {
+            if (!clip.HasTranslation(s) || !bones.TryGetValue(clip.BoneSymbols[s], out var bone))
+                continue;
+            var (correction, _) = CspkDecoder.TranslationFrame(bone);
+            if (2f * MathF.Acos(MathF.Min(1f, MathF.Abs(correction.W))) < 3f * MathF.PI / 180f)
+                continue;
+            var restDir = Vector3.Normalize(bone.LocalPosition);
+            var animDir = Vector3.Transform(restDir, Quaternion.Conjugate(correction));
+            var value = Vector3.Normalize(clip.SampleTranslation(s, 0f));
+            compared++;
+            if (Vector3.Dot(value, animDir) > Vector3.Dot(value, restDir))
+                closerToAnimation++;
+        }
+        Assert.True(compared > 0, "no bone with a retarget rotation");
+        Assert.True(closerToAnimation > compared * 0.75, $"{closerToAnimation}/{compared} translations along the animation-space direction");
+    }
 }

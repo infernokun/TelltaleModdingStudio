@@ -61,6 +61,7 @@ public sealed partial class CharactersViewModel
                 $"Exported {Path.GetFileName(path)} · {summary.Bytes / 1048576.0:0.0} MB · " +
                 $"{summary.Textures} texture{(summary.Textures == 1 ? "" : "s")}" +
                 (summary.Joints > 0 ? $" · {summary.Joints} bones" : "") +
+                (summary.UnnamedJoints > 0 ? $" ({summary.UnnamedJoints} without a known name)" : "") +
                 (summary.Animations > 0 ? " · with animation" : ""));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)

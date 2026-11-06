@@ -383,4 +383,88 @@ public class CspkDecoderTests
         Assert.Null(CspkDecoder.TryDecode(blob[..^4]));
         Assert.Null(CspkDecoder.TryDecode(blob[..100]));
     }
+
+    private static (SkeletonFile Skeleton, CspkClip Clip, AnimationFile Anim) RhysWakeUp()
+    {
+        SampleData.Require("sk54_rhys.skl", "sk54_action_rhysWakeUpDragged.anm");
+        Assert.True(SkeletonFile.TryLoad(File.ReadAllBytes(SampleData.Sample("sk54_rhys.skl")), out var skeleton, out var error), error);
+        Assert.True(AnimationFile.TryLoad(File.ReadAllBytes(SampleData.Sample("sk54_action_rhysWakeUpDragged.anm")), out var anim, out error), error);
+        var clip = CspkDecoder.TryDecode(anim!.PoseKeysPayload!);
+        Assert.NotNull(clip);
+        Assert.False(clip!.IsAdditive);
+        return (skeleton!, clip, anim);
+    }
+
+    private static float Degrees(Vector3 a, Vector3 b) =>
+        MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b)), -1f, 1f)) * 180f / MathF.PI;
+
+    [SkippableFact]
+    public void Leg_and_foot_translations_lie_along_the_animation_space_direction()
+    {
+        // The engine stores a bone's translation along its rest offset divided by its
+        // animation translation scale; the retarget rotation turns it back onto the rest
+        // offset. On this rig the legs and feet have the largest retarget rotations.
+        var (skeleton, clip, _) = RhysWakeUp();
+        var bySymbol = skeleton.BoneIndexBySymbol;
+        foreach (var name in new[] { "leg_L", "heel_L", "ball_L", "toe_L", "leg_R", "heel_R", "ball_R", "toe_R" })
+        {
+            var bone = skeleton.Bones[bySymbol[TelltaleModding.Core.Meta.TelltaleCrc64.HashSymbol(name)]];
+            int slot = clip.BoneSymbols.ToList().IndexOf(bone.JointSymbol);
+            Assert.True(slot >= 0, $"{name} is not in the clip");
+            var frame = CspkDecoder.TranslationFrame(bone);
+            var animDir = Vector3.Transform(bone.LocalPosition, Quaternion.Conjugate(frame.Correction));
+            var stored = clip.SampleTranslation(slot, 1f);
+            Assert.True(Degrees(stored, bone.LocalPosition) > 5f, $"{name}: retarget rotation too small to test");
+            Assert.True(Degrees(stored, animDir) < 0.5f, $"{name}: {Degrees(stored, animDir)} degrees off its animation-space direction");
+        }
+    }
+
+    [SkippableFact]
+    public void Pose_keys_2_values_map_through_the_same_frame_as_pose_keys()
+    {
+        // The same stored value gives the same local transform in either encoding, so feet and
+        // legs keep their rest offsets in Definitive Series clips too.
+        var (skeleton, clip, anim) = RhysWakeUp();
+        var geometry = new MeshGeometry(new Vector3[1], new Vector3[1], new Vector2[1], new Vector4[1],
+            Array.Empty<int>(), Array.Empty<MeshBatch>(), Vector3.Zero, Vector3.Zero);
+        var player = new TelltaleModding.Core.Scene.AnimationPlayer(geometry, skeleton);
+        player.Load(anim, "sk54_action_rhysWakeUpDragged.anm");
+        var tracked = anim.TransformTracks.Select(t => t.BoneSymbol).ToHashSet();
+        int compared = 0;
+        for (int slot = 0; slot < clip.BoneSymbols.Count; slot++)
+        {
+            if (tracked.Contains(clip.BoneSymbols[slot]) || !skeleton.BoneIndexBySymbol.TryGetValue(clip.BoneSymbols[slot], out int index))
+                continue;
+            var bone = skeleton.Bones[index];
+            var expected = player.SampleLocal(bone, 1f);
+            var actual = TelltaleModding.Core.Scene.AnimationPlayer.PoseKeys2Local(bone, CspkDecoder.TranslationFrame(bone),
+                clip.SampleTranslation(slot, 1f), clip.SampleRotation(slot, 1f), additive: false);
+            Assert.True((actual.Pos - expected.Pos).Length() < 1e-5f, $"bone {index}: {actual.Pos} vs {expected.Pos}");
+            Assert.True(MathF.Abs(Quaternion.Dot(actual.Rot, expected.Rot)) > 0.99999f, $"bone {index}: rotation differs");
+            compared++;
+        }
+        Assert.True(compared > 50, $"only {compared} bones compared");
+    }
+
+    [SkippableFact]
+    public void Pose_keys_2_rest_values_and_empty_additive_channels_keep_the_rest_pose()
+    {
+        var (skeleton, _, _) = RhysWakeUp();
+        foreach (var bone in skeleton.Bones)
+        {
+            var frame = CspkDecoder.TranslationFrame(bone);
+            var rest = TelltaleModding.Core.Scene.AnimationPlayer.PoseKeys2Local(bone, frame,
+                CspkDecoder.FromLocalTranslation(bone.LocalPosition, frame), bone.LocalRotation, additive: false);
+            Assert.True((rest.Pos - bone.LocalPosition).Length() < 1e-5f);
+            Assert.True(MathF.Abs(Quaternion.Dot(rest.Rot, bone.LocalRotation)) > 0.99999f);
+
+            // An additive clip that leaves a bone's channels alone (or adds nothing) leaves it at rest.
+            foreach (var (t, r) in new (Vector3?, Quaternion?)[] { (null, null), (Vector3.Zero, Quaternion.Identity) })
+            {
+                var layered = TelltaleModding.Core.Scene.AnimationPlayer.PoseKeys2Local(bone, frame, t, r, additive: true);
+                Assert.True((layered.Pos - bone.LocalPosition).Length() < 1e-5f);
+                Assert.True(MathF.Abs(Quaternion.Dot(layered.Rot, bone.LocalRotation)) > 0.99999f);
+            }
+        }
+    }
 }

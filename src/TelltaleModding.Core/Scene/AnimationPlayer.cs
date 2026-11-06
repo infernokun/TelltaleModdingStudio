@@ -126,26 +126,49 @@ public sealed class AnimationPlayer
                 : EngineLocal(bone, pos, rot, (track.Flags & CspkDecoder.AdditiveFlag) != 0);
         }
 
-        // Compressed pose v2: rotations replace the local rotation; translations are
-        // stored relative to the bone's rest length (1 = rest), so they scale by it.
+        // Compressed pose v2 holds the same kind of values as compressed pose keys and the
+        // engine applies them the same way (see PoseKeys2Local).
         if (_pose2BoneIndex is not null && _pose2BoneIndex.TryGetValue(bone.JointSymbol, out int pi))
         {
             var clip2 = _pose2!;
-            float restLength = bone.LocalPosition.Length();
-            var rot2 = clip2.HasRotation(pi) ? clip2.SampleRotation(pi, time) : bone.LocalRotation;
-            var pos2 = clip2.HasTranslation(pi) ? clip2.SampleTranslation(pi, time) * restLength : bone.LocalPosition;
-            // An additive translation is in the bone's own frame, as with compressed pose keys.
-            if (_additive)
-                return (bone.LocalPosition + (clip2.HasTranslation(pi) ? Vector3.Transform(pos2, bone.LocalRotation) : default),
-                        Quaternion.Normalize(Quaternion.Multiply(bone.LocalRotation, rot2)));
-            return (pos2, rot2);
+            return PoseKeys2Local(bone, _translationFrames[bone.JointSymbol],
+                clip2.HasTranslation(pi) ? clip2.SampleTranslation(pi, time) : null,
+                clip2.HasRotation(pi) ? clip2.SampleRotation(pi, time) : null,
+                _additive);
         }
-
         // Compressed pose keys drive every bone they name, translation and rotation.
         if (_cspkBoneIndex is not null && _cspkBoneIndex.TryGetValue(bone.JointSymbol, out int ci))
             return EngineLocal(bone, _cspk!.SampleTranslation(ci, time), _cspk.SampleRotation(ci, time), _cspk.IsAdditive);
 
         return (bone.LocalPosition, bone.LocalRotation);
+    }
+
+    /// <summary>
+    /// A bone's local transform from compressed pose v2 values (null where the clip leaves that
+    /// channel alone). Like every animated value, a translation is in bone-length space along
+    /// the bone's animation-space direction (its rest offset divided by its animation
+    /// translation scale), so it maps to a local offset through the bone's length and retarget
+    /// rotation (<see cref="CspkDecoder.ToLocalTranslation"/>). Scaling by the length alone
+    /// turns the offset by the retarget rotation, up to about 13 degrees on legs and feet. Rotations
+    /// replace the rest rotation; an additive clip layers both onto the rest pose, and a
+    /// channel it leaves alone stays at rest.
+    /// </summary>
+    internal static (Vector3 Pos, Quaternion Rot) PoseKeys2Local(SkeletonBone bone,
+        (Quaternion Correction, float Length) frame, Vector3? translation, Quaternion? rotation, bool additive)
+    {
+        if (additive)
+        {
+            var pos = translation is { } t
+                ? CspkDecoder.ToLocalTranslation(
+                    CspkDecoder.FromLocalTranslation(bone.LocalPosition, frame) + Vector3.Transform(t, bone.LocalRotation), frame)
+                : bone.LocalPosition;
+            var rot = rotation is { } r
+                ? Quaternion.Normalize(Quaternion.Multiply(bone.LocalRotation, r))
+                : bone.LocalRotation;
+            return (pos, rot);
+        }
+        return (translation is { } local ? CspkDecoder.ToLocalTranslation(local, frame) : bone.LocalPosition,
+                rotation ?? bone.LocalRotation);
     }
 
     /// <summary>
