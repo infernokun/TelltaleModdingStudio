@@ -63,6 +63,43 @@ public class SteamLibraryScannerTests
     }
 
     [Fact]
+    public void Installed_Telltale_games_are_found_from_Steam_manifests_alone()
+    {
+        var library = Path.Combine(Path.GetTempPath(), $"tms-steam-{Guid.NewGuid():N}");
+        try
+        {
+            var steamapps = Path.Combine(library, "steamapps");
+            void Install(int appId, string folder, bool withFolder = true)
+            {
+                Directory.CreateDirectory(steamapps);
+                File.WriteAllText(Path.Combine(steamapps, $"appmanifest_{appId}.acf"),
+                    $"\"AppState\"\n{{\n\t\"appid\"\t\t\"{appId}\"\n\t\"installdir\"\t\t\"{folder}\"\n}}\n");
+                if (withFolder)
+                    Directory.CreateDirectory(Path.Combine(steamapps, "common", folder));
+            }
+            Install(261030, "The Walking Dead Season Two");
+            Install(1449690, "The Walking Dead The Telltale Definitive Series");
+            Install(330830, "Tales from the Borderlands", withFolder: false); // listed, folder gone
+            Install(1708010, "TheExpanseATelltaleSeries");                    // not a Telltale engine game
+            // A Telltale folder Steam does not list is left to the full scan.
+            Directory.CreateDirectory(Path.Combine(steamapps, "common", "The Walking Dead Michonne", "Archives"));
+            File.WriteAllBytes(Path.Combine(steamapps, "common", "The Walking Dead Michonne", "Archives", "WDM_pc_data.ttarch2"), new byte[4]);
+
+            var found = SteamLibraryScanner.FindInstalled(new[] { library, Path.Combine(library, "missing") });
+
+            Assert.Equal(new[]
+            {
+                Path.Combine(steamapps, "common", "The Walking Dead Season Two"),
+                Path.Combine(steamapps, "common", "The Walking Dead The Telltale Definitive Series"),
+            }, found);
+        }
+        finally
+        {
+            Directory.Delete(library, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Archives_are_found_whatever_the_case_of_their_extension()
     {
         var game = Path.Combine(Path.GetTempPath(), $"tms-game-{Guid.NewGuid():N}");

@@ -13,45 +13,40 @@ namespace TelltaleModding.Core.Export;
 /// <summary>Settings for <see cref="GltfExporter"/>.</summary>
 public sealed record GltfExportOptions
 {
-    /// <summary>Name of the model's mesh and node (e.g. the character's name).</summary>
+    /// <summary>Name of the model's mesh and node.</summary>
     public string? Name { get; init; }
 
     /// <summary>Sampling rate for baked animation clips.</summary>
     public float FramesPerSecond { get; init; } = 30f;
 
-    /// <summary>Converts and embeds normal maps (with vertex tangents).</summary>
+    /// <summary>Embeds normal maps and vertex tangents.</summary>
     public bool IncludeNormalMaps { get; init; } = true;
 
     /// <summary>Draws both sides of every face, as the viewer does.</summary>
     public bool DoubleSided { get; init; } = true;
 
-    /// <summary>Alpha threshold of cut-out (MASK) materials such as eyelashes.</summary>
+    /// <summary>Alpha threshold for cut-out materials.</summary>
     public float AlphaCutoff { get; init; } = 0.5f;
 
-    /// <summary>Names a bone by its joint symbol; falls back to <see cref="BoneNames"/> when it returns null.</summary>
+    /// <summary>Optional bone naming. Returning null falls back to <see cref="BoneNames"/>.</summary>
     public Func<ulong, string?>? BoneName { get; init; }
 }
 
-/// <summary>An animation clip to bake: a player with the clip loaded, for the exported model.</summary>
+/// <summary>An animation clip to bake, as a player with the clip loaded.</summary>
 public sealed record GltfClip(string Name, AnimationPlayer Player)
 {
-    /// <summary>
-    /// A fixed pose to bake instead of the player's clip (bone local transforms by joint
-    /// symbol; bones it leaves out keep their rest transform), as a single-frame animation.
-    /// </summary>
+    /// <summary>A fixed pose to bake as a one-frame animation instead of the clip. Missing bones stay at rest.</summary>
     public IReadOnlyDictionary<ulong, (Vector3 Pos, Quaternion Rot)>? Pose { get; init; }
 }
 
 /// <summary>What an export wrote.</summary>
+/// <param name="UnnamedJoints">Bones with no known name.</param>
 public sealed record GltfExportSummary(
-    int Primitives, int Materials, int Textures, int Joints, int Animations, long Bytes);
+    int Primitives, int Materials, int Textures, int Joints, int Animations, long Bytes, int UnnamedJoints = 0);
 
 /// <summary>
-/// Writes an assembled model to glTF 2.0 binary (.glb): the visible batches with normals,
-/// UVs and their textures as embedded PNGs, the skeleton as a skin (rest pose and inverse
-/// bind matrices) and, optionally, animation clips baked to per-bone translation and
-/// rotation keys. Telltale models are already Y-up, metres, facing +Z with the character's
-/// left on +X, which is glTF's convention, so no axis conversion is applied.
+/// Writes an assembled model, its textures, skeleton and optional baked clips to a .glb.
+/// Telltale models already use glTF's axes, so nothing is converted.
 /// </summary>
 public static class GltfExporter
 {
@@ -94,7 +89,7 @@ public static class GltfExporter
         private readonly MemoryStream _bin = new();
         private readonly JsonArray _bufferViews = new(), _accessors = new(), _nodes = new(), _meshes = new(),
             _materials = new(), _textures = new(), _images = new(), _skins = new(), _animations = new();
-        private int _primitiveCount;
+        private int _primitiveCount, _unnamedBones;
 
         public Builder(AssembledModel model, GltfExportOptions options)
         {
@@ -105,7 +100,7 @@ public static class GltfExporter
 
         public GltfExportSummary Summary(long bytes) => new(
             _primitiveCount, _materials.Count, _images.Count,
-            _skins.Count > 0 ? _skins[0]!["joints"]!.AsArray().Count : 0, _animations.Count, bytes);
+            _skins.Count > 0 ? _skins[0]!["joints"]!.AsArray().Count : 0, _animations.Count, bytes, _unnamedBones);
 
         // ---- Scene ----------------------------------------------------------
 
@@ -173,10 +168,17 @@ public static class GltfExporter
             return _nodes.Count - 1;
         }
 
-        private string BoneName(SkeletonBone bone) =>
-            _options.BoneName?.Invoke(bone.JointSymbol) ?? BoneNames.For(bone.JointSymbol);
+        private string BoneName(SkeletonBone bone)
+        {
+            if (_options.BoneName?.Invoke(bone.JointSymbol) is { } custom)
+                return custom;
+            if (BoneNames.TryGet(bone.JointSymbol) is { } known)
+                return known;
+            _unnamedBones++;
+            return BoneNames.For(bone.JointSymbol);
+        }
 
-        /// <summary>One node per bone at its rest transform, parented under the armature node.</summary>
+        /// <summary>Adds a node per bone at its rest transform under the armature.</summary>
         private int[] AddBones(SkeletonFile skeleton, int armature, bool needsStaticJoint, out int? staticNode)
         {
             var nodes = new int[skeleton.Bones.Count];
@@ -289,7 +291,7 @@ public static class GltfExporter
                 var bw = _geometry.BlendWeights![v];
                 (w[0], w[1], w[2], w[3]) = (bw.X, bw.Y, bw.Z, bw.W);
                 float total = w[0] + w[1] + w[2] + w[3];
-                if (total < 1e-4f || bones[v * 4] < 0)
+                if (total < 1e-4f)
                 {
                     needsStatic = true;
                     joints[v * 4] = (ushort)staticJoint;

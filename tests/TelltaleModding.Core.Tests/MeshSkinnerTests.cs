@@ -233,4 +233,73 @@ public class MeshSkinnerTests
             Assert.True((p - expected[v]).Length() < 1e-4f, $"vertex {v}: {p} vs {expected[v]}");
         }
     }
+
+    // Sasha's ankle_L renamed in the mesh to a bone her skeleton does not have.
+    private static readonly ulong MissingBone = TelltaleModding.Core.Meta.TelltaleCrc64.HashSymbol("testOnly_shoe_L");
+
+    private static (MeshGeometry Real, MeshGeometry WithMissing, SkeletonFile Skeleton, int Ankle) SashaWithMissingAnkle()
+    {
+        var (geometry, skeleton) = LoadSasha();
+        ulong ankle = TelltaleModding.Core.Meta.TelltaleCrc64.HashSymbol("ankle_L");
+        Assert.True(skeleton.BoneIndexBySymbol.TryGetValue(ankle, out int ankleIndex));
+        Assert.Contains(geometry.BonePalettes!, p => p.Contains(ankle));
+        var palettes = geometry.BonePalettes!
+            .Select(p => (IReadOnlyList<ulong>)p.Select(s => s == ankle ? MissingBone : s).ToList()).ToList();
+        return (geometry, geometry with { BonePalettes = palettes }, skeleton, ankleIndex);
+    }
+
+    [SkippableFact]
+    public void A_bone_the_skeleton_lacks_moves_with_the_nearest_bone()
+    {
+        var (_, geometry, skeleton, ankle) = SashaWithMissingAnkle();
+        var standIns = MeshSkinner.StandInBones(geometry, skeleton);
+        Assert.Equal(new[] { MissingBone }, standIns.Keys);
+        // The stand-in is the ankle or a bone joined to it.
+        int standIn = standIns[MissingBone];
+        Assert.True(standIn == ankle || skeleton.Bones[standIn].ParentIndex == ankle || skeleton.Bones[ankle].ParentIndex == standIn,
+            $"stand-in {standIn} is not next to the ankle ({ankle})");
+        Assert.DoesNotContain(-1, MeshSkinner.ResolveVertexBones(geometry, skeleton)
+            .Where((_, i) => geometry.BlendWeights![i / 4][i % 4] > 0));
+    }
+
+    [SkippableFact]
+    public void Missing_bones_neither_distort_the_rest_pose_nor_leave_vertices_behind()
+    {
+        var (real, geometry, skeleton, ankle) = SashaWithMissingAnkle();
+        var vertexBones = MeshSkinner.ResolveVertexBones(real, skeleton);
+        var moved = Enumerable.Range(0, real.Positions.Length)
+            .Where(v => Enumerable.Range(0, 4).Any(k => vertexBones[v * 4 + k] == ankle && real.BlendWeights![v][k] > 0.5f))
+            .ToList();
+        Assert.NotEmpty(moved);
+
+        int n = real.Positions.Length;
+        var normals = new Vector3[n];
+        var rest = new Vector3[n];
+        new MeshSkinner(geometry, skeleton).Skin(skeleton.BindPoseWorld(), rest, normals);
+        for (int v = 0; v < n; v++)
+            Assert.True((rest[v] - geometry.Positions[v]).Length() < 1e-4f, $"vertex {v} moved at rest");
+
+        // Swing the left leg forward; the foot should follow.
+        ulong leg = TelltaleModding.Core.Meta.TelltaleCrc64.HashSymbol("leg_L");
+        var pose = skeleton.ComposeWorld(b => b.JointSymbol == leg
+            ? (b.LocalPosition, Quaternion.Normalize(b.LocalRotation * Quaternion.CreateFromAxisAngle(Vector3.UnitX, 0.8f)))
+            : (b.LocalPosition, b.LocalRotation));
+        var expected = new Vector3[n];
+        var actual = new Vector3[n];
+        new MeshSkinner(real, skeleton).Skin(pose, expected, normals);
+        new MeshSkinner(geometry, skeleton).Skin(pose, actual, normals);
+
+        float frozen = moved.Average(v => (geometry.Positions[v] - expected[v]).Length());
+        float error = moved.Average(v => (actual[v] - expected[v]).Length());
+        Assert.True(frozen > 0.05f, $"the pose barely moves the foot ({frozen})");
+        Assert.True(error < frozen * 0.2f, $"foot vertices are {error} off (left at rest they would be {frozen} off)");
+    }
+
+    [Fact]
+    public void Weights_of_slots_that_name_no_bone_are_cleared()
+    {
+        var weights = new[] { new Vector4(0.5f, 0.3f, 0.2f, 0f), new Vector4(1f, 0f, 0f, 0f) };
+        var bones = new[] { 3, -1, 4, -1, -1, -1, -1, -1 };
+        Assert.Equal(new[] { new Vector4(0.5f, 0f, 0.2f, 0f), Vector4.Zero }, MeshSkinner.ResolveWeights(weights, bones));
+    }
 }

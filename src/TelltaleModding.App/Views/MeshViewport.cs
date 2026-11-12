@@ -222,6 +222,8 @@ public class MeshViewport : OpenGlControlBase
             ResetSkinning();
             return;
         }
+        // Empty bone slots must have zero weight or the vertex gets pulled toward the origin.
+        weights = Core.Meshes.MeshSkinner.ResolveWeights(weights, vertexBones);
         var data = new float[count * SkinFloats];
         for (int i = 0; i < count; i++)
         {
@@ -319,7 +321,7 @@ public class MeshViewport : OpenGlControlBase
         {
             var w = weights[v];
             float total = w.X + w.Y + w.Z + w.W;
-            if (total < 1e-4f || bones[v * 4] < 0)
+            if (total < 1e-4f)
             {
                 positions[v] = rest[v];
                 normals[v] = restN[v];

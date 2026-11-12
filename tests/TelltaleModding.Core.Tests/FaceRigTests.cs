@@ -1,4 +1,5 @@
 using System.Numerics;
+using TelltaleModding.Core.Export;
 using TelltaleModding.Core.Meshes;
 using TelltaleModding.Core.Meta;
 using TelltaleModding.Core.Scene;
@@ -286,7 +287,12 @@ public class FaceRigTests
         Assert.Contains(bones, b => b.Group == FaceBoneGroup.Brows && b.Label.Contains("(left)"));
         Assert.Contains(bones, b => b.Group == FaceBoneGroup.Lips);
         Assert.Equal(bones.Count, bones.Select(b => b.Label).Distinct().Count());
-        Assert.All(bones, b => Assert.StartsWith("bone_", b.Name));
+        // Bigby's face bones have their own names, so they are grouped by where they sit.
+        Assert.All(bones, b =>
+        {
+            Assert.DoesNotContain("bone_", b.Name);
+            Assert.Null(BoneNames.TryGetStandard(b.Joint));
+        });
 
         Assert.Equal(FaceBoneGroup.Brows, FaceBones.GroupOf("browOuter_L"));
         Assert.Equal(FaceBoneGroup.Eyes, FaceBones.GroupOf("eyeLidUpper_R"));

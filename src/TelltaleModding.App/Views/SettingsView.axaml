@@ -57,6 +57,13 @@
                     </Grid>
                     <Grid Classes="row" ColumnDefinitions="*,Auto">
                         <StackPanel>
+                            <TextBlock Classes="label" Text="Look for new games on start" />
+                            <TextBlock Classes="hint" Text="Check Steam's list of installed games for Telltale games you haven't added." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding Preferences.LookForGamesOnStart}" OnContent="" OffContent="" />
+                    </Grid>
+                    <Grid Classes="row" ColumnDefinitions="*,Auto">
+                        <StackPanel>
                             <TextBlock Classes="label" Text="Open games in" />
                             <TextBlock Classes="hint" Text="The workspace shown after a game finishes opening." />
                         </StackPanel>

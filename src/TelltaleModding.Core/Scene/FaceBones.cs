@@ -27,7 +27,8 @@ public static class FaceBones
         var unplaced = new List<int>();
         for (int i = 0; i < bones.Count; i++)
         {
-            var name = BoneNames.TryGet(bones[i].JointSymbol);
+            // Only the shared rig names say where a bone sits on the face.
+            var name = BoneNames.TryGetStandard(bones[i].JointSymbol);
             int parent = bones[i].ParentIndex;
             var group = name is null ? null : GroupOf(name);
             namedAncestor[i] = name is not null ? i : parent >= 0 ? namedAncestor[parent] : -1;
@@ -68,7 +69,7 @@ public static class FaceBones
         var world = skeleton.BindPoseWorld();
         int head = -1;
         for (int i = 0; i < bones.Count && head < 0; i++)
-            if (BoneNames.TryGet(bones[i].JointSymbol) == "head")
+            if (BoneNames.TryGetStandard(bones[i].JointSymbol) == "head")
                 head = i;
         var origin = head >= 0 ? world[head].Translation
             : indices.Aggregate(Vector3.Zero, (sum, i) => sum + world[i].Translation) / indices.Count;

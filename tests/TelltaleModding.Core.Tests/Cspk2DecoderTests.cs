@@ -118,4 +118,32 @@ public class Cspk2DecoderTests
         BitConverter.TryWriteBytes(blob.AsSpan(80), (ulong)0x1000); // symbol table past the end
         Assert.Null(Cspk2Decoder.TryDecode(blob));
     }
+
+    [SampleFact(Clip, Rig)]
+    public void Translations_lie_along_the_bones_animation_space_direction()
+    {
+        // Only rigid bones with a noticeable retarget rotation are checked.
+        var (clip, _) = Decode(Clip);
+        Assert.True(SkeletonFile.TryLoad(File.ReadAllBytes(SampleData.Sample(Rig)), out var skl, out _));
+        var bones = skl!.Bones.GroupBy(b => b.JointSymbol).ToDictionary(g => g.Key, g => g.First());
+
+        int compared = 0;
+        for (int s = 0; s < clip.BoneSymbols.Count; s++)
+        {
+            if (!clip.HasTranslation(s) || !bones.TryGetValue(clip.BoneSymbols[s], out var bone))
+                continue;
+            var (correction, _) = CspkDecoder.TranslationFrame(bone);
+            if (2f * MathF.Acos(MathF.Min(1f, MathF.Abs(correction.W))) < 3f * MathF.PI / 180f)
+                continue;
+            if (clip.Translations[s].Any(k => MathF.Abs(k.Value.Length() - 1f) > 1e-3f))
+                continue;
+            var restDir = Vector3.Normalize(bone.LocalPosition);
+            var animDir = Vector3.Transform(restDir, Quaternion.Conjugate(correction));
+            var value = Vector3.Normalize(clip.SampleTranslation(s, 0f));
+            compared++;
+            Assert.True(Vector3.Dot(value, animDir) > MathF.Cos(0.5f * MathF.PI / 180f), $"bone {bone.JointSymbol:X16} is off its animation-space direction");
+            Assert.True(Vector3.Dot(value, animDir) > Vector3.Dot(value, restDir), $"bone {bone.JointSymbol:X16} lies along its rest offset");
+        }
+        Assert.True(compared >= 3, $"only {compared} rigid bones with a retarget rotation");
+    }
 }

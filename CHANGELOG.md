@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.0 (2026-11-12)
+
+### Home
+
+- Faster start: added **Look for new games on start** option and optimize detection. **Scan this PC** still checks every game folder.
+- Steam installed outside Program Files is found through the Windows registry.
+
+### Fixes
+
+- Exported bones have their real names (about 19,500 known, from RandomTBush's list). Set in `%LocalAppData%\TelltaleModdingStudio\BoneNames.txt`.
+- Minor fix for cases where some feet and shoes are mis-shaped in animations.
+
 ## 1.4.0 (2026-10-31)
 
 ### Dialogue
