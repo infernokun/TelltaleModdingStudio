@@ -3,7 +3,7 @@ using TelltaleModding.Core.Audio;
 
 namespace TelltaleModding.Core.Tests;
 
-/// <summary>A fact that only runs when The Walking Dead Definitive Series is installed (its FMOD DLL supplies Vorbis setups).</summary>
+/// <summary>A fact that only runs when The Walking Dead Definitive Series is installed, for its FMOD DLL.</summary>
 public sealed class WdcInstallFactAttribute : SkippableFactAttribute
 {
     public const string Folder = @"A:\SteamLibrary\steamapps\common\The Walking Dead The Telltale Definitive Series";
@@ -126,7 +126,7 @@ public class AudioTests
         Assert.Equal(91567, pcm.Length);
         Assert.True(Rms(pcm) > 200);
 
-        // The rebuilt file reads back as a plain Ogg Vorbis entry with the same length.
+        // The rebuilt file loads back as plain Ogg Vorbis.
         Assert.True(TelltaleAudio.TryLoad(ogg, "rebuilt.ogg", VorbisSetupLibrary.Empty, out var again, out var error), error);
         var plain = Assert.Single(again);
         Assert.Equal(91567, plain.SampleCount);
@@ -251,8 +251,7 @@ public class AudioTests
     }
 
     /// <summary>
-    /// A minimal PE image with one section holding a setup packet, a patch, and a
-    /// two-record setup table (one plain record, one patched record).
+    /// A small PE image with a setup table of one plain and one patched record.
     /// </summary>
     private static byte[] BuildFakePe(bool is64, byte[] setup, byte[] patch, uint setupCrc, uint patchedCrc)
     {

@@ -6,10 +6,7 @@ using TelltaleModding.Core.Audio;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// Transport for one audio clip: play/pause, stop and a seekable timeline. Players
-/// share the app's output, so starting one stops whichever was playing.
-/// </summary>
+/// <summary>Play, pause, stop and seek for one audio clip. Starting one player stops the others.</summary>
 public sealed partial class AudioPlayerViewModel : ViewModelBase
 {
     private static AudioPlayerViewModel? _active;
@@ -48,17 +45,14 @@ public sealed partial class AudioPlayerViewModel : ViewModelBase
     [ObservableProperty]
     private double _duration;
 
-    /// <summary>Playback position in seconds; setting it seeks.</summary>
+    /// <summary>Playback position in seconds. Setting it seeks.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TimeText))]
     private double _position;
 
     public string TimeText => $"{Format(Position)} / {Format(Duration)}";
 
-    /// <summary>
-    /// Where playback is at this moment, read from the output; <see cref="Position"/> only
-    /// moves on each tick of the transport.
-    /// </summary>
+    /// <summary>Current playback time read straight from the output, between ticks.</summary>
     public double LivePosition => _active == this && IsPlaying ? Math.Min(_output.Position.TotalSeconds, Duration) : Position;
 
     public string FormatText => Clip is null ? "" :
@@ -79,10 +73,7 @@ public sealed partial class AudioPlayerViewModel : ViewModelBase
             _output.Seek(TimeSpan.FromSeconds(value));
     }
 
-    /// <summary>
-    /// Loads a clip (decoding off the UI thread) and optionally starts it. A later call
-    /// supersedes an earlier one still decoding.
-    /// </summary>
+    /// <summary>Loads a clip off the UI thread and optionally starts it. A newer call wins.</summary>
     public async Task LoadAsync(Func<AudioClip> load, bool autoPlay)
     {
         int generation = ++_loadGeneration;
@@ -169,7 +160,7 @@ public sealed partial class AudioPlayerViewModel : ViewModelBase
         Start(Position < Duration - 0.05 ? Position : 0);
     }
 
-    /// <summary>Pauses playback if it is running; Play resumes from the same point.</summary>
+    /// <summary>Pauses playback if it is running.</summary>
     public void Pause()
     {
         if (!IsPlaying)

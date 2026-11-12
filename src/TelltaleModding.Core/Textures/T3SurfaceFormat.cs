@@ -1,9 +1,6 @@
 namespace TelltaleModding.Core.Textures;
 
-/// <summary>
-/// Telltale's engine surface formats (values from community reverse engineering of the
-/// engine; verified against real Game of Thrones-era files for BC1/BC3/A8/RGBA32F).
-/// </summary>
+/// <summary>Telltale's engine surface formats.</summary>
 public enum T3SurfaceFormat
 {
     ARGB8 = 0x00,

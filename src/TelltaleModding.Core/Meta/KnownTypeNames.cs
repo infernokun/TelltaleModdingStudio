@@ -1,11 +1,6 @@
 namespace TelltaleModding.Core.Meta;
 
-/// <summary>
-/// Maps Telltale type-name hashes (see <see cref="TelltaleCrc64.HashSymbol"/>) back to
-/// readable names. Names come from community reverse engineering (TelltaleToolLib,
-/// Telltale-Modding-Group) and were verified against real MSV6 headers where noted.
-/// Unlisted hashes are reported as unknown rather than failing the parse.
-/// </summary>
+/// <summary>Maps Telltale type-name hashes back to readable names.</summary>
 public static class KnownTypeNames
 {
     private static readonly Lazy<Dictionary<ulong, string>> _byHash = new(Build);
@@ -22,13 +17,10 @@ public static class KnownTypeNames
         return map;
     }
 
-    /// <summary>
-    /// Known engine type names. Verified-in-file names are grouped first; the rest are
-    /// plausible members of the same era whose hashes cost nothing to keep in the table.
-    /// </summary>
+    /// <summary>Known engine type names.</summary>
     private static readonly string[] Names =
     {
-        // Confirmed in real .d3dmesh headers (MSV6, GoT/Michonne era).
+        // Seen in .d3dmesh headers.
         "D3DMesh", "Symbol", "PropertySet", "Flags", "Vector2", "Color",
         "T3MaterialData", "T3MaterialRuntimeProperty", "T3MaterialCompiledData",
         "T3MaterialParameter", "T3MaterialTexture", "T3MaterialTransform2D",
@@ -37,20 +29,20 @@ public static class KnownTypeNames
         "T3MeshTexture", "T3MeshMaterial", "T3MeshTexCoordTransform",
         "GFXPlatformAttributeParams",
 
-        // Confirmed as material/prop property value types (Definitive Series and earlier).
+        // Material and prop property value types.
         "int32", "T3MaterialEnlightenPrecomputeParams", "EnumT3MaterialNormalSpaceType",
         "BlendMode", "EnumT3MaterialLightModelType",
 
-        // Confirmed in real .d3dtx headers.
+        // Seen in .d3dtx headers.
         "T3Texture", "T3SamplerStateBlock", "EnumPlatformType",
         "RenderSwizzleParams", "T3Texture::RegionStreamHeader",
 
-        // Confirmed as chore resource types (embedded data in Definitive Series chores).
+        // Chore resource types.
         "Animation", "Chore", "LanguageRes", "Procedural_LookAt", "PointOfInterestBlocking",
         "StyleIdleTransitionsRes", "ParticleInverseKinematics", "BlendCameraResource",
         "ProceduralEyes", "CameraSelect",
 
-        // Same-era types expected in other files.
+        // Other types from the same era.
         "Vector3", "Vector4", "Quaternion", "Transform", "String", "BinaryBuffer",
         "ToolProps", "LocationInfo", "T3MeshBoneEntry", "T3MeshLocalTransformEntry",
         "T3MeshEffectPreload", "T3MeshEffectPreloadEntry",

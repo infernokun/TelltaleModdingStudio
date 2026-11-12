@@ -7,23 +7,21 @@ using TelltaleModding.Core.Textures;
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// Baked lightmaps of an assembled scene: a second UV set laid out over per-mesh lightmap
-/// atlases (Tales from the Borderlands: <c>&lt;mesh&gt;_000.d3dtx</c> sampled with texcoord set 5).
-/// Lighting at a texel is <c>sample.rgb × <see cref="Scale"/> × <see cref="Intensity"/></c>;
-/// a lit color is the diffuse color times that (plus any dynamic lights).
+/// Baked lightmaps of an assembled scene. Lighting at a texel is
+/// <c>sample.rgb × <see cref="Scale"/> × <see cref="Intensity"/></c>.
 /// </summary>
 public sealed class SceneLightmaps
 {
     /// <summary>Stored lighting is divided by this so up to twice full brightness fits in 8 bits.</summary>
     public const float Scale = 2f;
 
-    /// <summary>Lightmap UVs, one per vertex of <see cref="AssembledScene.Model"/>'s geometry (zero where a batch has none).</summary>
+    /// <summary>Lightmap UVs, one per vertex (zero where a batch has none).</summary>
     public required Vector2[] Uv2 { get; init; }
 
-    /// <summary>For each batch of the geometry, its lightmap (lighting ÷ <see cref="Scale"/>, alpha 255), or null.</summary>
+    /// <summary>Each batch's lightmap, stored as lighting ÷ <see cref="Scale"/>, or null.</summary>
     public required IReadOnlyList<DdsImage?> BatchLightmaps { get; init; }
 
-    /// <summary>The scene's lightmap intensity ("HDR lightmaps Intensity", 1 when unset).</summary>
+    /// <summary>The scene's lightmap intensity (1 when unset).</summary>
     public float Intensity { get; init; } = 1;
 
     /// <summary>Batches that have a lightmap.</summary>
@@ -36,15 +34,12 @@ public static class SceneLightmapReader
     /// <summary>Texcoord set the games lay lightmaps out on.</summary>
     public const int LightmapTexCoordSet = 5;
 
-    /// <summary>
-    /// HDR atlases (BC3) store lighting as RGB × alpha × this ("RGBM"); a texel's alpha is
-    /// about 1/6 where the lighting is at or below full brightness.
-    /// </summary>
+    /// <summary>HDR atlases store lighting as RGB × alpha × this (RGBM).</summary>
     public const float RgbmRange = 6f;
 
     /// <summary>
-    /// The lightmap UVs of a mesh whose vertex buffers live in the file's async section (Tales
-    /// from the Borderlands), one per vertex; null when the mesh has no lightmap texcoord set.
+    /// The lightmap UVs of a mesh whose vertex buffers live in the file's async section, or
+    /// null when it has none.
     /// </summary>
     public static Vector2[]? ReadUvs(byte[] meshFile, D3dMeshFile mesh)
     {
@@ -77,9 +72,8 @@ public static class SceneLightmapReader
     }
 
     /// <summary>
-    /// Decodes a lightmap atlas to RGBA with lighting ÷ <see cref="SceneLightmaps.Scale"/>
-    /// (HDR atlases expanded from RGBM), box-filtered down to at most <paramref name="maxSize"/>
-    /// on a side (0 keeps full size). Null when it cannot be decoded.
+    /// Decodes a lightmap atlas to RGBA with lighting ÷ <see cref="SceneLightmaps.Scale"/>,
+    /// scaled down to fit <paramref name="maxSize"/>. Null when it cannot be decoded.
     /// </summary>
     public static DdsImage? Decode(byte[] d3dtx, int maxSize = 0)
     {

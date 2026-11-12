@@ -3,10 +3,8 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// Property keys of scene lights. The Definitive Series uses <c>EnvLight - …</c> keys
-/// (<c>module_env_light.prop</c>) and <c>CinLight - …</c> keys for character rig lights
-/// (<c>module_cin_light.prop</c>); older games (Wolf Among Us, Tales from the Borderlands,
-/// Game of Thrones) use <c>Light …</c> keys (<c>module_light.prop</c>).
+/// Property keys of scene lights. The Definitive Series uses <c>EnvLight</c> and <c>CinLight</c>
+/// keys; older games use <c>Light</c> keys.
 /// </summary>
 public static class SceneLightKeys
 {
@@ -28,7 +26,7 @@ public static class SceneLightKeys
     public static readonly ulong EnvLocalPosition = H("EnvLight - Local Position");
     public static readonly ulong EnvLocalRotation = H("EnvLight - Local Rotation");
 
-    // Definitive Series character (cinematic) rig lights.
+    // Definitive Series character rig lights.
     public static readonly ulong CinColor = H("CinLight - Color");
     public static readonly ulong CinIntensity = H("CinLight - Intensity");
     public static readonly ulong CinDimmer = H("CinLight - Dimmer");

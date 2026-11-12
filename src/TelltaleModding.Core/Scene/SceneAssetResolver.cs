@@ -3,10 +3,10 @@ using TelltaleModding.Core.Meta;
 
 namespace TelltaleModding.Core.Scene;
 
-/// <summary>An asset resolver that can also name any file from its symbol (scenes reference props and meshes that way).</summary>
+/// <summary>An asset resolver that can also name any file from its symbol.</summary>
 public interface ISceneAssetResolver : IAssetResolver
 {
-    /// <summary>The file a symbol (CRC64 of its name, with extension) refers to, or null when unknown.</summary>
+    /// <summary>The file a symbol refers to, or null when unknown.</summary>
     new string? NameForSymbol(ulong symbol);
 }
 
@@ -20,7 +20,7 @@ public sealed class SceneAssetResolver : ISceneAssetResolver
     public byte[]? TryRead(string fileName) =>
         _catalog.Find(fileName) is { } entry ? _catalog.Read(entry) : null;
 
-    // Material payloads are scanned 8 bytes at a time, so only texture files count as hits.
+    // Material payloads are scanned blindly, so only texture files count as hits.
     public string? TextureNameForSymbol(ulong symbol) =>
         _catalog.FindBySymbol(symbol) is { } entry &&
         entry.Name.EndsWith(".d3dtx", StringComparison.OrdinalIgnoreCase)
@@ -34,9 +34,8 @@ public sealed class SceneAssetResolver : ISceneAssetResolver
 }
 
 /// <summary>
-/// Serves a scene's files from a folder of loose files (searched
-/// recursively), naming files by symbol. <paramref name="aliases"/> maps game file names to
-/// the names they are stored under (e.g. renamed samples).
+/// Serves a scene's files from a folder of loose files. <paramref name="aliases"/> maps game
+/// file names to the names they are stored under.
 /// </summary>
 public sealed class SceneFolderAssetResolver : ISceneAssetResolver
 {

@@ -2,11 +2,7 @@ using System.Text.Json;
 
 namespace TelltaleModding.App.Services;
 
-/// <summary>
-/// The user's game library and last session, persisted as JSON under
-/// <c>%LOCALAPPDATA%\TelltaleModdingStudio\settings.json</c> (on Linux,
-/// <c>~/.local/share/TelltaleModdingStudio/settings.json</c>).
-/// </summary>
+/// <summary>The user's game library and last session, saved as JSON in local app data.</summary>
 public sealed class AppSettings
 {
     /// <summary>Game install folders the user has added, in the order added.</summary>
@@ -15,13 +11,13 @@ public sealed class AppSettings
     /// <summary>The game that was open when the app last closed.</summary>
     public string? LastGameFolder { get; set; }
 
-    /// <summary>True when the 3D viewports show the game's stylised look instead of studio lighting (older settings).</summary>
+    /// <summary>Old setting for the game look in 3D viewports.</summary>
     public bool ViewportGameLook { get; set; }
 
-    /// <summary>How the 3D viewports shade; null in settings saved before there were three looks.</summary>
+    /// <summary>How the 3D viewports shade. Null in older settings.</summary>
     public Core.Scene.RenderMode? ViewportLook { get; set; }
 
-    /// <summary>A release tag the user chose to skip; the start-up check stays quiet about it.</summary>
+    /// <summary>A release tag the user chose to skip.</summary>
     public string? SkippedUpdateVersion { get; set; }
 
     /// <summary>Choices from the Settings page.</summary>
@@ -33,7 +29,7 @@ public sealed class AppSettings
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TelltaleModdingStudio", "settings.json");
 
-    /// <summary>Where <see cref="Save"/> writes; the file these settings were loaded from.</summary>
+    /// <summary>The file these settings were loaded from and save to.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string FilePath { get; set; } = DefaultPath;
 
@@ -54,7 +50,7 @@ public sealed class AppSettings
         return settings;
     }
 
-    /// <summary>Saves settings; failures are ignored (settings are a convenience).</summary>
+    /// <summary>Saves settings. Failures are ignored.</summary>
     public void Save()
     {
         try

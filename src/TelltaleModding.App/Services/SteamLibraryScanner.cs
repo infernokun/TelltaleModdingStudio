@@ -21,9 +21,7 @@ public static class SteamLibraryScanner
     {
         var roots = LibraryRoots(SteamInstallFolders());
 
-        // Libraries that Steam no longer lists (or another Steam install) are commonly
-        // at <drive>:\SteamLibrary or <drive>:\Steam, or the same names at the root of
-        // a mounted drive on Linux.
+        // Also check the usual library folder names at each drive root.
         var names = OperatingSystem.IsWindows()
             ? new[] { "SteamLibrary", "Steam", @"Program Files (x86)\Steam" }
             : new[] { "SteamLibrary", "Steam" };
@@ -46,10 +44,8 @@ public static class SteamLibraryScanner
     }
 
     /// <summary>
-    /// The given Steam installs that exist, plus every library their
-    /// <c>steamapps/libraryfolders.vdf</c> lists. Links are followed, so one library
-    /// reached through two paths (<c>~/.steam/steam</c> and <c>~/.local/share/Steam</c>)
-    /// appears once.
+    /// The given Steam installs that exist, plus every library in their libraryfolders.vdf.
+    /// Links are followed so a library only shows up once.
     /// </summary>
     public static HashSet<string> LibraryRoots(IEnumerable<string> steamInstalls)
     {
@@ -88,8 +84,7 @@ public static class SteamLibraryScanner
             yield return Path.Combine(home, "Library", "Application Support", "Steam");
             yield break;
         }
-        // The distribution package (~/.steam/steam and ~/.steam/root link to
-        // ~/.local/share/Steam), then the Flatpak and Snap packages.
+        // Native package, then Flatpak and Snap.
         yield return Path.Combine(home, ".local", "share", "Steam");
         yield return Path.Combine(home, ".steam", "steam");
         yield return Path.Combine(home, ".steam", "root");
@@ -116,7 +111,7 @@ public static class SteamLibraryScanner
         return found.Distinct(PathComparer).OrderBy(Path.GetFileName).ToList();
     }
 
-    /// <summary>True when the folder (or one level below it) holds .ttarch/.ttarch2 archives.</summary>
+    /// <summary>True when the folder or one level below it holds .ttarch/.ttarch2 archives.</summary>
     public static bool HasTelltaleArchives(string folder)
     {
         try
@@ -131,7 +126,7 @@ public static class SteamLibraryScanner
         return false;
     }
 
-    // The folder a path ends up at once links are followed, without a trailing separator.
+    // The real folder after following links, with no trailing separator.
     private static string Canonical(string dir)
     {
         try

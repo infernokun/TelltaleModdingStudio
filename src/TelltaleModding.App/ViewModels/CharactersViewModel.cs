@@ -11,10 +11,7 @@ using TelltaleModding.Core.Scene;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// The character viewer: browse a game's characters, dress them from their parts,
-/// and play their animations.
-/// </summary>
+/// <summary>The character viewer: browse characters, change outfits and play animations.</summary>
 public sealed partial class CharactersViewModel : ViewModelBase
 {
     private GameCatalog? _catalog;
@@ -31,7 +28,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
     private AnimationPlayer? _player;
     private (AnimationFile Clip, string Name)? _clip;
 
-    /// <summary>How the viewport shades (shared by the workspaces; set by the shell).</summary>
+    /// <summary>How the viewport shades, shared by all workspaces.</summary>
     public ViewportLookViewModel Look { get; set; } = new();
 
     private readonly DispatcherTimer _playTimer;
@@ -45,10 +42,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
         InitFace();
     }
 
-    /// <summary>
-    /// Raised on the UI thread when a model is ready to render; the flag says whether
-    /// the camera should frame it afresh (new character) or stay put (outfit change).
-    /// </summary>
+    /// <summary>Raised on the UI thread when a model is ready. The flag says whether to reframe the camera.</summary>
     public event Action<AssembledModel, bool>? ModelReady;
 
     private bool _frameNextModel = true;
@@ -56,10 +50,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
     /// <summary>Raised when the viewport should show nothing.</summary>
     public event Action? ModelCleared;
 
-    /// <summary>
-    /// Raised during playback/scrubbing with the frame's skinning matrices (the viewport
-    /// skins on the GPU); null returns the model to its rest pose.
-    /// </summary>
+    /// <summary>Raised with the frame's skinning matrices. Null means rest pose.</summary>
     public event Action<Matrix4x4[]?>? PoseReady;
 
     /// <summary>Raised when the camera should frame the model again.</summary>
@@ -73,10 +64,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
     [ObservableProperty]
     private string _sourceName = "";
 
-    /// <summary>
-    /// Shows a game's characters. <paramref name="models"/> is the game's shared model
-    /// assembler (one per open game, so pages share its decoded meshes and textures).
-    /// </summary>
+    /// <summary>Shows a game's characters. <paramref name="models"/> is the game's shared model assembler.</summary>
     public void Load(GameCatalog catalog, ModelAssembler? models = null)
     {
         Reset();
@@ -92,10 +80,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
         CharacterSummary = $"{_allCharacters.Count:N0} characters";
     }
 
-    /// <summary>
-    /// Shows loose extracted files: the given meshes as one model, with every
-    /// animation in their folder (used by the <c>--preview-mesh</c> debug flag).
-    /// </summary>
+    /// <summary>Shows loose extracted meshes as one model, for the <c>--preview-mesh</c> flag.</summary>
     public void LoadLoose(IReadOnlyList<string> meshPaths, string? playAnimationPath = null)
     {
         Reset();
@@ -103,7 +88,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
         var resolver = new FolderAssetResolver(folder);
         _assets = resolver;
         _assembler = new ModelAssembler(resolver);
-        // The agent named after the first mesh, when its .prop is in the folder and lists it.
+        // Use the .prop named after the first mesh, if there is one.
         _agentProp = Path.GetFileNameWithoutExtension(meshPaths[0]) + ".prop";
         UseFaceSource(null, resolver, resolver.FileNames);
         SourceName = folder;
@@ -141,7 +126,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
             ?? new AnimationItemViewModel(Path.GetFileNameWithoutExtension(name), name, true, () => File.ReadAllBytes(animationPath));
     }
 
-    /// <summary>Stops playback and forgets the source, its characters and the model.</summary>
+    /// <summary>Stops playback and clears everything.</summary>
     public void Clear() => Reset();
 
     private void Reset()
@@ -211,7 +196,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
         _agentProp = entry.Id + ".prop";
         Face.SetCharacter(entry.Id, entry.DisplayName);
 
-        // Outfit: parts grouped by slot, in a stable body order.
+        // Parts grouped by slot.
         Outfit.Clear();
         bool anyDefault = entry.Parts.Any(p => p.DefaultOn);
         var seenSlots = new HashSet<string>();
@@ -220,7 +205,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
             var slot = new OutfitSlotViewModel(group.Key);
             foreach (var part in group.OrderBy(p => p.PartName, StringComparer.OrdinalIgnoreCase))
             {
-                // Without default data from the game, wear the first part of each slot.
+                // No defaults from the game, so wear the first part of each slot.
                 bool on = anyDefault ? part.DefaultOn : seenSlots.Add(group.Key);
                 slot.Parts.Add(new OutfitPartViewModel(part.Mesh.Name, part.PartName, on, ScheduleRebuild));
             }
@@ -237,10 +222,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
         _ = RebuildModelAsync();
     }
 
-    /// <summary>
-    /// The meshes a character wears by default: the game's own defaults, or else the
-    /// first part of each slot (the same choice the Outfit tab starts from).
-    /// </summary>
+    /// <summary>The meshes a character wears by default.</summary>
     public static IEnumerable<string> DefaultOutfitMeshes(CharacterEntry entry)
     {
         bool anyDefault = entry.Parts.Any(p => p.DefaultOn);
@@ -262,7 +244,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
 
     public ObservableCollection<OutfitSlotViewModel> Outfit { get; } = new();
 
-    // Several quick toggles collapse into one rebuild.
+    // Debounce so quick toggles only rebuild once.
     private async void ScheduleRebuild()
     {
         _rebuildCts?.Cancel();
@@ -310,7 +292,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
     [ObservableProperty]
     private string? _error;
 
-    /// <summary>One line per mesh/batch: textures matched, hidden layers, skeleton.</summary>
+    /// <summary>Load details, one line per mesh.</summary>
     public ObservableCollection<string> Details { get; } = new();
 
     private async Task RebuildModelAsync()
@@ -350,7 +332,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
             _buildLock.Release();
         }
         if (generation != _buildGeneration)
-            return; // a newer outfit/character was requested meanwhile
+            return; // a newer build was requested
         IsLoading = false;
 
         if (model is null)
@@ -380,7 +362,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
         ModelReady?.Invoke(model, _frameNextModel);
         _frameNextModel = false;
 
-        // Keep the current clip (and time) across outfit changes.
+        // Keep the current clip and time across outfit changes.
         if (_player is not null && _clip is { } clip)
         {
             _player.Load(clip.Clip, clip.Name);
@@ -615,7 +597,7 @@ public sealed partial class CharactersViewModel : ViewModelBase
         _timeFromTimer = false;
     }
 
-    // Scrubbing the timeline poses the model at the dragged time.
+    // Scrubbing the timeline.
     partial void OnCurrentTimeChanged(double value)
     {
         if (!_timeFromTimer && _clip is not null)
@@ -650,7 +632,7 @@ public sealed class CharacterItemViewModel
     public string SearchText { get; }
 }
 
-/// <summary>A body slot in the outfit tab (Head, Hair, …) and its interchangeable parts.</summary>
+/// <summary>A body slot in the Outfit tab and its parts.</summary>
 public sealed class OutfitSlotViewModel
 {
     public OutfitSlotViewModel(string slot) => Slot = slot;
@@ -679,7 +661,7 @@ public sealed partial class OutfitPartViewModel : ViewModelBase
 
     partial void OnIsOnChanged(bool value) => _changed();
 
-    /// <summary>"bodyUpperBBackpack" → "Body upper B backpack".</summary>
+    /// <summary>Splits a camelCase part name into readable words.</summary>
     internal static string Prettify(string partName)
     {
         var words = new List<string>();
@@ -720,6 +702,6 @@ public sealed class AnimationItemViewModel
     public string FileName { get; }
     public bool IsCharacterClip { get; }
 
-    /// <summary>Reads the clip's bytes (may run on a background thread).</summary>
+    /// <summary>Reads the clip's bytes. May run on a background thread.</summary>
     public Func<byte[]> Load { get; }
 }

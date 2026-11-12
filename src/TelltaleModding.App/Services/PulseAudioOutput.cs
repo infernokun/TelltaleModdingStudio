@@ -5,9 +5,8 @@ using System.Runtime.InteropServices;
 namespace TelltaleModding.App.Services;
 
 /// <summary>
-/// Speaker output on Linux through PulseAudio's simple API (<c>libpulse-simple</c>), which
-/// PipeWire also provides. A thread per clip writes the samples in short chunks, so pause,
-/// seek and volume take effect within a chunk or two.
+/// Speaker output on Linux through libpulse-simple. A thread per clip writes short chunks
+/// so pause, seek and volume react quickly.
 /// </summary>
 public sealed class PulseAudioOutput : IAudioOutput
 {
@@ -46,7 +45,7 @@ public sealed class PulseAudioOutput : IAudioOutput
             lock (_heardLock)
                 (frame, at) = (_heardFrame, _heardAt);
             double seconds = frame / (double)_rate;
-            // The writer moves the frame on once a chunk; in between, time runs on with the sound.
+            // The writer only updates once per chunk, so fill in the time since then.
             if (IsPlaying && Interlocked.Read(ref _seekFrame) < 0)
                 seconds += Math.Min(Stopwatch.GetElapsedTime(at).TotalSeconds, ChunkMs / 1000.0);
             return TimeSpan.FromSeconds(Math.Min(seconds, Frames / (double)_rate));
@@ -61,7 +60,7 @@ public sealed class PulseAudioOutput : IAudioOutput
 
     private long Frames => _pcm.Length / _channels;
 
-    /// <summary>True when a PulseAudio or PipeWire server accepts a playback stream.</summary>
+    /// <summary>True when a PulseAudio server accepts a playback stream.</summary>
     public static bool IsAvailable()
     {
         if (!OperatingSystem.IsLinux())
@@ -98,7 +97,7 @@ public sealed class PulseAudioOutput : IAudioOutput
         if (_pcm.Length == 0)
             return;
         _paused = false;
-        // A clip that played to its end starts again from wherever it was sought to.
+        // A finished clip starts again from the last seek point.
         if (_finished)
             Start(Interlocked.Read(ref _heardFrame));
     }
@@ -175,7 +174,7 @@ public sealed class PulseAudioOutput : IAudioOutput
                 }
                 if (_paused)
                 {
-                    // Drop what the server still holds, and carry on from what was heard.
+                    // Drop buffered audio and resume from what was heard.
                     pa_simple_flush(s, out _);
                     frame = Interlocked.Read(ref _heardFrame);
                     while (_paused && !_stop && Interlocked.Read(ref _seekFrame) < 0)
@@ -205,7 +204,7 @@ public sealed class PulseAudioOutput : IAudioOutput
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
-            // No PulseAudio library after all: the clip just doesn't sound.
+            // No PulseAudio library, so the clip stays silent.
         }
         finally
         {
@@ -240,7 +239,7 @@ public sealed class PulseAudioOutput : IAudioOutput
         public uint MinReq;
         public uint FragSize;
 
-        // (uint)-1 asks the server for its default in each field.
+        // (uint)-1 means use the server default.
         public static BufferAttr ServerDefaults => new()
         {
             MaxLength = uint.MaxValue, TLength = uint.MaxValue, Prebuf = uint.MaxValue, MinReq = uint.MaxValue, FragSize = uint.MaxValue,

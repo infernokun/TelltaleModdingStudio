@@ -1,14 +1,12 @@
 namespace TelltaleModding.Core.Archives;
 
 /// <summary>
-/// Blowfish keys for the .ttarch2 games, keyed by ttarchext game index (the same
-/// numbering as <c>Data/games.json</c>, which was generated from ttarchext's
-/// <c>gamekeys[]</c> table). Only the .ttarch2-era entries are ported; classic
-/// .ttarch games are not read in-process.
+/// Blowfish keys for the .ttarch2 games by ttarchext game index, ported from ttarchext's
+/// <c>gamekeys[]</c> table.
 /// </summary>
 internal static class Ttarch2GameKeys
 {
-    // Hex of the raw key bytes, exactly as they appear in ttarchext.c.
+    // Raw key bytes as hex, as they appear in ttarchext.c.
     private static readonly Dictionary<int, string> HexKeys = new()
     {
         [54] = "85CA8FA089DF6473A2B2D6C69ECAC688995A73D89FE19BE296519F9B9ACECD99D276627FA7C49BD8DAE7A99C6778B3D1B1C89964A0A285", // The Wolf Among Us
@@ -25,7 +23,7 @@ internal static class Ttarch2GameKeys
         [67] = "96CA999F8DDA9A87D7CDD9BB93D1BEC0D79171DC9ED98DD0D18CD8C3A0B0C695C39C93BBCCCCA7D3B9D9D9D08E93BEDAAED18D77D5D3A3", // The Walking Dead: The Telltale Definitive Series
     };
 
-    // Keyed ciphers are built once per game and shared: decryption never mutates them.
+    // Built once per game and shared, since decrypting doesn't change them.
     private static readonly Dictionary<int, TtarchBlowfish> Ciphers = new();
 
     /// <summary>Returns the keyed cipher for <paramref name="gameNum"/>, or null when it has no .ttarch2 key.</summary>

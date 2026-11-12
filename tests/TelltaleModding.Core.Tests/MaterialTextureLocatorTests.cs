@@ -5,7 +5,7 @@ namespace TelltaleModding.Core.Tests;
 
 public class MaterialTextureLocatorTests
 {
-    // A material payload is scanned for 8-byte texture symbols; padding keeps them apart.
+    // Texture symbols with padding between them.
     private static byte[] Payload(params string[] textures) =>
         textures.SelectMany(t => BitConverter.GetBytes(TelltaleCrc64.HashSymbol(t)).Concat(new byte[8])).ToArray();
 
@@ -15,7 +15,7 @@ public class MaterialTextureLocatorTests
     [SkippableFact]
     public void Real_diffuse_wins_over_engine_placeholders_listed_first()
     {
-        // Alvin (Definitive Series): color_000 fills unused slots ahead of the real diffuse.
+        // Alvin has color_000 placeholders ahead of the real diffuse.
         string[] textures =
         {
             "sk54_alvin_body_nm.d3dtx", "color_000.d3dtx", "color_000.d3dtx", "sk54_alvin_body_detail.d3dtx",
@@ -28,7 +28,7 @@ public class MaterialTextureLocatorTests
     [SkippableFact]
     public void Color_texture_is_the_stem_the_other_maps_extend()
     {
-        // Clementine 305: a damage mask and a damage overlay are listed around the real head.
+        // Clementine 305 has damage textures listed around the real head.
         string[] textures =
         {
             "sk62_clementine_headWrinkle_nm.d3dtx", "sk62_clementine_head_nm.d3dtx",
@@ -51,7 +51,7 @@ public class MaterialTextureLocatorTests
         Assert.Equal("sk62_clementine_head_nm.d3dtx",
             MaterialTextureLocator.PickNormalMap(Payload(textures), s => Lookup(s, textures)));
 
-        // Only a wrinkle map: better no normal map than a permanently wrinkled face.
+        // A wrinkle map alone isn't used, or the face would always look wrinkled.
         string[] wrinkleOnly = { "face_wrinkle_nm.d3dtx", "face.d3dtx" };
         Assert.Null(MaterialTextureLocator.PickNormalMap(Payload(wrinkleOnly), s => Lookup(s, wrinkleOnly)));
     }

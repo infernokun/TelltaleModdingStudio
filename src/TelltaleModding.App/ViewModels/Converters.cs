@@ -27,7 +27,7 @@ public static class Converters
             ? "Pick a character to load their model."
             : "Open a game from Home to start.");
 
-    /// <summary>Speed multiplier label, e.g. 0.5 → "0.5×".</summary>
+    /// <summary>Speed multiplier label.</summary>
     public static readonly IValueConverter SpeedLabel =
         new FuncValueConverter<double, string>(speed => $"{speed:0.##}×");
 }

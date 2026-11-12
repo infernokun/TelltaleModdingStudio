@@ -4,7 +4,7 @@
              x:Class="TelltaleModding.App.Views.ConversationView"
              x:DataType="vm:ConversationViewModel">
 
-    <!-- The list and the tree share the width; drag the gap between them to resize. -->
+    <!-- Conversation list and tree -->
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="0.42*" MinWidth="210" MaxWidth="440" />
@@ -63,7 +63,7 @@
                     <!-- Tree -->
                     <TabItem Header="Tree" FontSize="14">
                         <Grid RowDefinitions="Auto,*">
-                            <!-- Wraps onto a second row when the panel is narrow rather than cutting off. -->
+                            <!-- Wraps when the panel is narrow -->
                             <WrapPanel Margin="0,0,0,6">
                                 <WrapPanel.Styles>
                                     <Style Selector="WrapPanel > :is(Control)">
@@ -148,7 +148,7 @@
                                 </ItemsControl>
                             </ScrollViewer>
                             <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
-                                       Text="Press Play through to hear the conversation; at each choice, pick a reply."
+                                       Text="Press Play through to hear the conversation and pick replies as you go."
                                        IsVisible="{Binding !HasTranscript}" />
 
                             <!-- Options waiting for a pick -->

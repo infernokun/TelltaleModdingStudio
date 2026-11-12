@@ -1,21 +1,17 @@
 namespace TelltaleModding.Core.Textures;
 
 /// <summary>
-/// Puts a normal map's channels where the viewer reads them. Newer textures (Michonne, Tales
-/// from the Borderlands, the Definitive Series) carry a swizzle naming the channel each of X,
-/// Y and Z comes from: their BC3 normal maps store X in alpha, Y in blue and Z in green
-/// (swizzle 3, 2, 1, 0), as the games' shaders read them. Older textures (The Wolf Among Us,
-/// Game of Thrones, the original Season Two) have no swizzle and keep X in blue and Y in
-/// alpha, which is how the viewer reads BC3 and BC2 maps; BC5 maps it reads as X in red and
-/// Y in green, anything else as X, Y, Z in red, green, blue.
+/// Puts a normal map's channels where the viewer reads them. Newer textures carry a swizzle
+/// saying which channel X, Y and Z come from. The viewer reads BC3 and BC2 maps as X in blue
+/// and Y in alpha, and everything else as X, Y, Z in red, green, blue.
 /// </summary>
 public static class NormalMapSwizzle
 {
     private const byte Zero = 4, One = 5;
 
     /// <summary>
-    /// <paramref name="image"/> rearranged by <paramref name="swizzle"/> into the viewer's layout
-    /// for its format, or the image itself when it has no swizzle or already matches.
+    /// Rearranges <paramref name="image"/> by <paramref name="swizzle"/> into the viewer's layout,
+    /// or returns it as is when there's no swizzle or it already matches.
     /// </summary>
     public static DdsImage Apply(DdsImage image, IReadOnlyList<byte>? swizzle)
     {

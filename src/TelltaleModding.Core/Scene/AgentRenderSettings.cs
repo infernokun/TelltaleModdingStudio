@@ -5,14 +5,8 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// How an agent's <c>.prop</c> asks for all of its meshes to be drawn, on top of what their
-/// materials say: a color multiplied over every material ("Render Diffuse Color"), the
-/// light the agent gives off ("Render Emission Color", black unless set: it lights the
-/// surface's own color and makes the materials' emissive textures glow), an opacity for
-/// the whole agent ("Render Constant Alpha", -1 when unset) and whether its translucent
-/// surfaces are drawn as one layer ("Render 3D Alpha"). Tales from the Borderlands'
-/// hologram Handsome Jack has grey textures that are made blue, glowing and see-through
-/// this way. Colors are as stored (display values, not linear).
+/// Agent-wide render settings from its <c>.prop</c>: tint, glow, opacity and one-layer
+/// translucency. Colors are stored as display values, not linear.
 /// </summary>
 public sealed record AgentRenderSettings
 {
@@ -30,10 +24,7 @@ public sealed record AgentRenderSettings
     /// <summary>Opacity of the whole agent (1 when unset).</summary>
     public float Opacity { get; init; } = 1f;
 
-    /// <summary>
-    /// True when the agent's translucent surfaces show only their nearest layer: the engine
-    /// lays down their depth first, so a see-through body does not show its own far side.
-    /// </summary>
+    /// <summary>True when translucent surfaces show only their nearest layer (depth is drawn first).</summary>
     public bool DrawAsOneLayer { get; init; }
 
     /// <summary>Nothing set: the materials are drawn as they are.</summary>
@@ -42,18 +33,12 @@ public sealed record AgentRenderSettings
     public bool IsDefault => Equals(Default);
 
     /// <summary>
-    /// True when the agent is drawn as an effect: it glows or is see-through. Only then is
-    /// its color applied. A color on an otherwise ordinary character grades it for one
-    /// scene's lighting (Season Two's sk54_carver203 is set to grey, sk56_clementine203 to
-    /// a faint green), which a character viewer leaves out.
+    /// True when the agent glows or is see-through. Only then is its color applied, since on
+    /// ordinary characters it is just a per-scene grade.
     /// </summary>
     public bool IsEffect => EmissionColor != Vector3.Zero || Opacity < 1f || DrawAsOneLayer;
 
-    /// <summary>
-    /// The color multiplied over the materials, in linear light (white unless
-    /// <see cref="IsEffect"/>). Agent colors are display values the engine multiplies in
-    /// before gamma; the viewer shades in linear light.
-    /// </summary>
+    /// <summary>The color multiplied over the materials, in linear light (white unless <see cref="IsEffect"/>).</summary>
     public Vector3 LinearTint => IsEffect ? Linear(DiffuseColor) : Vector3.One;
 
     /// <summary><see cref="EmissionColor"/> in linear light.</summary>
@@ -61,10 +46,7 @@ public sealed record AgentRenderSettings
 
     private static Vector3 Linear(Vector3 c) => new(MathF.Pow(c.X, 2.2f), MathF.Pow(c.Y, 2.2f), MathF.Pow(c.Z, 2.2f));
 
-    /// <summary>
-    /// Reads the settings from an agent's property set and, for keys it does not set, its
-    /// parents (nearest first) through <paramref name="parent"/> (null when a parent is unknown).
-    /// </summary>
+    /// <summary>Reads the settings from an agent's property set, falling back to its parents through <paramref name="parent"/>.</summary>
     public static AgentRenderSettings FromProperties(MaterialData properties, Func<ulong, MaterialData?>? parent = null)
     {
         var chain = new List<MaterialData> { properties };
@@ -79,11 +61,7 @@ public sealed record AgentRenderSettings
         return From(Color(DiffuseColorKey), Color(EmissionColorKey), alpha, oneLayer);
     }
 
-    /// <summary>
-    /// Reads the settings from a scene agent's property chain: its own set in the
-    /// <c>.scene</c> followed by the <c>.prop</c> files it inherits from, nearest first
-    /// (see <see cref="SceneObject.PropertyChain"/>). The nearest set with a key wins.
-    /// </summary>
+    /// <summary>Reads the settings from a scene agent's <see cref="SceneObject.PropertyChain"/>. The nearest set with a key wins.</summary>
     public static AgentRenderSettings FromProperties(IReadOnlyList<ScenePropertySet> chain)
     {
         T? First<T>(Func<ScenePropertySet, T?> get) where T : struct =>

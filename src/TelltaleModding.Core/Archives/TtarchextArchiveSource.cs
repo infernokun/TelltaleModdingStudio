@@ -5,17 +5,10 @@ using TelltaleModding.Core.Engine;
 namespace TelltaleModding.Core.Archives;
 
 /// <summary>
-/// <see cref="IArchiveSource"/> backed by the ttarchext executable: the table of contents
-/// comes from one <c>-l</c> listing, and each <see cref="Read"/> extracts the file with an
-/// exact-name <c>-f</c> filter into a private temp folder, reads the bytes and deletes it.
-/// Slow (one process per read) but works for every archive generation ttarchext knows,
-/// which makes it the fallback for classic <c>.ttarch</c> games. Implements
-/// <see cref="IArchivePrefetch"/> so bulk readers can pull many files with one process.
+/// <see cref="IArchiveSource"/> that runs ttarchext for each read. Slow, but it handles every
+/// archive type ttarchext knows, so it's the fallback for classic <c>.ttarch</c> games.
 /// </summary>
-/// <remarks>
-/// Note that ttarchext always decrypts <c>.lua</c>/<c>.lenc</c> scripts on extraction,
-/// so <see cref="Read"/> returns plain Lua for those rather than the stored bytes.
-/// </remarks>
+/// <remarks>ttarchext always decrypts Lua scripts, so <see cref="Read"/> returns plain Lua for those.</remarks>
 public sealed class TtarchextArchiveSource : IArchiveSource, IArchivePrefetch
 {
     private static readonly Lazy<string> _processTempRoot = new(CreateProcessTempRoot);
@@ -46,11 +39,11 @@ public sealed class TtarchextArchiveSource : IArchiveSource, IArchivePrefetch
 
     /// <summary>
     /// Lists <paramref name="archivePath"/> with ttarchext and returns a source over it.
-    /// Throws <see cref="TtarchException"/> when the engine can't be found or fails.
+    /// Throws <see cref="TtarchException"/> when ttarchext can't be found or fails.
     /// </summary>
     /// <param name="archivePath">Full path of the archive.</param>
-    /// <param name="gameNum">ttarchext game index (selects the decryption key).</param>
-    /// <param name="enginePath">ttarchext executable; located automatically when null.</param>
+    /// <param name="gameNum">ttarchext game index, which picks the decryption key.</param>
+    /// <param name="enginePath">ttarchext executable, found automatically when null.</param>
     public static TtarchextArchiveSource Open(string archivePath, int gameNum, string? enginePath = null)
     {
         var fullPath = Path.GetFullPath(archivePath);
@@ -93,8 +86,7 @@ public sealed class TtarchextArchiveSource : IArchiveSource, IArchivePrefetch
             }
         }
 
-        // A private folder per read keeps concurrent reads (and concurrent copies of the
-        // same file) from ever touching each other's output.
+        // A folder per read so concurrent reads never touch each other's output.
         var dir = Path.Combine(_workDir, Guid.NewGuid().ToString("N"));
         try
         {
@@ -114,9 +106,8 @@ public sealed class TtarchextArchiveSource : IArchiveSource, IArchivePrefetch
     }
 
     /// <summary>
-    /// Extracts all of <paramref name="entries"/> with a single ttarchext run (using a
-    /// wildcard built from the names' common prefix and suffix) and keeps them on disk
-    /// until each is read once. Entries from other archives are ignored.
+    /// Extracts <paramref name="entries"/> with a single ttarchext run and keeps each on disk
+    /// until it's read once.
     /// </summary>
     public void Prefetch(IReadOnlyCollection<ArchiveEntryRef> entries, CancellationToken cancellationToken = default)
     {
@@ -144,7 +135,7 @@ public sealed class TtarchextArchiveSource : IArchiveSource, IArchivePrefetch
                 _prefetched[name] = path;
         }
 
-        // The wildcard can match more than was asked for; drop the extras straight away.
+        // The wildcard can match more than was asked for, so delete the extras.
         if (Directory.Exists(dir))
         {
             foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
@@ -156,10 +147,7 @@ public sealed class TtarchextArchiveSource : IArchiveSource, IArchivePrefetch
         }
     }
 
-    /// <summary>
-    /// Builds a ttarchext wildcard (<c>*</c>/<c>?</c>, case-insensitive) matching every
-    /// name: longest common prefix + <c>*</c> + longest common suffix.
-    /// </summary>
+    /// <summary>Builds a ttarchext wildcard from the names' common prefix and suffix.</summary>
     public static string BuildWildcard(IReadOnlyList<string> names)
     {
         if (names.Count == 0) return "*";

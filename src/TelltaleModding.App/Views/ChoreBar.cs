@@ -4,10 +4,7 @@ using Avalonia.Media;
 
 namespace TelltaleModding.App.Views;
 
-/// <summary>
-/// Where a resource plays within its chore: a thin track for the whole chore with a bar
-/// for each span the resource plays in (fractions of the chore's length).
-/// </summary>
+/// <summary>A track for the whole chore with a bar for each span a resource plays in.</summary>
 public sealed class ChoreBar : Control
 {
     public static readonly StyledProperty<IReadOnlyList<(double Start, double End)>?> SpansProperty =

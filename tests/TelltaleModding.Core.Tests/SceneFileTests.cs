@@ -21,12 +21,12 @@ public class SceneFileTests
         Assert.Equal(230, scene.Agents.Count);
         Assert.Equal("adv_bellTower.scene", scene.Agents[0].Name);
 
-        // An environment mesh agent sits at the origin and inherits its own .prop.
+        // An environment mesh sits at the origin and inherits its own .prop.
         var tower = scene.Find("adv_towerBellTower")!;
         Assert.Equal(Vector3.Zero, tower.LocalPosition);
         Assert.Equal(TelltaleCrc64.HashSymbol("adv_towerBellTower.prop"), Assert.Single(tower.Properties.Parents));
 
-        // A door placed by its LocationInfo transform.
+        // A door placed by its LocationInfo.
         var door = scene.Find("obj_doorEntranceBellTower")!;
         AssertNear(new Vector3(1.869658f, 0.553911f, 0.30378f), door.LocalPosition);
         Assert.Equal(Quaternion.Identity, door.LocalRotation);

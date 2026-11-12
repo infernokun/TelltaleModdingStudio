@@ -9,20 +9,20 @@ public enum SceneLightType
     Point,
     Spot,
 
-    /// <summary>Flat light within a radius (a local ambient light).</summary>
+    /// <summary>Flat light within a radius.</summary>
     Ambient,
 
-    /// <summary>Ambient light that is brighter on surfaces facing its direction (sky light).</summary>
+    /// <summary>Ambient light that is brighter on surfaces facing its direction.</summary>
     DirectionalAmbient,
 }
 
 /// <summary>Which property module a light was read from.</summary>
 public enum SceneLightFamily
 {
-    /// <summary><c>EnvLight - …</c> keys (Definitive Series environment lights).</summary>
+    /// <summary><c>EnvLight</c> keys (Definitive Series environment lights).</summary>
     Environment,
 
-    /// <summary><c>CinLight - …</c> keys (Definitive Series character rig lights).</summary>
+    /// <summary><c>CinLight</c> keys (Definitive Series character rig lights).</summary>
     Cinematic,
 
     /// <summary><c>Light …</c> keys (older games).</summary>
@@ -41,24 +41,24 @@ public sealed class SceneLight
 
     public required SceneLightFamily Family { get; init; }
 
-    /// <summary>The stored type value (<c>EnvLight - Type</c> or <c>Light Type</c>); -1 when absent.</summary>
+    /// <summary>The stored type value, or -1 when absent.</summary>
     public int RawType { get; init; } = -1;
 
     public Vector3 Position { get; init; }
 
-    /// <summary>Where the light points (the agent's local +Z in world space), normalised.</summary>
+    /// <summary>Where the light points: the agent's local +Z in world space.</summary>
     public Vector3 Direction { get; init; } = -Vector3.UnitY;
 
-    /// <summary>Linear RGB color (the stored color is converted from sRGB).</summary>
+    /// <summary>Linear RGB color.</summary>
     public Vector3 Color { get; init; } = Vector3.One;
 
-    /// <summary>Intensity with dimmers and the scene's light environment intensity applied. Negative lights darken.</summary>
+    /// <summary>Intensity with dimmers applied. Negative lights darken.</summary>
     public float Intensity { get; init; } = 1;
 
     /// <summary>Reach of a point, spot or local ambient light (0 = unlimited).</summary>
     public float Range { get; init; }
 
-    /// <summary>Distance falloff exponent (Definitive Series; 2 = inverse square-like).</summary>
+    /// <summary>Distance falloff exponent (Definitive Series).</summary>
     public float Falloff { get; init; } = 2;
 
     /// <summary>Full apex angle of a spot light's bright core, in degrees.</summary>
@@ -67,50 +67,40 @@ public sealed class SceneLight
     /// <summary>Full apex angle of a spot light's cone, in degrees.</summary>
     public float SpotOuterDegrees { get; init; }
 
-    /// <summary>On when the scene starts (enabled, turned on and visible).</summary>
+    /// <summary>On when the scene starts.</summary>
     public bool Enabled { get; init; } = true;
 
-    /// <summary>A light of a character lighting rig: it lights characters only, from a rig placed at run time.</summary>
+    /// <summary>A light of a character lighting rig, which lights characters only.</summary>
     public bool IsCharacterLight { get; init; }
 
-    /// <summary>
-    /// The light reaches the location's main geometry: its groups include the default group
-    /// (Definitive Series group 0; older games: a shown mesh shares one of
-    /// its light groups). Lights only for the sky dome, foliage cards, effects or characters do not.
-    /// </summary>
+    /// <summary>True when the light's groups reach the location's main geometry.</summary>
     public bool AffectsMainGeometry { get; init; } = true;
 
     /// <summary>
-    /// The light also shines on lightmapped surfaces. Older games skip ordinary lights on
-    /// lightmapped meshes (their light is in the lightmap) unless "Dynamic on LightMap" is set.
+    /// The light also shines on lightmapped surfaces. Older games only do this when
+    /// "Dynamic on LightMap" is set.
     /// </summary>
     public bool LightsLightmapped { get; init; } = true;
 
-    /// <summary>A static light whose contribution is baked into lightmaps (older games) or Enlighten data.</summary>
+    /// <summary>A static light already baked into lightmaps or Enlighten data.</summary>
     public bool IsBaked { get; init; }
 
     /// <summary>Light group symbols (older games) or the group flag bits (Definitive Series) the light affects.</summary>
     public IReadOnlyList<ulong> Groups { get; init; } = Array.Empty<ulong>();
 
-    /// <summary>
-    /// Shown mesh objects (by <see cref="SceneLayout.Objects"/> index) in the light's groups (older
-    /// games only); null when the light is not limited by groups.
-    /// </summary>
+    /// <summary>Shown mesh objects in the light's groups (older games only), or null when not limited.</summary>
     public IReadOnlyList<int>? AffectedObjects { get; init; }
 
     /// <summary>How much of the scene's visible geometry the light reaches (0-1), set by <see cref="SceneLighting.Build"/>.</summary>
     public float Coverage { get; init; } = 1;
 
-    /// <summary>|Intensity| × color luminance × <see cref="Coverage"/>: how much the light matters.</summary>
+    /// <summary>How much the light matters, from intensity, luminance and coverage.</summary>
     public float Importance => MathF.Abs(Intensity) * SceneLighting.Luminance(Color) * Coverage;
 
     /// <summary>True for lights a direct-light shader can draw (directional, point, spot).</summary>
     public bool IsDirect => Type is SceneLightType.Directional or SceneLightType.Point or SceneLightType.Spot;
 
-    /// <summary>
-    /// The light as a <see cref="LightSource"/>. Cone angles are full apex angles in degrees;
-    /// color is linear and intensity is carried separately.
-    /// </summary>
+    /// <summary>The light as a <see cref="LightSource"/>.</summary>
     public LightSource ToLightSource() => new(
         Type switch
         {
@@ -126,18 +116,11 @@ public sealed class SceneLight
     public override string ToString() => $"{Name} ({Type}, {Intensity:0.###})";
 }
 
-/// <summary>
-/// The lights of a scene and its ambient light, turned into <see cref="LightRig"/>s.
-/// </summary>
+/// <summary>The lights of a scene and its ambient light, turned into <see cref="LightRig"/>s.</summary>
 /// <remarks>
-/// Light agents are read from their property chains (see <see cref="SceneLightKeys"/>).
-/// Directional and spot lights point along the agent's local +Z (the axis that points down
-/// for nearly every ceiling spot and sun in the games). Ambient comes from ambient-type
-/// lights weighted by how much of the scene they cover, the scene's <c>Ambient Color</c>,
-/// and, in the Definitive Series, the scene's light-probe snapshot texture
-/// (<c>&lt;scene&gt;_module_lightprobe.d3dtx</c>, a small render of the location whose top and
-/// bottom stand in for sky and ground light; the <c>.probe</c> files hold only the probe
-/// positions and tetrahedra; the probes' light is computed by Enlighten at run time).
+/// Directional and spot lights point along the agent's local +Z. Ambient comes from ambient
+/// lights, the scene's <c>Ambient Color</c> and, in the Definitive Series, the light-probe
+/// snapshot texture. The <c>.probe</c> files hold no light, only probe positions.
 /// </remarks>
 public sealed class SceneLighting
 {
@@ -147,13 +130,13 @@ public sealed class SceneLighting
     /// <summary>Every light agent, in scene order.</summary>
     public required IReadOnlyList<SceneLight> Lights { get; init; }
 
-    /// <summary>Ambient light that does not come from light agents (scene color, light probe): sky term.</summary>
+    /// <summary>Ambient light that does not come from light agents: sky term.</summary>
     public Vector3 BaseAmbientSky { get; init; }
 
     /// <summary>Ambient light that does not come from light agents: ground term.</summary>
     public Vector3 BaseAmbientGround { get; init; }
 
-    /// <summary>Where <see cref="BaseAmbientSky"/> came from ("light probe", "scene ambient color", "none").</summary>
+    /// <summary>Where <see cref="BaseAmbientSky"/> came from.</summary>
     public string AmbientSource { get; init; } = "none";
 
     /// <summary>The scene's name, used as the rig's source.</summary>
@@ -167,7 +150,7 @@ public sealed class SceneLighting
         light.Enabled && light.AffectsMainGeometry && !light.IsCharacterLight && !LooksLikeEffectLight(light.Name) &&
         light.Intensity > 0 && light.Coverage > 0;
 
-    /// <summary>Lights of particle effects and props switched on by chores (<c>light_fx_*</c>, <c>*_vfx_*</c>, muzzle flashes).</summary>
+    /// <summary>Lights of effects and props that chores switch on.</summary>
     public static bool LooksLikeEffectLight(string name)
     {
         var n = name.ToLowerInvariant();
@@ -176,8 +159,8 @@ public sealed class SceneLighting
     }
 
     /// <summary>
-    /// The rig for lightmapped surfaces: only lights that also shine on them (see
-    /// <see cref="SceneLight.LightsLightmapped"/>) and no ambient; the lightmap carries it.
+    /// The rig for lightmapped surfaces: only lights that also shine on them, and no ambient
+    /// since the lightmap carries it.
     /// </summary>
     public LightRig BuildLightmappedRig(IEnumerable<SceneLight> chosen, int maxLights = MaxRigLights)
     {
@@ -188,11 +171,7 @@ public sealed class SceneLighting
     /// <summary>The rig of the default lights.</summary>
     public LightRig BuildRig() => BuildRig(DefaultLights);
 
-    /// <summary>
-    /// A rig from the chosen lights: the most important direct lights (directional first,
-    /// at most <see cref="MaxRigLights"/>) and ambient from the chosen ambient lights plus
-    /// the scene's base ambient.
-    /// </summary>
+    /// <summary>A rig from the chosen lights: the most important direct lights plus ambient.</summary>
     public LightRig BuildRig(IEnumerable<SceneLight> chosen, int maxLights = MaxRigLights)
     {
         var list = chosen.ToList();
@@ -229,10 +208,8 @@ public sealed class SceneLighting
     }
 
     /// <summary>
-    /// Reads every light agent of <paramref name="layout"/>. <paramref name="assets"/> (optional)
-    /// supplies the light-probe texture; <paramref name="boundsMin"/>/<paramref name="boundsMax"/>
-    /// are the visible geometry's bounds (e.g. <see cref="AssembledScene"/>'s framing bounds),
-    /// used to judge how much of it each light reaches.
+    /// Reads every light agent of <paramref name="layout"/>. <paramref name="boundsMin"/> and
+    /// <paramref name="boundsMax"/> are used to judge how much of the scene each light reaches.
     /// </summary>
     public static SceneLighting Build(SceneLayout layout, ISceneAssetResolver? assets = null,
         Vector3? boundsMin = null, Vector3? boundsMax = null)
@@ -283,7 +260,7 @@ public sealed class SceneLighting
             lights.Add(share < 1 ? Copy(placed, placed.Coverage * share, placed.AffectedObjects, placed.IsCharacterLight) : placed);
         }
 
-        // Base ambient: the scene's ambient color, then the light-probe snapshot if there is one.
+        // Base ambient: the scene's ambient color plus the light-probe snapshot.
         var sceneAmbient = First(sceneChain, s => s.GetColor(SceneLightKeys.AmbientColor)) is { } ac
             ? SrgbToLinear(new Vector3(ac.X, ac.Y, ac.Z))
             : Vector3.Zero;
@@ -333,9 +310,8 @@ public sealed class SceneLighting
         float intensity = (First(chain, s => s.GetFloat(SceneLightKeys.EnvIntensity)) ?? 1f) *
                           (First(chain, s => s.GetFloat(SceneLightKeys.EnvIntensityDimmer)) ?? 1f) *
                           (First(chain, s => s.GetFloat(SceneLightKeys.EnvIntensityDiffuse)) ?? 1f) * envIntensity;
-        // Group flags: bit 0 is the main geometry; others hold the sky dome (2), characters (3),
-        // foliage cards (7) and the like. Bits 16-19 are the ambient groups, which feed the baked
-        // indirect light rather than lighting surfaces directly.
+        // Group flags: bit 0 is the main geometry, bit 3 characters. Bits 16-19 are ambient
+        // groups that feed baked indirect light.
         uint groups = (uint)(First(chain, s => s.GetInt32(SceneLightKeys.EnvGroups)) ?? 1);
         bool ambientGroup = (groups & 0xF0000u) != 0;
         var type = envType switch
@@ -398,7 +374,7 @@ public sealed class SceneLighting
         float intensity = (First(chain, s => s.GetFloat(SceneLightKeys.Intensity)) ?? 1f) *
                           (First(chain, s => s.GetFloat(SceneLightKeys.Dimmer)) ?? 1f) *
                           (First(chain, s => s.GetFloat(SceneLightKeys.IntensityDiffuse)) ?? 1f);
-        // Gobo spot lights give their soft edge as radii on the projection plane one unit out.
+        // Spot radii are on a projection plane one unit out.
         float inner = First(chain, s => s.GetFloat(SceneLightKeys.SpotInnerRadius)) ?? 0.2f;
         float outer = First(chain, s => s.GetFloat(SceneLightKeys.SpotOuterRadius)) ?? 0.9f;
         bool isStatic = First(chain, s => s.GetBool(SceneLightKeys.Static)) ?? false;
@@ -423,7 +399,7 @@ public sealed class SceneLighting
             Range = Math.Max(0, First(chain, s => s.GetFloat(SceneLightKeys.MaxDistance)) ?? 0),
             SpotInnerDegrees = 2 * MathF.Atan(Math.Max(0, inner)) * 180 / MathF.PI,
             SpotOuterDegrees = 2 * MathF.Atan(Math.Max(0, outer)) * 180 / MathF.PI,
-            // "Lightmap Specular" lights only add highlights to lightmapped surfaces.
+            // Type 10 is "Lightmap Specular", which only adds highlights.
             Enabled = type != 10 && obj.StartVisible && (First(chain, s => s.GetBool(SceneLightKeys.TurnedOn)) ?? true),
             IsCharacterLight = LooksLikeCharacterLight(obj.Name),
             IsBaked = isStatic && !dynamicOnLightmap,
@@ -432,10 +408,7 @@ public sealed class SceneLighting
         };
     }
 
-    /// <summary>
-    /// Character lighting rigs: <c>lightrig_*</c> containers and their lights,
-    /// <c>light_CHAR_*</c>, <c>*_char_*</c> and shadow-only character lights.
-    /// </summary>
+    /// <summary>True for lights of character lighting rigs, judged by name.</summary>
     public static bool LooksLikeCharacterLight(string name)
     {
         var n = name.ToLowerInvariant();
@@ -508,7 +481,7 @@ public sealed class SceneLighting
         return null;
     }
 
-    /// <summary>sRGB to linear, per channel (values above 1 follow the same curve).</summary>
+    /// <summary>sRGB to linear, per channel.</summary>
     public static Vector3 SrgbToLinear(Vector3 c) => new(ToLinear(c.X), ToLinear(c.Y), ToLinear(c.Z));
 
     private static float ToLinear(float v) =>

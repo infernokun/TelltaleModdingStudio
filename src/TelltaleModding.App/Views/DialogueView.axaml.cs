@@ -86,8 +86,7 @@ public partial class DialogueView : UserControl
             AnimateSpeaker();
     }
 
-    // While a line plays, the speaker is posed on every frame the display draws rather than
-    // on the player's slower ticks, so the face moves at the screen's frame rate.
+    // Pose the speaker every display frame while a line plays, not on the slower player ticks.
     private bool _animating;
 
     private void AnimateSpeaker()
@@ -98,7 +97,7 @@ public partial class DialogueView : UserControl
         top.RequestAnimationFrame(OnSpeakerFrame);
     }
 
-    // A hidden page skips the frame but keeps the loop, so switching back mid-line stays smooth.
+    // When hidden, skip drawing but keep the loop going.
     private void OnSpeakerFrame(TimeSpan _)
     {
         if (_vm is null || TopLevel.GetTopLevel(this) is not { } top || (IsEffectivelyVisible ? !_vm.RenderSpeakerFrame() : !_vm.Player.IsPlaying))
@@ -109,8 +108,7 @@ public partial class DialogueView : UserControl
         top.RequestAnimationFrame(OnSpeakerFrame);
     }
 
-    // A hidden speaker gives its width (and the gap before it) back to the list; showing
-    // it again restores the width it had, including any the user dragged it to.
+    // Hiding the speaker gives its width to the list. Showing it restores the old width.
     private void FoldSpeaker(bool visible)
     {
         var gap = Columns.ColumnDefinitions[2];
@@ -130,7 +128,7 @@ public partial class DialogueView : UserControl
         }
     }
 
-    // Panning or zooming the speaker hands the camera to the user; the Follow switch takes it back.
+    // Panning or zooming turns Follow off. The Follow switch turns it back on.
     private void OnSpeakerChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(SpeakerViewModel.FollowCamera) && _vm is not null)
@@ -139,7 +137,7 @@ public partial class DialogueView : UserControl
             _vm.Speaker.Render(_vm.Player.LivePosition);
     }
 
-    // The game's camera, kept on the speaker's face (the follow camera's target) in a narrow view.
+    // The game's camera, kept on the speaker's face.
     private void OnGameView(TelltaleModding.Core.Scene.CameraView view)
     {
         if (_vm?.Speaker.FollowTarget(_vm.Player.LivePosition) is { } face)
@@ -162,7 +160,7 @@ public partial class DialogueView : UserControl
     private void OnSpeakerHead(System.Numerics.Vector3 headTop, float height) =>
         SpeakerViewport.FocusFaceAt(headTop, height, 3f);
 
-    // A new speaker is framed on their face; the same speaker keeps the camera.
+    // Frame a new speaker's face. The same speaker keeps the camera.
     private void OnSpeakerModel(TelltaleModding.Core.Scene.AssembledModel model, bool frame)
     {
         SpeakerViewport.SetModel(model, keepCamera: !frame);

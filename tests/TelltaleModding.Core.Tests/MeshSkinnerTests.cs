@@ -23,14 +23,13 @@ public class MeshSkinnerTests
         return (mesh!.GetGeometry(), skeleton!);
     }
 
-    // Legacy (MSV5) meshes: The Wolf Among Us (three float weights), Game of Thrones
-    // (four UN16 weights) and a rigid Game of Thrones part (blend indices only).
+    // Legacy (MSV5) meshes with different weight formats.
     private static readonly Dictionary<string, (string Mesh, string Skeleton)> LegacyCharacters = new()
     {
         ["bigby"] = ("sk54_bigby_head.d3dmesh", "sk54_bigby.skl"),
         ["bannerman"] = ("sk61_bannermanWhitehillLow_handsBare.d3dmesh", "sk61_bannermanForresterLow.skl"),
         ["asherSheath"] = ("sk61_asher_swordSheath.d3dmesh", "sk61_asher.skl"),
-        // Episode 5 build: batch vertex ranges of its two palettes overlap.
+        // Its two palettes have overlapping vertex ranges.
         ["sasha105"] = ("sk55_sasha105.d3dmesh", "sk55_sasha.skl"),
     };
 
@@ -55,8 +54,7 @@ public class MeshSkinnerTests
     [SkippableFact]
     public void V55_blend_weights_decode_sorted_largest_first()
     {
-        // The packed format stores each weight relative to its largest possible share,
-        // which only makes sense for sorted weights; a wrong decoding breaks the order.
+        // A wrong decoding breaks the sort order.
         var (geometry, _) = LoadClementine();
         Assert.All(geometry.BlendWeights!, w =>
         {
@@ -72,7 +70,7 @@ public class MeshSkinnerTests
         Assert.True(geometry.IsSkinned);
         Assert.True(geometry.BonePalettes!.Count > 0);
 
-        // Every batch palette resolves fully into the skeleton.
+        // Every palette bone is in the skeleton.
         foreach (var batch in geometry.Batches)
         {
             if (batch.BonePaletteIndex < 0)
@@ -81,7 +79,7 @@ public class MeshSkinnerTests
             Assert.All(palette, symbol => Assert.Contains(symbol, skeleton.JointSymbols));
         }
 
-        // Blend weights are sane: non-negative and summing to ~1 where present.
+        // Weights are non-negative and add up to about 1.
         int weighted = 0;
         foreach (var w in geometry.BlendWeights!)
         {
@@ -95,16 +93,14 @@ public class MeshSkinnerTests
         Assert.True(weighted > geometry.Positions.Length / 2, "most vertices should be weighted");
     }
 
-    // The sword sheath is excluded: it hangs rigidly off a bone at its far end.
+    // No sword sheath: it hangs off a bone at its far end.
     public static TheoryData<string> DeformingCharacters => new() { "sasha", "sasha105", "clementine", "bigby", "bannerman" };
 
     [SkippableTheory]
     [MemberData(nameof(DeformingCharacters))]
     public void Vertices_sit_near_their_strongest_bone(string character)
     {
-        // Rest-pose skinning is the identity whichever bones the indices name, so check
-        // the mapping itself: a vertex's most-weighted bone must be close by (a misread
-        // index scale or palette would bind vertices to bones across the body).
+        // A vertex's most-weighted bone should be close by.
         var (geometry, skeleton) = Load(character);
         var bind = skeleton.BindPoseWorld();
         var vertexPalettes = geometry.VertexPaletteIndices();
@@ -153,8 +149,7 @@ public class MeshSkinnerTests
     [SkippableFact]
     public void Vertices_take_the_palette_of_the_batch_that_draws_them()
     {
-        // Batches of different palettes can span overlapping vertex ranges; the drawing
-        // batch decides. A range-based lookup binds 478 of this mesh's vertices wrongly.
+        // Vertex ranges overlap here, so a range-based lookup gets 478 vertices wrong.
         var (geometry, _) = Load("sasha105");
         var vertexPalettes = geometry.VertexPaletteIndices();
         foreach (var batch in geometry.Batches)
@@ -172,9 +167,7 @@ public class MeshSkinnerTests
     [SkippableFact]
     public void Walk_cycle_keeps_the_surface_together()
     {
-        // A vertex skinned through the wrong palette follows an unrelated bone: the sleeve
-        // stayed at its bind-pose spot while the arm walked away, tearing edges by ~0.3.
-        // Correctly bound, no edge's length changes by more than ~0.035 over the cycle.
+        // Edge lengths barely change during the walk; wrong palettes tear the mesh.
         var (geometry, skeleton) = Load("sasha105");
         Assert.True(AnimationFile.TryLoad(
             File.ReadAllBytes(SampleData.Sample("sk55_move_sashaWalk.anm")), out var clip, out var error), error);
@@ -205,9 +198,7 @@ public class MeshSkinnerTests
     [SkippableFact]
     public void Skin_matrices_reproduce_the_cpu_skin_with_the_shader_blend()
     {
-        // The viewport skins in the vertex shader from SkinMatrices and VertexBones:
-        // sum of weight × (rest × matrix) over the resolved bones, divided by the weight
-        // sum; vertices without weights or an unresolved first bone stay at rest.
+        // Same blend the viewport's vertex shader does.
         var (geometry, skeleton) = Load("sasha105");
         Assert.True(AnimationFile.TryLoad(
             File.ReadAllBytes(SampleData.Sample("sk55_move_sashaWalk.anm")), out var clip, out var error), error);

@@ -7,9 +7,7 @@ public class EngineLocatorTests
     [SkippableFact]
     public void LocatesEngineFromTestBinaryDirectory()
     {
-        // The test binary lives five folders below the repo root
-        // (tests/Project/bin/Debug/net8.0), the same depth as the desktop app's
-        // output folder, so this is the exact walk the app performs at startup.
+        // The test binary sits as deep as the app's output folder, so this is the same search.
         var path = EngineLocator.TryLocate();
         Assert.NotNull(path);
     }
@@ -17,8 +15,7 @@ public class EngineLocatorTests
     [SkippableFact]
     public void ToleratesTrailingDirectorySeparator()
     {
-        // AppContext.BaseDirectory ends with a separator on real hosts; the walk-up
-        // must not burn an iteration re-visiting the same directory because of it.
+        // AppContext.BaseDirectory usually ends with a separator.
         var start = AppContext.BaseDirectory;
         if (!Path.EndsInDirectorySeparator(start))
             start += Path.DirectorySeparatorChar;

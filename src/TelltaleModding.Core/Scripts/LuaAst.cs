@@ -12,7 +12,7 @@ internal abstract class LuaExpr
     public virtual bool IsPrefix => false;
     /// <summary>True for calls and varargs that may produce several values.</summary>
     public virtual bool CanBeMulti => false;
-    /// <summary>Nesting depth, used to refuse absurdly deep trees from malformed code.</summary>
+    /// <summary>Nesting depth, used to reject very deep trees from broken code.</summary>
     public int Depth { get; protected set; } = 1;
 
     protected static int DepthOf(params LuaExpr?[] children)
@@ -31,7 +31,7 @@ internal sealed class ConstExpr : LuaExpr
     public LuaConstant Value { get; }
     public override int Precedence => Value.Kind == LuaConstantKind.Number && (Value.Number < 0 || double.IsNegative(Value.Number)) ? 7 : 10;
     public static readonly ConstExpr Nil = new(LuaConstant.Nil);
-    /// <summary>A nil put in a register by LOADNIL (as opposed to a nil constant operand).</summary>
+    /// <summary>A nil put in a register by LOADNIL, not a nil constant operand.</summary>
     public static readonly ConstExpr LoadedNil = new(LuaConstant.Nil);
     public static readonly ConstExpr True = new(LuaConstant.True);
     public static readonly ConstExpr False = new(LuaConstant.False);
@@ -175,7 +175,7 @@ internal sealed class LocalStmt : LuaStmt
     public LocalStmt(List<string> names, List<LuaExpr> values) { Names = names; Values = values; }
     public List<string> Names { get; }
     public List<LuaExpr> Values { get; }
-    /// <summary>Declared with <c>local function</c> (the name is visible inside the body).</summary>
+    /// <summary>Declared with <c>local function</c>, so the name is visible inside the body.</summary>
     public bool IsLocalFunction { get; init; }
 }
 
@@ -267,7 +267,7 @@ internal sealed class LabelStmt : LuaStmt
     public string Label { get; }
 }
 
-/// <summary>Comment lines (used for fallback instruction listings).</summary>
+/// <summary>Comment lines, used for fallback instruction listings.</summary>
 internal sealed class CommentStmt : LuaStmt
 {
     public CommentStmt(IReadOnlyList<string> lines) { Lines = lines; }
@@ -455,8 +455,8 @@ internal sealed class LuaWriter
     // ---- expressions ----
 
     /// <summary>
-    /// A comma-separated list. A trailing call or vararg limited to one value is wrapped in
-    /// parentheses when <paramref name="openEnded"/> (it would otherwise expand).
+    /// A comma-separated list. When <paramref name="openEnded"/>, a trailing single-value call
+    /// or vararg gets parentheses so it doesn't expand.
     /// </summary>
     public string ExprList(List<LuaExpr> items, bool openEnded)
     {
@@ -517,7 +517,7 @@ internal sealed class LuaWriter
             {
                 int p = b.Precedence;
                 string l = Expr(b.Left, b.RightAssociative ? p + 1 : p);
-                // and/or are associative: `a or (b or c)` reads (and compiles) as `a or b or c`.
+                // and/or are associative, so `a or (b or c)` can drop the parentheses.
                 bool assoc = b.Op is "and" or "or" && b.Right is BinaryExpr rb && rb.Op == b.Op;
                 string r = Expr(b.Right, b.RightAssociative || assoc ? p : p + 1);
                 return l + " " + b.Op + " " + r;
@@ -569,7 +569,7 @@ internal sealed class LuaWriter
         var close = string.Concat(Enumerable.Repeat(Indent, _depth));
         if (parts.All(p => p.Length <= 24 && !p.Contains('\n')))
         {
-            // Lists of short items are packed several to a line.
+            // Pack short items several to a line.
             var lines = new List<string>();
             var line = new StringBuilder();
             for (int i = 0; i < parts.Count; i++)

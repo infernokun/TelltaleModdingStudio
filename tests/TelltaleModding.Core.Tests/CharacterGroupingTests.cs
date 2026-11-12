@@ -46,7 +46,7 @@ public class CharacterGroupingTests
     [SkippableFact]
     public void SkeletonWithoutProp_FallsBackToNamesAndHeuristic()
     {
-        // Same files, no prop read: the heuristic must land on the same outfit.
+        // Without the prop, the name rules should pick the same outfit.
         var characters = CharacterGrouping.Build(ClementineEntries(), new Dictionary<string, CharacterProp>());
 
         var clem = Assert.Single(characters); // obj_ skeletons are props, not characters

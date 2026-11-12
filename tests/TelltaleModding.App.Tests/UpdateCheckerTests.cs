@@ -11,7 +11,7 @@ namespace TelltaleModding.App.Tests;
 
 public class UpdateCheckerTests
 {
-    // A trimmed releases/latest reply in GitHub's shape.
+    // A cut-down GitHub releases/latest reply.
     private static string ReleaseJson(string tag = "v1.3.0", bool draft = false, bool prerelease = false) => $$"""
         {
           "url": "https://api.github.com/repos/infernokun/TelltaleModdingStudio/releases/1",
@@ -261,7 +261,7 @@ public class UpdateCheckerTests
         Assert.Contains("too long", result.Error);
     }
 
-    // ---- The view-model: start-up, button and skipping ----------------------------------------
+    // ---- View model ----------------------------------------------------------------------
 
     private static string TempSettings() => Path.Combine(Path.GetTempPath(), $"tms-updates-{Guid.NewGuid():N}.json");
 

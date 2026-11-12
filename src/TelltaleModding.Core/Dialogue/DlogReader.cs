@@ -37,10 +37,10 @@ internal static class DlogReader
 
     private sealed class Layout
     {
-        /// <summary>Dialogs, folders and nodes carry a unique-id block (games up to 2017).</summary>
+        /// <summary>Older games give dialogs, folders and nodes a unique-id block.</summary>
         public bool UniqueIds;
 
-        /// <summary>Production props and friends follow the dependencies (2014 on).</summary>
+        /// <summary>Newer games have production props and a few more fields after the dependencies.</summary>
         public bool ProductionProps;
 
         public required Dictionary<ulong, string> Classes;
@@ -118,7 +118,7 @@ internal static class DlogReader
             nodes.Add(node);
             if (aligned || i == nodeCount - 1)
                 continue;
-            // The node's tail was not understood: find the next node by its class hash.
+            // Didn't understand the node's tail, so find the next node by its class hash.
             int next = FindNextNode(r, layout, Math.Max(r.Pos, start + 8));
             if (next < 0)
                 break;
@@ -262,9 +262,9 @@ internal static class DlogReader
 
     private static void ReadJump(Reader r, DlogNode node)
     {
-        ReadLink(r); // the link is a placeholder; jumps resolve by name
+        ReadLink(r); // placeholder, jumps resolve by name
         ulong targetName = r.U64();
-        // Target class, behaviour, choice transparency, visibility, then the other-dialog handle.
+        // Target, behavior, choice transparency, visibility, then the other-dialog handle.
         var values = new List<uint>();
         while (values.Count < 8 && !(r.Peek32(0) == 12 && values.Count >= 3))
             values.Add(r.U32());
@@ -299,7 +299,7 @@ internal static class DlogReader
                 for (int i = 0; i < n; i++)
                 {
                     uint key = map.U32();
-                    // A line is its unique-id block, [object id block], then the 4-byte language proxy.
+                    // A line is a unique-id block, maybe an object id block, then the 4-byte language proxy.
                     int blocks = 0;
                     Reader last;
                     do
@@ -312,7 +312,7 @@ internal static class DlogReader
             }
             catch (DlogFormatException)
             {
-                // Not a line collection (notes); its block was already skipped.
+                // Not a line collection. Its block was already skipped.
             }
             if (r.Left <= 1)
                 break;
@@ -325,7 +325,7 @@ internal static class DlogReader
         node.Id = ReadObjId(b);
         b.Block(); // visibility conditions
         b.Block(); // object props
-        // Older games put a unique-id block here; the remaining fields are 64 bytes.
+        // Older games put a unique-id block here. The rest is 64 bytes.
         while (b.Left > 64)
             b.Block();
         node.PrevId = ReadLink(b);
@@ -370,7 +370,7 @@ internal static class DlogReader
                 case "DlgNodeParallel::PElement":
                     break;
                 default:
-                    // Unknown tail: skip to the next child of a known shape, or the end.
+                    // Unknown tail, so stop here.
                     return children;
             }
         }
@@ -418,7 +418,7 @@ internal static class DlogReader
         return new DlogChild(id, className, kind, headId, name, texts);
     }
 
-    // Object props hold typed property values; a choice's text is a LanguageResProxy value.
+    // A choice's text is a LanguageResProxy value in its object props.
     private static IReadOnlyList<uint> PropertyTexts(Reader b)
     {
         List<uint>? ids = null;
@@ -439,7 +439,7 @@ internal static class DlogReader
                 for (int i = 0; i < count && count < 64 && p + 12 <= span.Length; i++)
                 {
                     uint value = BinaryPrimitives.ReadUInt32LittleEndian(span[(p + 8)..]);
-                    // Values are bare ids, or 8-byte blocks holding the id in older streams.
+                    // Older streams wrap the id in an 8-byte block.
                     if (value == 8 && p + 16 <= span.Length)
                     {
                         value = BinaryPrimitives.ReadUInt32LittleEndian(span[(p + 12)..]);
@@ -462,7 +462,7 @@ internal static class DlogReader
 
     private static ulong ReadObjId(Reader r) => r.Block().Block().U64();
 
-    // A resource handle: a block holding the symbol of the file's name (0 for none).
+    // A handle is a block holding the file name's symbol, or nothing.
     private static ulong ReadHandle(Reader r)
     {
         var handle = r.Block();
@@ -501,7 +501,7 @@ internal static class DlogReader
         return r.Data[flag] is (byte)'0' or (byte)'1' && LooksLikeFolders(r, flag + 1);
     }
 
-    // The next offset holding a node class hash followed by a readable node.
+    // Next offset with a node class hash followed by a readable node.
     private static int FindNextNode(Reader r, Layout layout, int from)
     {
         for (int p = from; p + 12 <= r.End; p++)
@@ -535,7 +535,7 @@ internal static class DlogReader
         return -1;
     }
 
-    /// <summary>A bounded little-endian cursor; <see cref="Block"/> returns a reader over a size-prefixed block.</summary>
+    /// <summary>Bounded little-endian reader. <see cref="Block"/> reads a size-prefixed block.</summary>
     private sealed class Reader
     {
         public Reader(byte[] data, int pos, int end)

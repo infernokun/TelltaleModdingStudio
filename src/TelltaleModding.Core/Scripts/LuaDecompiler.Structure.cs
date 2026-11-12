@@ -6,10 +6,8 @@ internal sealed partial class FunctionDecompiler
     // ------------------------------------------------------------------ value regions
 
     /// <summary>
-    /// Finds and/or/comparison expressions whose result lands in one register. Their exits
-    /// are: the join point ("fin") reached by tests that carry the tested value
-    /// (TESTSET, or TEST on the result register), and the LOADBOOL false/true pair that
-    /// comparisons jump to when the result must be a boolean.
+    /// Finds and/or/comparison expressions whose result lands in one register. They exit
+    /// either to a join point via tests that carry the value, or to a LOADBOOL false/true pair.
     /// </summary>
     private void FindRegions()
     {
@@ -30,7 +28,7 @@ internal sealed partial class FunctionDecompiler
             int tgt = Target(p + 1);
             var ins = _code[p];
             if (ins.Op == LuaOpCode.TestSet && tgt == p + 2)
-                Seed(tgt, ins.A); // `x = y and x`: the value is already in place
+                Seed(tgt, ins.A); // `x = y and x`, the value is already in place
             if (tgt <= p + 2 || tgt > _n) continue;
             if (ins.Op == LuaOpCode.TestSet)
                 Seed(tgt, ins.A);
@@ -225,8 +223,8 @@ internal sealed partial class FunctionDecompiler
     }
 
     /// <summary>
-    /// Locals declared in this block whose scope ended before the block did were inside a
-    /// <c>do ... end</c>: wrap the statements from the first such declaration.
+    /// Locals whose scope ended before the block did were inside a <c>do ... end</c>, so wrap
+    /// the statements from the first such declaration.
     /// </summary>
     private void CloseScopes(List<LuaStmt> list, int pc)
     {
@@ -356,7 +354,7 @@ internal sealed partial class FunctionDecompiler
         throw new DecompileException($"unstructured jump to {t + 1}");
     }
 
-    /// <summary>Skips instructions with no effect on control flow (CLOSE, jumps over nothing but those).</summary>
+    /// <summary>Skips CLOSE and jumps that only skip over CLOSE.</summary>
     private int NextRealPc(int pc)
     {
         while (pc < _n)
@@ -455,13 +453,13 @@ internal sealed partial class FunctionDecompiler
             return null;
         if (F == int.MinValue)
         {
-            // Every path reaches T: the condition is constant-true (e.g. `x == "a" or "b"`).
+            // Every path reaches T, so the condition is always true.
             return new Chain { Tests = tests, T = T, F = -1, TrueSucc = ts, FalseSucc = fs };
         }
         return new Chain { Tests = tests, T = T, F = F, TrueSucc = ts, FalseSucc = fs };
     }
 
-    /// <summary>Evaluates the chain's operands and returns the condition under which control falls through to T.</summary>
+    /// <summary>Evaluates the chain's operands and returns the condition for falling through to T.</summary>
     private LuaExpr ChainCondition(Chain c)
     {
         var atoms = new List<LuaExpr>();
@@ -472,8 +470,8 @@ internal sealed partial class FunctionDecompiler
         }
         if (c.F < 0 && atoms.Count == 1)
         {
-            // Nothing to skip: either `if x then end` (jumps when false) or the start of an
-            // `x or <constant>` chain (jumps when true).
+            // Nothing to skip: either `if x then end`, which jumps when false, or the start
+            // of an `x or <constant>` chain, which jumps when true.
             var t = _code[c.Tests[0]];
             bool jumpsWhenTrue = t.Op is LuaOpCode.Test or LuaOpCode.TestSet ? t.C != 0 : t.A != 0;
             return jumpsWhenTrue ? atoms[0] : Negate(atoms[0]);
@@ -490,7 +488,7 @@ internal sealed partial class FunctionDecompiler
         bool breakForm = false;
         if (F < 0)
         {
-            // Every path falls through (constant-true condition): nothing to skip.
+            // Always-true condition, nothing to skip.
             thenEnd = T; after = T;
         }
         else if (F > T && F <= end)
@@ -524,7 +522,7 @@ internal sealed partial class FunctionDecompiler
             else if (lastJmp > T && _code[lastJmp].Op == LuaOpCode.Jmp && !IsTestPartner(lastJmp) &&
                      Resolve(Target(lastJmp)) == rF)
             {
-                // `if c then ... end; break`: the false exit was threaded through the break.
+                // `if c then ... end; break`, where the false exit goes through the break.
                 thenEnd = lastJmp; after = lastJmp;
             }
             else if (ctx.LoopExit >= 0 && rF == ctx.LoopExit) { breakForm = true; thenEnd = T; after = T; }
@@ -564,7 +562,7 @@ internal sealed partial class FunctionDecompiler
         if (IsTestPartner(j))
             return Repeat(h, j, loopExit);
 
-        // while <cond> do: expression code then a condition whose false exit leaves the loop.
+        // while <cond> do: expression code, then a condition whose false exit leaves the loop.
         int p0 = h;
         bool clean = true;
         while (p0 < j)
@@ -650,7 +648,7 @@ internal sealed partial class FunctionDecompiler
         return q + 1;
     }
 
-    /// <summary>The loop variable in <paramref name="reg"/> whose scope starts at the body (possibly empty).</summary>
+    /// <summary>The loop variable in <paramref name="reg"/> whose scope starts at the body.</summary>
     private int LoopVariable(int reg, int bodyStart)
     {
         foreach (int li in _locals.StartingAt(bodyStart))
@@ -691,9 +689,8 @@ internal sealed partial class FunctionDecompiler
     // ------------------------------------------------------------------ conditions
 
     /// <summary>
-    /// Reduces a short-circuit graph (node i: jump to <paramref name="t"/>[i] when
-    /// atom i holds, else to <paramref name="f"/>[i]; successors are node indices or
-    /// ExitTrue/ExitFalse) to the condition under which control reaches ExitTrue.
+    /// Reduces a short-circuit graph to the condition for reaching ExitTrue. Node i goes to
+    /// <paramref name="t"/>[i] when atom i holds, else to <paramref name="f"/>[i].
     /// </summary>
     private LuaExpr? ReduceCondition(List<LuaExpr> atoms, int[] t, int[] f)
     {
@@ -776,8 +773,8 @@ internal sealed partial class FunctionDecompiler
                 return new BinaryExpr("==", b.Left, b.Right);
             case BinaryExpr { Op: "and" or "or" } b:
             {
-                // Lua only compiles `not` into pure jumps when it applies to comparisons, so a
-                // condition ending in a plain value test was written with the negation pushed in.
+                // Lua only turns `not` into pure jumps for comparisons, so a condition ending in a
+                // plain value test was written with the negation pushed in.
                 var dm = new BinaryExpr(b.Op == "and" ? "or" : "and", Negate(b.Left), Negate(b.Right));
                 if (!RightmostIsComparison(b)) return dm;
                 return NotCount(dm) < NotCount(b) + 1 ? dm : new UnaryExpr("not", e);
@@ -800,9 +797,8 @@ internal sealed partial class FunctionDecompiler
                 var left = RK(i.B, pc);
                 string op = i.Op == LuaOpCode.Eq ? "==" : i.Op == LuaOpCode.Lt ? "<" : "<=";
                 LuaExpr cmp;
-                // `a > b` compiles to `b < a` with b evaluated second (higher register):
-                // print it the way round that reproduces the evaluation order.
-                // (Equality is never swapped by the compiler, so `nil == x` is kept as written.)
+                // `a > b` compiles to `b < a` with b in the higher register, so flip it back to
+                // keep the evaluation order. The compiler never swaps equality.
                 bool swapped = i.Op != LuaOpCode.Eq &&
                                ((LuaInstruction.IsConstant(i.B) && !LuaInstruction.IsConstant(i.C)) ||
                                 (!LuaInstruction.IsConstant(i.B) && !LuaInstruction.IsConstant(i.C) && i.B > i.C));
@@ -819,7 +815,7 @@ internal sealed partial class FunctionDecompiler
             }
             case LuaOpCode.TestSet:
             {
-                // Outside a recognised expression the conditional copy would be lost.
+                // Outside a recognized expression the conditional copy would be lost.
                 if (_captureReg < 0 && !_inRegion)
                     throw new DecompileException("conditional assignment outside an expression");
                 var v = Read(i.B, pc);

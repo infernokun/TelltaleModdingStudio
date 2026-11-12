@@ -20,7 +20,7 @@ body:
     id: version
     attributes:
       label: App version
-      description: The release you downloaded, e.g. 1.0.0.
+      description: The version you downloaded, like 1.0.0.
     validations:
       required: true
   - type: dropdown
@@ -42,7 +42,7 @@ body:
     id: what
     attributes:
       label: What happened
-      description: What you did, what you expected, and what you saw instead. Name the character, scene or file if there is one.
+      description: What you did, what you expected and what happened instead. Mention the character, scene or file if there is one.
     validations:
       required: true
   - type: textarea
@@ -54,5 +54,5 @@ body:
     id: crash
     attributes:
       label: Crash log
-      description: If the app crashed, attach or paste `%LOCALAPPDATA%\TelltaleModdingStudio\crash.log` (Settings also has a button to open it).
+      description: If the app crashed, attach or paste `%LOCALAPPDATA%\TelltaleModdingStudio\crash.log`.
       render: text

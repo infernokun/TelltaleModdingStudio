@@ -13,7 +13,7 @@ public sealed class CatalogAssetResolver : IAssetResolver
     public byte[]? TryRead(string fileName) =>
         _catalog.Find(fileName) is { } entry ? _catalog.Read(entry) : null;
 
-    // Material payloads are scanned 8 bytes at a time, so only texture files count as hits.
+    // Only texture files count, since material data is scanned blindly for symbols.
     public string? TextureNameForSymbol(ulong symbol) =>
         _catalog.FindBySymbol(symbol) is { } entry &&
         entry.Name.EndsWith(".d3dtx", StringComparison.OrdinalIgnoreCase)

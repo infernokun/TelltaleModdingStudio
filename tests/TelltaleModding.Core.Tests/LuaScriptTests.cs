@@ -4,11 +4,8 @@ using TelltaleModding.Core.Scripts;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// Lua script reading, disassembly and decompilation. Game samples are real scripts from
-/// Tales from the Borderlands, Game of Thrones and The Walking Dead Definitive Series
-/// (Lua 5.2) and The Wolf Among Us (Lua 5.1 with Telltale's opcode numbering); the
-/// <c>script_stock5x_corpus</c> files were compiled by stock Lua 5.1/5.2 (8-byte numbers,
-/// 64-bit sizes) from a test program covering most of the language.
+/// Lua script reading, disassembly and decompiling. The <c>script_stock5x_corpus</c> files were
+/// built with stock Lua 5.1 and 5.2 from a test program that covers most of the language.
 /// </summary>
 public class LuaScriptTests
 {

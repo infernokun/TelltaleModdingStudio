@@ -37,7 +37,7 @@ public class SpeakerCameraTests
         var quarter = Matrix4x4.CreateRotationY(MathF.PI / 2);
         var turned = rest.Select(m => m * quarter).ToArray();
 
-        // Facing front for the first second, then a quarter turn: the camera comes round with them.
+        // Facing front for a second, then a quarter turn; the camera follows.
         var camera = SpeakerCamera.Build(skeleton, t => t < 1 ? rest : turned, 4)!;
         Assert.Equal(0f, camera.At(0).Yaw, 0.05f);
         Assert.Equal(MathF.PI / 2, camera.At(4).Yaw, 0.05f);

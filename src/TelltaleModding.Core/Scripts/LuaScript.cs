@@ -7,9 +7,8 @@ namespace TelltaleModding.Core.Scripts;
 public enum LuaScriptKind { Source, Bytecode51, Bytecode52, Unknown }
 
 /// <summary>
-/// A game script ready for viewing: plain source passes through unchanged, compiled
-/// bytecode is decompiled and disassembled on first access (names and string constants
-/// are available immediately, for indexing).
+/// A game script ready for viewing. Source passes through as-is, bytecode is decompiled
+/// and disassembled the first time it's needed.
 /// </summary>
 public sealed class LuaScript
 {
@@ -32,24 +31,24 @@ public sealed class LuaScript
     }
 
     public LuaScriptKind Kind { get; }
-    /// <summary>"Lua 5.2 bytecode", "Lua 5.1 bytecode", "Lua source", ...</summary>
+    /// <summary>A label like "Lua 5.1 bytecode".</summary>
     public string VersionLabel { get; }
-    /// <summary>The chunk name recorded in the bytecode's debug info, if any.</summary>
+    /// <summary>The chunk name from the bytecode's debug info, if any.</summary>
     public string? SourceName { get; }
     /// <summary>Number of functions, including the main chunk.</summary>
     public int FunctionCount { get; }
-    /// <summary>Best-effort names of the functions the script defines, in definition order.</summary>
+    /// <summary>Guessed names of the functions the script defines, in order.</summary>
     public IReadOnlyList<string> FunctionNames { get; }
     /// <summary>Distinct string constants, in order of first use.</summary>
     public IReadOnlyList<string> StringConstants { get; }
-    /// <summary>The parsed bytecode (null for source and unrecognised data).</summary>
+    /// <summary>The parsed bytecode, or null.</summary>
     public LuaChunk? Chunk { get; }
 
-    /// <summary>Readable Lua: the original text for source, decompiled code for bytecode.</summary>
+    /// <summary>Readable Lua: the original source, or decompiled bytecode.</summary>
     public string Decompiled => _decompiled.Value.Text;
-    /// <summary>Annotated instruction listing (empty for source).</summary>
+    /// <summary>Annotated instruction listing, empty for source.</summary>
     public string Disassembly => _disassembly.Value;
-    /// <summary>Code regions the decompiler emitted as instruction listings instead of source.</summary>
+    /// <summary>Code regions the decompiler left as instruction listings.</summary>
     public int DecompileFallbacks => _decompiled.Value.Fallbacks;
 
     internal static LuaScript FromChunk(LuaChunk chunk)
@@ -126,7 +125,7 @@ public sealed class LuaScript
 /// <summary>Detects and opens Lua scripts (source, Lua 5.1 or 5.2 bytecode).</summary>
 public static class LuaScriptReader
 {
-    /// <summary>True for script file names: <c>.lua</c>, <c>.lenc</c>, <c>.luac</c>.</summary>
+    /// <summary>True for script file names.</summary>
     public static bool IsScriptFile(string name)
     {
         var ext = Path.GetExtension(name);
@@ -136,8 +135,8 @@ public static class LuaScriptReader
     }
 
     /// <summary>
-    /// Opens a (decrypted) script. Never throws: data that isn't Lua source or supported
-    /// bytecode comes back as <see cref="LuaScriptKind.Unknown"/> with a text or hex preview.
+    /// Opens a decrypted script. Doesn't throw: anything it can't read comes back as
+    /// <see cref="LuaScriptKind.Unknown"/> with a preview.
     /// </summary>
     public static LuaScript Read(byte[] data, string name)
     {

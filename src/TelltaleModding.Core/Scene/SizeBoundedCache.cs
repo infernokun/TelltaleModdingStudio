@@ -1,10 +1,8 @@
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// A cache that keeps the most recently used entries within a byte budget, dropping the least
-/// recently used first. Sizes come from the size function given (approximate is fine; null
-/// values count as nothing). An entry is never dropped by its own insertion, so one value
-/// larger than the whole budget stays until the next one arrives. Thread-safe.
+/// A least-recently-used cache within a byte budget. An entry is never dropped by its own
+/// insertion, so an oversized value stays until the next one arrives. Thread-safe.
 /// </summary>
 public sealed class SizeBoundedCache<TKey, TValue> where TKey : notnull
 {
@@ -73,8 +71,7 @@ public sealed class SizeBoundedCache<TKey, TValue> where TKey : notnull
 
     /// <summary>
     /// The cached value, or <paramref name="factory"/>'s, which is then cached. The factory runs
-    /// outside the lock, so values are made in parallel; when two threads make the same one, the
-    /// first to finish is kept and returned to both.
+    /// outside the lock; if two threads race, the first result wins.
     /// </summary>
     public TValue GetOrAdd(TKey key, Func<TKey, TValue> factory)
     {

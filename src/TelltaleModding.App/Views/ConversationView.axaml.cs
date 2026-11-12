@@ -7,10 +7,7 @@ using TelltaleModding.App.ViewModels;
 
 namespace TelltaleModding.App.Views;
 
-/// <summary>
-/// A scene's conversations as a tree and as a click-through player. Set its DataContext
-/// to a <see cref="ConversationViewModel"/>.
-/// </summary>
+/// <summary>A scene's conversations as a tree and as a click-through player.</summary>
 public partial class ConversationView : UserControl
 {
     private ConversationViewModel? _vm;
@@ -18,7 +15,7 @@ public partial class ConversationView : UserControl
     public ConversationView()
     {
         InitializeComponent();
-        // Enter or Space plays the selected line; double-click follows a jump.
+        // Enter or Space plays the selected line. Double-click follows a jump.
         NodeTree.KeyDown += (_, e) =>
         {
             if (e.Key is Key.Enter or Key.Space && NodeTree.SelectedItem is ConversationNodeViewModel item)
@@ -58,7 +55,7 @@ public partial class ConversationView : UserControl
         }
     }
 
-    // Keep the selected node in view once its ancestors have expanded.
+    // Scroll the selected node into view after its parents expand.
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(ConversationViewModel.SelectedNode) || _vm?.SelectedNode is not { } item)

@@ -5,16 +5,16 @@
   </picture>
 </p>
 
-A desktop app for exploring and modding Telltale games. Point it at an installed
-game (e.g. _The Walking Dead: The Telltale Definitive Series_ or _Tales from the
-Borderlands_) and it inventories the whole game: every character with their
-outfit parts, textures and animations, and every file in its archives. Swap in
-replacements and build a minimal patch archive the game loads over its originals.
+An app for exploring and modding Telltale games. Point it at a Telltale game
+(e.g. _The Walking Dead: The Telltale Definitive Series_ or _Tales from the
+Borderlands_) and it inventories the game: every character with their
+outfit parts, textures and animations, and its archives. Swap in
+replacements (WIP) and build a minimal patch archive the game loads over its originals.
 
 Archives are read natively (`.ttarch2`: chunked zlib/Oodle, Blowfish-encrypted or
 plain). [ttarchext](https://aluigi.altervista.org/papers.htm#ttarchext) by Luigi
-Auriemma (for learning purposes only) is still used to build patches, to decrypt
-the games' resource descriptions, and to read classic `.ttarch` archives.
+Auriemma is still used to build patches, to decrypt the games' resource descriptions,
+and to read classic `.ttarch` archives.
 
 **Download:** Windows and Linux (x86-64) builds are on the [Releases](../../releases) page.
 
@@ -27,8 +27,6 @@ Each release lists SHA-256 checksums in `SHA256SUMS.txt`, and releases built by 
 checked with `gh attestation verify <file> --repo infernokun/TelltaleModdingStudio`.
 
 ## Screenshots
-
-Click a picture for the full size.
 
 <table>
   <tr>
@@ -69,6 +67,7 @@ Click a picture for the full size.
 
 **Viewport controls:** drag to orbit, middle-drag to pan, scroll to zoom, **F** to
 frame. Click the view and use **WASD/QE** to fly; hold right-click to look around.
+Made to kinda mimic unreal engine.
 
 **Looks:** _Studio_ for plain lighting, _Game_ for each game's own art style, and
 _Graphic black_ for solid black shadows in any game.
@@ -80,24 +79,11 @@ Audio plays on Windows, and on Linux through PulseAudio or PipeWire. Some games'
 sounds need the game installed, since the app reads their audio codec setup from the
 install folder.
 
-## Repository layout
-
-| Path                               | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/TelltaleModding.Core`         | Cross-platform .NET 8 library: native `.ttarch2` reader (`Archives`), game inventory: install detection, archive priorities, characters, outfits, animations (`Catalog`), mesh/skeleton/animation/texture decoders (`Meshes`, `Textures`), model assembly, animation playback, face rig and lip sync (`Scene`), glTF export (`Export`), FMOD sound decoding (`Audio`), subtitle databases and their voice lines (`Dialogue`), Lua bytecode decompiler (`Scripts`), ttarchext wrapper, mod-project model, minimal-patch builder |
-| `src/TelltaleModding.App`          | Avalonia 11 desktop UI (MVVM)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `tests/TelltaleModding.Core.Tests` | xUnit suite, including tests against real sample files and (when present) installed games                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `tests/TelltaleModding.App.Tests`  | Headless UI tests: render every workspace to PNG, and drive the app end-to-end against installed games                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `engine/ttarchext`                 | The ttarchext CLI (source + Windows exe), the extraction/build engine                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `engine/oodle`                     | Linux loader for a game's own Oodle DLL (`libtelltale_oodle.so`)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `samples/`                         | Game files the tests read (archives, meshes, textures, skeletons, animations, props, resource descriptions). Only a few are in the repository; tests whose sample is missing are skipped                                                                                                                                                                                                                                                                                                                                       |
-| `legacy/winforms`                  | The original WinForms GUI, kept for reference                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-
 ## Building
 
 ```bash
 dotnet build TelltaleModding.sln
-dotnet test                      # runs the Core test suite (works on any OS)
+dotnet test
 dotnet run --project src/TelltaleModding.App
 ```
 
@@ -106,19 +92,9 @@ Everything builds and runs on Windows and Linux. Two native pieces:
 - **ttarchext**: `ttarchext.exe` is shipped for Windows. On Linux and macOS,
   `make -C engine/ttarchext` (needs `zlib1g-dev`) builds a native `ttarchext` that
   handles encrypted, zlib-compressed and plain archives. This repo carries a small
-  portability fix for it (the original Blowfish code assumed 32-bit `unsigned long`).
-  The app picks the one that runs on your OS, or set `TTARCHEXT_PATH` to a specific
-  binary. When only the `.exe` is present on a non-Windows host, engine actions are
-  disabled with an explanatory status message.
-- **Oodle on Linux**: Oodle-compressed `.ttarch2` archives (lowercase `zCTT`/`eCTT`
-  tags) are decoded with the game's own `oo2core_*_win64.dll`. Windows loads it
-  directly; on x86-64 Linux, `make -C engine/oodle` builds `libtelltale_oodle.so`,
-  which loads that Windows DLL and calls it. The build copies it next to the app.
-  Nothing of Oodle is in this repository.
-
-With a native engine present, `dotnet test` also runs end-to-end integration
-tests: listing and extracting from the real sample archives and round-tripping a
-built patch. CI does this on every push.
+  portability fix for it. The app picks the one that runs on your OS, or set `TTARCHEXT_PATH` to a specific binary. When only the `.exe` is present on a non-Windows host, engine actions are disabled with an explanatory status message.
+- **Oodle on Linux**: Oodle-compressed `.ttarch2` archives are decoded with the game's own `oo2core_*_win64.dll`. Windows loads it directly; on x86-64 Linux, `make -C engine/oodle` builds `libtelltale_oodle.so`, which loads that Windows DLL and calls it. The build copies it next to the app.
+  `dotnet test` also runs end-to-end integration tests.
 
 ## Notes
 
@@ -126,8 +102,6 @@ built patch. CI does this on every push.
   patch; decoded DDS/OGG files are not valid archive members.
 - If the game crashes loading a rebuilt v7+ archive, rebuild with ttarchext's
   compatibility mode (`-x`).
-- Game archives and their contents belong to their respective owners; mod
-  responsibly.
 
 ## Credits
 
@@ -136,15 +110,11 @@ built patch. CI does this on every push.
 - File layouts (meshes, animations, property sets) follow [TelltaleToolLib](https://github.com/LucasSaragosa/TelltaleToolLib).
 - Built with [Avalonia](https://avaloniaui.net/), [AvaloniaEdit](https://github.com/AvaloniaUI/AvaloniaEdit) with TextMateSharp, [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet), [NAudio](https://github.com/naudio/NAudio), [NLayer](https://github.com/naudio/NLayer) and [NVorbis](https://github.com/NVorbis/NVorbis).
 - Oodle-compressed archives are read through the Oodle library each game ships (RAD Game Tools / Epic Games).
-- The logo is set in [Ultra](https://fonts.google.com/specimen/Ultra) and [Archivo](https://fonts.google.com/specimen/Archivo).
 
-All game assets (characters, models, textures, animations, audio, dialogue, scripts
-and scenes), names and trademarks belong to Telltale Games and the games' licensors
-(_The Walking Dead_, _Tales from the Borderlands_, _The Wolf Among Us_, _Game of
-Thrones_ and their creators). The screenshots show game content only to demonstrate
-the app. This project is a fan-made tool, not affiliated with or endorsed by Telltale
-Games or any licensor. The app reads the games you have installed; the few game files
-under `samples/` are there only as test data.
+All game assets, names and trademarks belong to Telltale Games and the games' licensors.
+The screenshots show game content only to demonstrate the app. This project is a fan-made tool,
+not affiliated with or endorsed by Telltale Games or any licensor. The app reads the games you
+have installed; the few game files under `samples/` are there only as test data.
 
 ## License
 

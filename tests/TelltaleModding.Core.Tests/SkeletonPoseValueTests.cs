@@ -4,10 +4,8 @@ using TelltaleModding.Core.Meshes;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// The Walking Dead: Michonne stores nearly all its clips as uncompressed skeleton poses
-/// (SkeletonPoseValue): a bone table, then per sample a rotation and a bone-length space
-/// translation for each bone. Samples: <c>spv_michonne_phoneme_AA_angryA.anm</c> (one held
-/// mouth pose) and <c>spv_alex_headGesture_lookDown_add.anm</c> (an additive gesture).
+/// Uncompressed skeleton poses, which The Walking Dead: Michonne uses for most clips. Samples:
+/// <c>spv_michonne_phoneme_AA_angryA.anm</c> and <c>spv_alex_headGesture_lookDown_add.anm</c>.
 /// </summary>
 public class SkeletonPoseValueTests
 {
@@ -34,8 +32,7 @@ public class SkeletonPoseValueTests
         var jaw = pose.Rotations[0][0];
         Assert.Equal(-0.0756f, jaw.X, 1e-3f);
         Assert.Equal(0.9971f, jaw.W, 1e-3f);
-        // Translations are in bone-length space (1 = the rest length), like decoded compressed
-        // pose keys: a mouth shape stretches the lips a little.
+        // Translations are relative to the rest length, so they stay close to 1.
         Assert.All(pose.Translations, t => Assert.Equal(1f, t[0].Length(), 0.1f));
         Assert.Equal(pose.BoneSymbols.ToHashSet(), clip.FindBoneSymbols(pose.BoneSymbols.ToHashSet()));
     }
@@ -51,7 +48,7 @@ public class SkeletonPoseValueTests
         Assert.Equal(0f, pose.SampleTimes[0]);
         Assert.Equal(2.333f, pose.SampleTimes[^1], 1e-3f);
         Assert.True(pose.SampleTimes.Zip(pose.SampleTimes.Skip(1)).All(p => p.First < p.Second));
-        // An additive clip's values are offsets: at rest they are no rotation and no move.
+        // Additive values are offsets, so the first one is no change.
         Assert.Equal(1f, Math.Abs(Quaternion.Dot(Quaternion.Identity, pose.Rotations[0][0])), 1e-4f);
         Assert.Equal(0f, pose.Translations[0][0].Length(), 1e-4f);
     }

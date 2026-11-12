@@ -6,8 +6,7 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// A fact that runs only when a real game install and a runnable ttarchext are present
-/// (the developer machine's Steam libraries); skipped everywhere else.
+/// A fact that runs only when the game is installed and ttarchext can run.
 /// </summary>
 public sealed class InstallFactAttribute : FactAttribute
 {
@@ -21,9 +20,8 @@ public sealed class InstallFactAttribute : FactAttribute
 }
 
 /// <summary>
-/// End-to-end catalog builds over real installs through the ttarchext fallback reader.
-/// The index is cached under %TEMP% so repeated runs are quick; the first run per
-/// install takes seconds (Definitive Series: ~300 archives).
+/// Builds catalogs for real installs through ttarchext. The index is cached under %TEMP%
+/// so later runs are quick.
 /// </summary>
 public class GameCatalogIntegrationTests
 {
@@ -68,7 +66,7 @@ public class GameCatalogIntegrationTests
         Assert.True(anims.Count(a => a.NamedForCharacter) > 1000);
         Assert.Contains(anims, a => a.File.Name == "sk62_action_clementine400AjCloseDoor.anm" && a.NamedForCharacter);
         Assert.Contains(anims, a => a.File.Name == "sk62_clementine400_jog.anm" && a.NamedForCharacter);
-        // Character-named clips come before the rest of the family.
+        // Clips named for the character come first.
         int lastNamed = anims.ToList().FindLastIndex(a => a.NamedForCharacter);
         int firstOther = anims.ToList().FindIndex(a => !a.NamedForCharacter);
         Assert.True(firstOther < 0 || lastNamed < firstOther);
@@ -86,8 +84,7 @@ public class GameCatalogIntegrationTests
         Assert.Equal(101, episode.Priority);
         Assert.Contains(catalog.Archives, a => !a.Enabled && Path.GetFileName(a.Path).StartsWith("WD4_De_", StringComparison.Ordinal));
 
-        // Every file the patch carries is served from the patch or something ranked above it
-        // (later patches, mods), never from the episode archives it patches.
+        // Files in the patch never come from the episode archives it patches.
         var priorityOf = catalog.Archives.ToDictionary(a => a.Path, a => a.Priority, StringComparer.OrdinalIgnoreCase);
         using (var patchSource = TtarchextArchiveSource.Open(patch.Path, 67, EngineFactAttribute.FindRunnableEngine()))
         {

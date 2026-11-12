@@ -7,8 +7,7 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// <see cref="GameInstall"/> and <see cref="GameCatalog"/> over a fake install: empty
-/// archive files on disk (for detection and cache fingerprints) served by in-memory sources.
+/// <see cref="GameInstall"/> and <see cref="GameCatalog"/> on a fake install served from memory.
 /// </summary>
 public class GameCatalogTests
 {
@@ -112,8 +111,7 @@ public class GameCatalogTests
         game.Add(Mod, "shared.d3dtx", 16);
         game.Add(Mod, "modOnly.d3dtx", 16);
 
-        // A plain-text description (as in the Definitive Series) gives the mod priority 700;
-        // the other archives fall back to name-based priorities.
+        // A description file gives the mod priority 700; the rest go by their names.
         File.WriteAllText(Path.Combine(game.ArchivesFolder, "_resdesc_50_Mod_Example.lua"),
             "local set = {}\nset.name = \"Mod_Example\"\nset.setName = \"Mod_Example\"\n" +
             "set.logicalName = \"<Mod_Example>\"\nset.logicalDestination = \"<Project>\"\nset.priority = 700\n" +
@@ -205,7 +203,7 @@ public class GameCatalogTests
 
         Assert.Equal("shared.d3dtx", catalog.FindBySymbol(TelltaleCrc64.HashSymbol("shared.d3dtx"))!.Name);
         Assert.Equal("shared.d3dmesh", catalog.FindBySymbol(TelltaleCrc64.HashSymbol("shared.d3dmesh"))!.Name);
-        // Extension-less symbol: textures win a stem collision.
+        // Without an extension, textures win a name clash.
         Assert.Equal("shared.d3dtx", catalog.FindBySymbol(TelltaleCrc64.HashSymbol("Shared"))!.Name);
         Assert.Equal("sk62_clementine400_hairCap.d3dmesh",
             catalog.FindBySymbol(TelltaleCrc64.HashSymbol("sk62_clementine400_haircap"))!.Name);
@@ -291,7 +289,7 @@ public class GameCatalogTests
             Assert.Equal(16, second.Read(second.Find("modOnly.d3dtx")!).Length);
         }
 
-        // Updating an archive (new size/mtime) invalidates the cache.
+        // Changing an archive invalidates the cache.
         File.WriteAllBytes(Path.Combine(game.ArchivesFolder, Patch), new byte[] { 1, 2 });
         using var third = await game.OpenCatalog();
         Assert.False(third.LoadedFromCache);

@@ -13,7 +13,7 @@ public partial class ScenesView : UserControl
     {
         InitializeComponent();
 
-        // Scenes are explored from inside, so allow a much closer camera than for characters.
+        // Scenes are explored from inside, so let the camera get much closer.
         Viewport.MinZoom = 0.01f;
         Viewport.NearPlaneFactor = 0.002f;
 

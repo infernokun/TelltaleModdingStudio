@@ -7,11 +7,8 @@ using TelltaleModding.Core.Archives;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// Tests for the in-process .ttarch2 reader. The two checked-in samples hold the
-/// same 1706 files in different containers (Game of Thrones ECTT with Blowfish +
-/// zlib chunks, and test.ttarch2 NCTT, stored with a 3ATT table), so each serves as
-/// ground truth for the other. Synthetic archives cover the zCTT/Oodle variants
-/// and tiny chunks; tests against installed games skip when the game is absent.
+/// Tests for the .ttarch2 reader. The two checked-in samples hold the same files in
+/// different containers, so each one checks the other.
 /// </summary>
 public class Ttarch2ArchiveTests
 {
@@ -64,7 +61,7 @@ public class Ttarch2ArchiveTests
             Assert.True(a.AsSpan().SequenceEqual(b), entry.Name);
             total += a.Length;
         }
-        // ~27 MB through ~424 chunks of 64 KB: plenty of files straddle chunk edges.
+        // Big enough that plenty of files cross chunk edges.
         Assert.True(total > 20_000_000);
     }
 
@@ -85,7 +82,7 @@ public class Ttarch2ArchiveTests
         var entry = archive.Entries.Single(e => e.Name == "Episode.lua");
         var data = archive.Read(entry);
 
-        // Stored as "\x1bLEn" + Blowfish; ttarchext writes it out as plain Lua bytecode.
+        // Stored encrypted; ttarchext writes it out as plain Lua bytecode.
         Assert.Equal(entry.Size, data.Length);
         Assert.Equal("\x1bLuaR", Encoding.ASCII.GetString(data, 0, 5));
     }
@@ -109,7 +106,7 @@ public class Ttarch2ArchiveTests
     [SkippableFact]
     public void EncryptedArchiveNeedsAGameWithAKey()
     {
-        // Game 0 is a classic .ttarch game: no .ttarch2 key.
+        // Game 0 has no .ttarch2 key.
         Assert.Throws<ArgumentOutOfRangeException>(() => Ttarch2Archive.Open(SampleData.GameOfThrones, 0));
     }
 
@@ -179,7 +176,7 @@ public class Ttarch2ArchiveTests
     [InstalledGameFact(DefinitiveSeriesRoot)]
     public void ReadsSyntheticOodleArchive()
     {
-        // The game's Oodle DLL both builds the fixture and decodes it.
+        // Uses the game's own Oodle DLL.
         var dll = Path.Combine(DefinitiveSeriesRoot, "oo2core_5_win64.dll");
         using var oodle = new OodleCompressor(dll);
         var files = SyntheticFiles();
@@ -202,7 +199,7 @@ public class Ttarch2ArchiveTests
         Assert.Contains("oo2core", ex.Message);
     }
 
-    // --- installed games (skipped when absent) ---
+    // --- installed games ---
 
     [InstalledGameFact(DefinitiveSeriesRoot)]
     public void ReadsDefinitiveSeriesAnimationArchive()
@@ -218,7 +215,7 @@ public class Ttarch2ArchiveTests
     [InstalledGameFact(DefinitiveSeriesRoot)]
     public void DefinitiveSeriesMeshMatchesCheckedInSample()
     {
-        // samples/sk62_clementine400_head.d3dmesh was extracted from this archive by ttarchext.
+        // The sample was extracted from this archive.
         if (!File.Exists(Path.Combine(SampleData.SamplesDir, "sk62_clementine400_head.d3dmesh")))
             return;
         using var archive = Ttarch2Archive.Open(
@@ -251,7 +248,7 @@ public class Ttarch2ArchiveTests
         }
     }
 
-    /// <summary>Files sized to start, end and straddle 256-byte chunks in every way.</summary>
+    /// <summary>Files sized to start, end and cross 256-byte chunks.</summary>
     private static List<(string Name, byte[] Data)> SyntheticFiles()
     {
         var rng = new Random(1234);
@@ -259,8 +256,7 @@ public class Ttarch2ArchiveTests
         foreach (var size in new[] { 10, 0, 300, 1, 2000, 255, 256, 257, 700 })
         {
             var data = new byte[size];
-            // Mostly compressible text, with one incompressible file so some full
-            // chunks are stored raw.
+            // One random file so some chunks get stored raw.
             if (size == 2000) rng.NextBytes(data);
             else for (int i = 0; i < size; i++) data[i] = (byte)"telltale "[(i + size) % 9];
             files.Add(($"file_{files.Count}_{size}.bin", data));
@@ -288,7 +284,7 @@ public class Ttarch2ArchiveTests
         public static byte[] Build(IReadOnlyList<(string Name, byte[] Data)> files, string container,
             int compressionType, int chunkSize, Func<byte[], byte[]> compress)
         {
-            // Inner stream: 4ATT, names size, count, 28-byte records, names, data.
+            // Inner 4ATT stream.
             var names = new MemoryStream();
             var data = new MemoryStream();
             var records = new MemoryStream();
@@ -329,8 +325,7 @@ public class Ttarch2ArchiveTests
                 return outer.ToArray();
             }
 
-            // Chunked: compress each chunk; a full chunk that does not shrink is
-            // stored raw (a chunk exactly chunkSize long is taken as uncompressed).
+            // A full chunk that does not shrink is stored raw.
             var chunks = new List<byte[]>();
             for (int at = 0; at < stream.Length; at += chunkSize)
             {
@@ -350,7 +345,7 @@ public class Ttarch2ArchiveTests
         }
     }
 
-    /// <summary>Minimal binding to OodleLZ_Compress, only for building fixtures.</summary>
+    /// <summary>Calls OodleLZ_Compress to build test archives.</summary>
     private sealed class OodleCompressor : IDisposable
     {
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -377,7 +372,7 @@ public class Ttarch2ArchiveTests
             return comp[..n];
         }
 
-        // The decompressor shares the module, so it is deliberately left loaded.
+        // Left loaded since the decompressor uses the same DLL.
         public void Dispose() { }
     }
 }

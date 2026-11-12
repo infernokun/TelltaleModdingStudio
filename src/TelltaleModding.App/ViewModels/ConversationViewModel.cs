@@ -9,11 +9,7 @@ using TelltaleModding.Core.Dialogue;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// A scene's conversations from its <c>.dlog</c>: browse one as a tree of lines, choice
-/// menus and branches, or click through it: lines play in order and choices wait for
-/// the player. Lines are matched to <see cref="DialogueIndex"/> by language line id.
-/// </summary>
+/// <summary>A scene's conversations from its <c>.dlog</c>, shown as a tree or played through.</summary>
 public sealed partial class ConversationViewModel : ViewModelBase
 {
     private static readonly ConditionalWeakTable<DialogueIndex, Dictionary<uint, DialogueEntry>> LineTables = new();
@@ -26,7 +22,7 @@ public sealed partial class ConversationViewModel : ViewModelBase
     private readonly Dictionary<ulong, ConversationNodeViewModel> _itemsByNode = new();
     private DlogWalker? _walker;
 
-    /// <summary>Raised when a line should be heard; hook it to the audio player.</summary>
+    /// <summary>Raised when a line should be played.</summary>
     public event Action<DialogueEntry>? PlayLineRequested;
 
     /// <summary>Every <c>.dlog</c> in the game, by name.</summary>
@@ -61,23 +57,23 @@ public sealed partial class ConversationViewModel : ViewModelBase
     [ObservableProperty]
     private ConversationNodeViewModel? _selectedNode;
 
-    /// <summary>Hide conversations that never say anything (logic-only entry points).</summary>
+    /// <summary>Hide conversations that have no lines.</summary>
     [ObservableProperty]
     private bool _onlyWithLines = true;
 
-    /// <summary>Show bookkeeping nodes (start, logic, scripts, waits, idles) in the tree.</summary>
+    /// <summary>Show logic and script nodes in the tree.</summary>
     [ObservableProperty]
     private bool _showLogic;
 
-    /// <summary>Raise <see cref="PlayLineRequested"/> as click-through reaches each line.</summary>
+    /// <summary>Play each line as click-through reaches it.</summary>
     [ObservableProperty]
     private bool _speakLines = true;
 
-    /// <summary>Move to the next line by itself when the host reports the clip ended.</summary>
+    /// <summary>Move to the next line when the clip ends.</summary>
     [ObservableProperty]
     private bool _autoAdvance = true;
 
-    /// <summary>True while click-through waits for "Next" (a line was just shown).</summary>
+    /// <summary>True while click-through waits for Next.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AdvanceCommand))]
     private bool _canAdvance;
@@ -104,10 +100,7 @@ public sealed partial class ConversationViewModel : ViewModelBase
 
     // ---- Loading ----------------------------------------------------------
 
-    /// <summary>
-    /// Points the view at a game: lists its dialogs and opens <paramref name="sceneName"/>
-    /// (a <c>.dlog</c> name or a <see cref="DialogueEntry.Scene"/>), when given.
-    /// </summary>
+    /// <summary>Lists a game's dialogs and opens <paramref name="sceneName"/> if given.</summary>
     public void Load(GameCatalog catalog, DialogueIndex index, string? sceneName = null)
     {
         _catalog = catalog;
@@ -151,13 +144,13 @@ public sealed partial class ConversationViewModel : ViewModelBase
     private List<(string Name, IReadOnlySet<string> Episodes)> _sceneEpisodes = new();
     private string? _episode;
 
-    /// <summary>The scenes' episodes (archive labels, as <see cref="DialogueIndex.EpisodeOf"/> gives them).</summary>
+    /// <summary>The episodes the scenes belong to.</summary>
     public IEnumerable<string> SceneEpisodes => _sceneEpisodes.SelectMany(s => s.Episodes);
 
     /// <summary>Raised when opening a scene outside the episode filter cleared it.</summary>
     public event Action? EpisodeFilterCleared;
 
-    /// <summary>Lists only the scenes of <paramref name="episode"/> (all when null).</summary>
+    /// <summary>Lists only the scenes of <paramref name="episode"/>, or all when null.</summary>
     public void SetEpisode(string? episode)
     {
         if (string.Equals(_episode, episode, StringComparison.OrdinalIgnoreCase))
@@ -166,7 +159,7 @@ public sealed partial class ConversationViewModel : ViewModelBase
         FillScenes();
     }
 
-    // Refills the scene list for the episode, keeping the open scene when it still fits.
+    // Refills the scene list, keeping the open scene if it's still listed.
     private void FillScenes()
     {
         var keep = SelectedScene;
@@ -182,12 +175,12 @@ public sealed partial class ConversationViewModel : ViewModelBase
         Status = _episode is null ? $"{Scenes.Count:N0} dialogs" : $"{Scenes.Count:N0} dialogs in {_episode}";
     }
 
-    /// <summary>Opens a scene's dialog by <c>.dlog</c> name or <see cref="DialogueEntry.Scene"/>; false if it has none.</summary>
+    /// <summary>Opens a scene's dialog. False if it has none.</summary>
     public bool SelectScene(string sceneName)
     {
         var stem = Path.GetFileNameWithoutExtension(sceneName);
         var match = Scenes.FirstOrDefault(s => s.Equals(stem, StringComparison.OrdinalIgnoreCase));
-        // A jump or a line from another episode: show every scene again.
+        // Scene is in another episode, so clear the filter.
         if (match is null && _episode is not null &&
             _sceneEpisodes.Any(s => s.Name.Equals(stem, StringComparison.OrdinalIgnoreCase)))
         {
@@ -408,7 +401,7 @@ public sealed partial class ConversationViewModel : ViewModelBase
 
     internal DialogueEntry? Line(uint id) => _lines.GetValueOrDefault(id);
 
-    /// <summary>"Speaker: text" for a line id, or a placeholder when the language database lacks it.</summary>
+    /// <summary>"Speaker: text" for a line id, or a placeholder if it's missing.</summary>
     internal string Describe(uint id) =>
         Line(id) is { } entry
             ? (entry.Line.Speaker.Length > 0 ? $"{TitleCase(entry.Line.Speaker)}: {Text(entry)}" : Text(entry))
@@ -422,15 +415,12 @@ public sealed partial class ConversationViewModel : ViewModelBase
         string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Select(w => char.ToUpperInvariant(w[0]) + w[1..].ToLowerInvariant()));
 
-    /// <summary>
-    /// The label of a choice option: its text, its conditional's case texts, or a
-    /// placeholder with the first thing said in its branch as the detail.
-    /// </summary>
+    /// <summary>The label shown for a choice option.</summary>
     internal (string Label, string Detail, bool Silent) OptionLabel(DlogChild option)
     {
         if (option.TextIds.Count > 0)
             return (OptionText(option.TextIds[0]), "", false);
-        // A textless option that opens with a conditional shows its cases' texts.
+        // No text of its own, so use the texts of the conditional it starts with.
         if (_dialog?.Head(option) is { Kind: DlogNodeKind.Conditional } conditional
             && conditional.Children.Where(c => c.TextIds.Count > 0).Select(c => OptionText(c.TextIds[0])).ToList() is { Count: > 0 } cases)
             return (string.Join("  /  ", cases), "Depends on earlier choices", false);
@@ -529,7 +519,7 @@ public sealed partial class ConversationViewModel : ViewModelBase
         Pump();
     }
 
-    /// <summary>Call when the line requested last finished playing, to move on in click-through.</summary>
+    /// <summary>Call when the last requested line finishes playing.</summary>
     public void OnLineFinished()
     {
         if (AutoAdvance && CanAdvance)
@@ -579,7 +569,7 @@ public sealed partial class ConversationViewModel : ViewModelBase
                 }
                 else if (AutoAdvance)
                 {
-                    // Nothing to hear: give the reader a moment, then carry on.
+                    // No audio, so wait a moment for reading.
                     await Task.Delay(1500);
                     if (generation == _pumpGeneration && CanAdvance && _walker == walker)
                         Advance();
@@ -678,7 +668,7 @@ public sealed partial class ConversationViewModel : ViewModelBase
                     hidden.Clear();
                 }
             }
-            // Hidden nodes at the end of a branch point at the branch's own item.
+            // Hidden nodes at the end of a branch map to the branch's item.
             if (parent is not null)
                 foreach (var h in hidden)
                     _owner._itemsByNode.TryAdd(h.Id, parent);
@@ -871,7 +861,7 @@ public sealed class ConversationItemViewModel
         LineCount = lines.Count;
         ChoiceCount = choices;
         Name = start?.Name;
-        // The first line with words in it (some lines are silent beats).
+        // First line that isn't silent.
         Preview = lines.Select(describe).FirstOrDefault(d => !d.EndsWith("(silence)", StringComparison.Ordinal))
                   ?? (lines.Count > 0 ? describe(lines[0]) : "");
         Title = Name ?? (Preview.Length > 0 ? Preview : $"Conversation {number}");
@@ -886,7 +876,7 @@ public sealed class ConversationItemViewModel
 
     public DlogChild Branch { get; }
 
-    /// <summary>The start node's name (<c>cs_enter</c>…) when known.</summary>
+    /// <summary>The start node's name, when known.</summary>
     public string? Name { get; }
 
     public string Title { get; }
@@ -901,7 +891,7 @@ public sealed class ConversationItemViewModel
     public int ChoiceCount { get; }
 }
 
-/// <summary>An item of the conversation tree: a line, a choice menu or option, a branch, a jump…</summary>
+/// <summary>An item in the conversation tree.</summary>
 public sealed partial class ConversationNodeViewModel : ViewModelBase
 {
     private readonly ConversationViewModel _owner;
@@ -913,7 +903,7 @@ public sealed partial class ConversationNodeViewModel : ViewModelBase
         Parent = parent;
     }
 
-    /// <summary>The node shown (null for an option or case, which are branches).</summary>
+    /// <summary>The node shown. Null for options and cases.</summary>
     public DlogNode? Node { get; }
 
     /// <summary>The branch shown, for options and cases.</summary>
@@ -954,7 +944,7 @@ public sealed partial class ConversationNodeViewModel : ViewModelBase
     private void GoTo() => _owner.FollowJump(this);
 }
 
-/// <summary>A line said, a choice made, or a note, in the click-through transcript.</summary>
+/// <summary>One entry in the click-through transcript.</summary>
 public sealed class PlayStepViewModel
 {
     private PlayStepViewModel(string speaker, string text, DialogueEntry? entry, bool isChoice, bool isInfo)
@@ -993,7 +983,7 @@ public sealed class PlayStepViewModel
     internal static PlayStepViewModel Info(string text) => new("", text, null, false, true);
 }
 
-/// <summary>An option offered in click-through: a choice, a conditional case, a sequence part.</summary>
+/// <summary>An option offered in click-through.</summary>
 public sealed class PlayOptionViewModel
 {
     public PlayOptionViewModel(int index, string label, string detail, bool isMuted, bool showInTranscript)

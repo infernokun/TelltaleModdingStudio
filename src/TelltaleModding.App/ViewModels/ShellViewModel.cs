@@ -10,10 +10,7 @@ namespace TelltaleModding.App.ViewModels;
 /// <summary>The app's workspaces.</summary>
 public enum Workspace { Home, Characters, Scenes, Dialogue, Scripts, Assets, Mod, Settings }
 
-/// <summary>
-/// The main window: the game library, the open game, and the workspaces
-/// (Home, Characters, Scenes, Dialogue, Scripts, Assets, Mod) that share it.
-/// </summary>
+/// <summary>The main window: the game library, the open game and the workspaces.</summary>
 public sealed partial class ShellViewModel : ViewModelBase, IDisposable
 {
     private readonly AppSettings _settings;
@@ -64,7 +61,7 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
         };
         Dialogue.StatusMessage += message => StatusText = message;
         Characters.StatusMessage += message => StatusText = message;
-        // The Face tab lip-syncs voice lines from the dialogue index once it is read.
+        // The Face tab gets voice lines from the dialogue index.
         Characters.Face.DialogueSource = () => Dialogue.Index;
         Dialogue.PropertyChanged += (_, e) =>
         {
@@ -82,18 +79,18 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
     public AssetsViewModel Assets { get; } = new();
     public ModToolsViewModel Mod { get; } = new();
 
-    /// <summary>How the 3D viewports shade; the style follows the open game.</summary>
+    /// <summary>How the 3D viewports shade.</summary>
     public ViewportLookViewModel Look { get; } = new();
 
-    /// <summary>The Settings page's choices (saved with the app settings).</summary>
+    /// <summary>The Settings page's choices.</summary>
     public UserPreferences Preferences { get; }
 
     public SettingsViewModel Settings { get; }
 
-    /// <summary>The update check behind the status bar button and the start-up popup.</summary>
+    /// <summary>The update check.</summary>
     public UpdatesViewModel Updates { get; }
 
-    // Pushes preferences into the workspaces (all of them, or the one that changed).
+    // Pushes preferences into the workspaces. Null means all of them.
     private void ApplyPreferences(string? changed)
     {
         bool All(string name) => changed is null || changed == name;
@@ -115,7 +112,7 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
 
     private IDialogService? _dialogs;
 
-    /// <summary>Set by the view so pickers can be shown; null in unit tests.</summary>
+    /// <summary>Set by the view so pickers can be shown. Null in tests.</summary>
     public IDialogService? Dialogs
     {
         get => _dialogs;
@@ -138,7 +135,7 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(IsHome), nameof(IsSettings), nameof(IsCharacters), nameof(IsScenes), nameof(IsDialogue), nameof(IsScripts), nameof(IsAssets), nameof(IsMod))]
     private Workspace _currentWorkspace = Workspace.Home;
 
-    // Leaving the Dialogue workspace pauses its line or track; Play resumes it.
+    // Leaving Dialogue pauses whatever is playing.
     partial void OnCurrentWorkspaceChanged(Workspace oldValue, Workspace newValue)
     {
         if (oldValue == Workspace.Dialogue && newValue != Workspace.Dialogue)
@@ -168,7 +165,7 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
     /// <summary>Games the user added.</summary>
     public ObservableCollection<GameCardViewModel> Games { get; } = new();
 
-    /// <summary>Telltale games found in Steam libraries that are not in the library yet.</summary>
+    /// <summary>Telltale games found in Steam that aren't in the library yet.</summary>
     public ObservableCollection<GameCardViewModel> Detected { get; } = new();
 
     [ObservableProperty]
@@ -260,7 +257,7 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
         await AddAndOpenAsync(card.Folder);
     }
 
-    /// <summary>Adds a game folder to the library (if new) and opens it.</summary>
+    /// <summary>Adds a game folder to the library if it's new, then opens it.</summary>
     public async Task AddAndOpenAsync(string folder)
     {
         var card = Games.FirstOrDefault(g => SameFolder(g.Folder, folder));
@@ -337,8 +334,7 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
             ActiveGameName = install.DisplayName;
             Look.Style = GameLookStyle.ForGame(install.Game.GameNum);
             card.Status = $"{catalog.Characters.Count:N0} characters · {catalog.Entries.Count:N0} files";
-            // One model assembler per game: Characters, the Dialogue speaker and Assets
-            // previews share its decoded meshes and textures (and its memory budget).
+            // One model assembler per game so the workspaces share decoded meshes and textures.
             var models = new ModelAssembler(new CatalogAssetResolver(catalog));
             Characters.Load(catalog, models);
             Dialogue.Load(catalog, models);
@@ -357,7 +353,7 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
         }
         catch (OperationCanceledException)
         {
-            StatusText = "Cancelled.";
+            StatusText = "Canceled.";
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException
                                        or UnauthorizedAccessException or DllNotFoundException)
@@ -394,12 +390,12 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
         _openCts?.Cancel();
         CloseGame();
         Characters.Clear();
-        // The static would otherwise keep this shell (and every view bound to it) alive.
+        // Otherwise the static keeps this shell alive.
         if (ReferenceEquals(UserPreferences.Current, Preferences))
             UserPreferences.Current = new();
     }
 
-    /// <summary>Shows loose extracted meshes (debug flags <c>--preview-mesh</c> / <c>--play-anim</c>).</summary>
+    /// <summary>Shows loose extracted meshes, for the <c>--preview-mesh</c> flag.</summary>
     public void OpenLooseFiles(IReadOnlyList<string> meshPaths, string? animationPath)
     {
         Characters.LoadLoose(meshPaths, animationPath);
@@ -431,11 +427,11 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
         _openCts?.Cancel();
         _openCts = null;
         IsBusy = false;
-        StatusText = "Cancelled.";
+        StatusText = "Canceled.";
     }
 }
 
-/// <summary>A game in the library (or found on this PC).</summary>
+/// <summary>A game in the library or found on this PC.</summary>
 public sealed partial class GameCardViewModel : ViewModelBase
 {
     public GameCardViewModel(string folder)
@@ -461,7 +457,7 @@ public sealed partial class GameCardViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isBusy;
 
-    /// <summary>Monogram for the card's tile, e.g. "WD" for The Walking Dead.</summary>
+    /// <summary>Initials shown on the card's tile.</summary>
     public string Initials
     {
         get

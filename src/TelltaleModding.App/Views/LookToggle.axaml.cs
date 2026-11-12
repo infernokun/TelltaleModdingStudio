@@ -4,7 +4,7 @@ using TelltaleModding.App.ViewModels;
 
 namespace TelltaleModding.App.Views;
 
-/// <summary>A small "Studio | Game | Graphic black" switch for a 3D viewport's shading, with the intensity of its black shadows.</summary>
+/// <summary>The Studio, Game and Graphic black switch for a 3D viewport.</summary>
 public partial class LookToggle : UserControl
 {
     public LookToggle()
@@ -12,10 +12,7 @@ public partial class LookToggle : UserControl
         InitializeComponent();
     }
 
-    /// <summary>
-    /// Keeps <paramref name="viewport"/>'s render mode and style in step with
-    /// <paramref name="look"/> until the returned handle is disposed.
-    /// </summary>
+    /// <summary>Keeps <paramref name="viewport"/> in sync with <paramref name="look"/> until disposed.</summary>
     public static IDisposable Attach(MeshViewport viewport, ViewportLookViewModel look)
     {
         var prefs = look.Preferences;

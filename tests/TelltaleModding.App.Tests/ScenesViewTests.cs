@@ -12,9 +12,7 @@ using Xunit;
 namespace TelltaleModding.App.Tests;
 
 /// <summary>
-/// Drives the Scenes workspace against installed games (skipped when the install is
-/// missing): list the locations, assemble one, toggle agents. Screenshots go to
-/// <see cref="UiTests.ShotsFolder"/>.
+/// Runs the Scenes workspace against installed games. Screenshots go to <see cref="UiTests.ShotsFolder"/>.
 /// </summary>
 public class ScenesViewTests
 {
@@ -52,7 +50,7 @@ public class ScenesViewTests
 
         var vm = new ScenesViewModel();
         var window = new Window { Width = 1440, Height = 900, Content = new ScenesView { DataContext = vm } };
-        // Closed even on failure, so the view stops following this view model into later tests.
+        // Close the window even on failure so it doesn't affect later tests.
         try
         {
             window.Show();
@@ -80,7 +78,7 @@ public class ScenesViewTests
             Directory.CreateDirectory(UiTests.ShotsFolder);
             window.CaptureRenderedFrame()!.Save(Path.Combine(UiTests.ShotsFolder, $"scenes-{shot}.png"));
 
-            // Hiding props only masks batches; showing characters re-assembles.
+            // Hiding props only masks batches; showing characters rebuilds the scene.
             vm.Kinds.First(k => k.Kind == SceneAgentKind.Prop).IsOn = false;
             PumpUntil(() => mask is not null, 10, "props to hide");
             Assert.Contains(false, mask!);
@@ -118,7 +116,7 @@ public class ScenesViewTests
             bool? keptCamera = null;
             vm.SceneReady += (scene, keep) => (shown, keptCamera) = (scene, keep);
             vm.Load(catalog);
-            // jackAI.scene only holds hologram Jack, hidden until a chore shows him.
+            // jackAI.scene only holds hologram Jack, who starts hidden.
             vm.IncludeOtherScenes = true;
             vm.SelectedScene = vm.Scenes.First(s => s.FileName == "jackAI.scene");
             PumpUntil(() => vm.Error is not null && !vm.IsLoading, 120, "the scene to load");

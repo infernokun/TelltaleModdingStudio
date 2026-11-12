@@ -2,11 +2,7 @@ using System.Text;
 
 namespace TelltaleModding.App.Services;
 
-/// <summary>
-/// Records unhandled errors to <c>%LOCALAPPDATA%\TelltaleModdingStudio\crash.log</c>
-/// (on Linux, <c>~/.local/share/TelltaleModdingStudio/crash.log</c>), newest last, so a
-/// crash leaves something to look at.
-/// </summary>
+/// <summary>Writes unhandled errors to crash.log in local app data.</summary>
 public static class CrashLog
 {
     public static string FilePath => Path.Combine(
@@ -27,7 +23,7 @@ public static class CrashLog
         };
     }
 
-    /// <summary>Appends an entry; never throws.</summary>
+    /// <summary>Appends an entry. Never throws.</summary>
     public static void Write(string context, Exception? exception)
     {
         try

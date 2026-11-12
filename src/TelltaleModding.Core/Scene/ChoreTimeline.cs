@@ -9,17 +9,17 @@ namespace TelltaleModding.Core.Scene;
 public enum ChoreItemKind
 {
     Animation,
-    /// <summary>An additive animation layered on top (<c>_add.anm</c>): breaths, head turns, gestures.</summary>
+    /// <summary>An additive animation layered on top (<c>_add.anm</c>).</summary>
     Gesture,
     Chore,
     VoiceLine,
     /// <summary>Data the chore carries itself, such as a procedural look-at.</summary>
     Embedded,
-    /// <summary>A resource with no play span: a style guide, a prop or the scene it sets up.</summary>
+    /// <summary>A resource with no play span.</summary>
     Setting,
 }
 
-/// <summary>One resource on a chore's timeline, with the spans it plays in (none for settings, which apply throughout).</summary>
+/// <summary>One resource on a chore's timeline, with the spans it plays in.</summary>
 public sealed record ChoreTimelineItem(int Index, ChoreItemKind Kind, string Name, IReadOnlyList<ChoreBlock> Blocks, int Priority)
 {
     public float? Start => Blocks.Count == 0 ? null : Blocks.Min(b => b.Start);
@@ -27,7 +27,7 @@ public sealed record ChoreTimelineItem(int Index, ChoreItemKind Kind, string Nam
     public bool Looping => Blocks.Any(b => b.Looping);
 }
 
-/// <summary>The resources of one agent (a character, camera, light...), in play order.</summary>
+/// <summary>The resources of one agent, in play order.</summary>
 public sealed record ChoreTimelineTrack(string Agent, IReadOnlyList<ChoreTimelineItem> Items);
 
 /// <summary>A chore laid out per agent for reading: what plays, for whom, and when.</summary>
@@ -35,10 +35,7 @@ public static partial class ChoreTimeline
 {
     private static readonly ulong StyleIdleType = TelltaleCrc64.HashSymbol("StyleIdleTransitionsRes");
 
-    /// <param name="nameOf">
-    /// A readable name for a resource, or null to show its symbol. Data stored in the chore
-    /// that has no name is named after its type and owner (see <see cref="EmbeddedName"/>).
-    /// </param>
+    /// <param name="nameOf">A readable name for a resource, or null to show its symbol.</param>
     public static IReadOnlyList<ChoreTimelineTrack> Build(ChoreFile chore, Func<ChoreResource, string?> nameOf)
     {
         var owner = new Dictionary<int, string>();
@@ -63,7 +60,7 @@ public static partial class ChoreTimeline
             items.Add(new ChoreTimelineItem(i, kind, name, resource.Blocks, resource.Priority));
         }
 
-        // Characters first (the agents with voice lines or animations), then everything else.
+        // Characters first, then everything else.
         return order
             .Select(a => new ChoreTimelineTrack(a, tracks[a]
                 .OrderBy(t => t.Start is null ? 0 : 1).ThenBy(t => t.Start).ThenBy(t => t.Index).ToList()))
@@ -97,11 +94,7 @@ public static partial class ChoreTimeline
         _ => "Setting",
     };
 
-    /// <summary>
-    /// A name for data stored in the chore, whose own name is a symbol no file has: what
-    /// its type does, and for a look-at target (agent <c>obj_lookAtClementineEyes</c>) whose
-    /// eyes or head it marks.
-    /// </summary>
+    /// <summary>A readable name for unnamed data stored in the chore, based on its type and owner.</summary>
     public static string EmbeddedName(ulong type, string agent)
     {
         var typeName = KnownTypeNames.Resolve(type);
@@ -135,8 +128,7 @@ public static partial class ChoreTimeline
     [GeneratedRegex("^obj_lookAt(?<who>.+?)(?<part>Eyes|Head|Face|Body|Chest|Hand)?$", RegexOptions.IgnoreCase)]
     private static partial Regex LookAtTarget();
 
-    // "ClementineFlashback" to "Clementine Flashback"; lowered, "CameraSelect" to "camera select".
-    // Runs of capitals ("AJ", "IK") stay as they are.
+    // Splits a camel-case name into words, keeping runs of capitals as they are.
     private static string Words(string name, bool lower)
     {
         var words = new StringBuilder();
@@ -156,17 +148,13 @@ public static partial class ChoreTimeline
         return string.Join(' ', words.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    /// <summary>
-    /// What a timeline row shows: its name (one missing from the game's files becomes
-    /// "unnamed" and its kind) and the notes that go with it, such as the line id of a
-    /// voice line or how many spans it plays in.
-    /// </summary>
+    /// <summary>What a timeline row shows: its name and the notes that go with it.</summary>
     public static (string Name, IReadOnlyList<string> Details) Describe(ChoreFile chore, ChoreTimelineItem item,
         IReadOnlyDictionary<ulong, DialogueLine> lines)
     {
         var resource = chore.Resources[item.Index];
         var details = new List<string>();
-        // A name missing from the game's files is shown by its kind, with the symbol as a note.
+        // Unnamed resources show their kind, with the symbol as a note.
         var name = item.Name;
         if (name.StartsWith("0x", StringComparison.Ordinal))
         {
@@ -189,8 +177,8 @@ public static partial class ChoreTimeline
     }
 
     /// <summary>
-    /// When a row plays: "3.4–7.4s", or "throughout" with no span. Spans can begin before
-    /// the chore does, so a move is already under way at 0 s; one that ends by then is a "lead-in".
+    /// When a row plays, or "throughout" with no span. A span that ends before the chore
+    /// starts is a "lead-in".
     /// </summary>
     public static string Span(float? start, float? end) => (start, end) switch
     {
@@ -199,7 +187,7 @@ public static partial class ChoreTimeline
         ({ } s, { } e) => $"{Math.Max(0, s):0.0}–{e:0.0}s",
     };
 
-    /// <summary>A count of what an agent does: "2 voice lines · 14 animations · 1 setting".</summary>
+    /// <summary>A count of what an agent does, by kind.</summary>
     public static string Summarize(IReadOnlyList<ChoreTimelineItem> items)
     {
         var parts = new List<string>();
@@ -218,11 +206,7 @@ public static partial class ChoreTimeline
         return string.Join(" · ", parts);
     }
 
-    /// <summary>
-    /// The timeline as plain text, with the rows the Assets preview shows: a heading per
-    /// agent, then a line per resource with when it plays, its kind, its name and notes.
-    /// A resource that plays more than once lists every span.
-    /// </summary>
+    /// <summary>The timeline as plain text, with the same rows the Assets preview shows.</summary>
     public static string ToText(ChoreFile chore, Func<ChoreResource, string?> nameOf, IReadOnlyDictionary<ulong, DialogueLine> lines)
     {
         var text = new StringBuilder();

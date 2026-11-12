@@ -8,42 +8,31 @@ public enum RenderMode
     /// <summary>Neutral, physically-minded lighting for inspecting a model.</summary>
     Studio,
 
-    /// <summary>The game's stylised look: ink outlines, the game's light model, ink and graphic black.</summary>
+    /// <summary>The game's stylized look: outlines, the game's light model, ink and graphic black.</summary>
     GameLook,
 
-    /// <summary>
-    /// The game's look with full graphic black (see <see cref="GameLookStyle.WithGraphicBlack"/>):
-    /// every game's engine supports it, though most of their scenes leave it off.
-    /// </summary>
+    /// <summary>The game's look with full graphic black (see <see cref="GameLookStyle.WithGraphicBlack"/>).</summary>
     GraphicBlack,
 }
 
 /// <summary>
-/// The parameters of a game's stylised look, following the games' shaders: an inverted-hull
-/// outline pushed out along the vertex normals, screen-space edge lines, the light model
-/// (wrapped diffuse, optionally through a toon ramp), ink textures, graphic black and a
-/// final color grade. Colors are sRGB 0-1; screen widths are logical pixels (scaled by
-/// the display's DPI); distances are scene units (metres).
+/// The parameters of a game's stylized look, following the games' shaders. Colors are sRGB
+/// 0-1, screen widths are logical pixels and distances are scene units.
 /// </summary>
 public sealed record GameLookStyle
 {
-    /// <summary>Display name, e.g. "The Wolf Among Us".</summary>
+    /// <summary>Display name.</summary>
     public string Name { get; init; } = "Default";
 
     // ---- Inverted-hull outline (the games' SceneToonOutline2 pass) ------------
 
     /// <summary>
-    /// Draws the mesh again, back faces only, pushed out along its normals: the games'
-    /// toon outline. Offset in clip space is <c>HullWidth / (tan(31.25°) × clamp(depth, HullZRange))</c>:
-    /// constant world thickness inside the range, constant screen thickness outside.
+    /// Draws the mesh again, back faces only, pushed out along its normals. Clip-space offset is
+    /// <c>HullWidth / (tan(31.25°) × clamp(depth, HullZRange))</c>.
     /// </summary>
     public bool HullOutline { get; init; }
 
-    /// <summary>
-    /// Hull width before the depth division: the shader's <c>S × COLOR1 × 0.05</c>
-    /// (Tales from the Borderlands' S = 0.075 with a per-vertex width of 1 gives 0.00375,
-    /// about 3.3 px at 1 m on a 1080-line view).
-    /// </summary>
+    /// <summary>Hull width before the depth division: the shader's <c>S × COLOR1 × 0.05</c>.</summary>
     public float HullWidth { get; init; } = 0.00375f;
 
     /// <summary>The material's "Outline Z Range": depths the hull width is clamped between.</summary>
@@ -60,10 +49,7 @@ public sealed record GameLookStyle
     /// <summary>How opaque the edge lines are (0-1).</summary>
     public float OutlineOpacity { get; init; } = 1f;
 
-    /// <summary>
-    /// Relative depth step that draws an edge line: the fraction a neighbour lies behind
-    /// the pixel, beyond what the surface's own slope explains (0.02 = 2 %).
-    /// </summary>
+    /// <summary>Relative depth step, beyond the surface's own slope, that draws an edge line.</summary>
     public float DepthThreshold { get; init; } = 0.02f;
 
     /// <summary>Change of surface direction (1 − cos of the angle) that draws a crease line; 2 disables.</summary>
@@ -72,10 +58,7 @@ public sealed record GameLookStyle
     /// <summary>Crease line width as a fraction of <see cref="OutlineWidth"/>.</summary>
     public float CreaseWidthScale { get; init; } = 0.5f;
 
-    /// <summary>
-    /// Distance, in multiples of the model's size, beyond which edge lines thin with distance
-    /// (0 = constant width), so far scenery is not drowned in ink.
-    /// </summary>
+    /// <summary>Distance, in model sizes, beyond which edge lines thin out (0 = constant width).</summary>
     public float OutlineFalloffDistance { get; init; } = 3f;
 
     /// <summary>Thinnest a distant edge line may get, as a fraction of <see cref="OutlineWidth"/>.</summary>
@@ -86,16 +69,10 @@ public sealed record GameLookStyle
     /// <summary>Diffuse wrap: light is <c>saturate((N·L + wrap) / (1 + wrap))</c>.</summary>
     public float Wrap { get; init; } = 0.15f;
 
-    /// <summary>
-    /// Toon ramp: where direct light steps to the next band (wrapped N·L × attenuation, 0-1),
-    /// ascending. Empty keeps smooth light.
-    /// </summary>
+    /// <summary>Toon ramp thresholds where direct light steps to the next band, ascending. Empty keeps smooth light.</summary>
     public IReadOnlyList<float> BandThresholds { get; init; } = Array.Empty<float>();
 
-    /// <summary>
-    /// Light level of each band, one more than <see cref="BandThresholds"/> (null spreads
-    /// them evenly from 0 to 1).
-    /// </summary>
+    /// <summary>Light level of each band, one more than <see cref="BandThresholds"/>; null spreads them evenly.</summary>
     public IReadOnlyList<float>? BandLevels { get; init; }
 
     /// <summary>Half-width of the blend at each band edge (0 = hard step).</summary>
@@ -104,10 +81,7 @@ public sealed record GameLookStyle
     /// <summary>How much smooth light is kept under the bands (0 = flat bands).</summary>
     public float BandSmoothness { get; init; }
 
-    /// <summary>
-    /// When true only the brightest light is diffuse (through the ramp), as the toon light
-    /// model does; the others add nothing but highlights.
-    /// </summary>
+    /// <summary>When true only the brightest light is diffuse, like the toon light model; others add only highlights.</summary>
     public bool ToonKeyLightOnly { get; init; }
 
     /// <summary>How much normal-map detail shapes the light (0 = the smooth surface, 1 = every bump).</summary>
@@ -122,10 +96,7 @@ public sealed record GameLookStyle
     /// <summary>Rim width: 1 − N·V above which the rim shows (0-1, smaller is wider).</summary>
     public float RimThreshold { get; init; } = 0.6f;
 
-    /// <summary>
-    /// Specular highlights become hard shapes above this value of the smooth highlight
-    /// (0 = smooth highlights).
-    /// </summary>
+    /// <summary>Highlights become hard shapes above this value (0 = smooth highlights).</summary>
     public float SpecularThreshold { get; init; }
 
     /// <summary>Strength of highlights relative to the material's (0 = no specular).</summary>
@@ -133,71 +104,51 @@ public sealed record GameLookStyle
 
     // ---- Ink --------------------------------------------------------------------
 
-    /// <summary>
-    /// Strength of ink-texture lines (the Definitive Series' <c>_ink</c> maps on UV set 3, drawn
-    /// in <see cref="InkColor"/> where the filtered value passes 0.5, regardless of light, before
-    /// graphic black).
-    /// </summary>
+    /// <summary>Strength of ink-texture lines, drawn where the filtered <c>_ink</c> value passes 0.5.</summary>
     public float InkLineStrength { get; init; } = 1f;
 
-    /// <summary>How dark drawn line art (detail textures, ink where alpha &lt; 0.5) prints (0-1).</summary>
+    /// <summary>How dark drawn line art prints (0-1).</summary>
     public float LineArtStrength { get; init; } = 1f;
 
     /// <summary>
-    /// Graphic-black alpha (0 = off): where the lit color's luminance (linear,
-    /// <c>dot(c, (0.3, 0.59, 0.11))</c>) is below <see cref="InkThreshold"/> it turns black.
+    /// Graphic-black alpha (0 = off). Pixels whose linear luminance <c>dot(c, (0.3, 0.59, 0.11))</c>
+    /// is below <see cref="InkThreshold"/> turn black.
     /// </summary>
     public float InkStrength { get; init; }
 
     /// <summary>
-    /// Graphic-black threshold under the studio rig. The games test about 0.008 against their
-    /// shadow-mapped scene light; the studio rig has no shadows and its wrapped fill and rim
-    /// lights reach everywhere, so this is tested against the key light alone, without wrap
-    /// (albedo × key × max(N·L, 0) plus highlights): black past the key's terminator, a little
-    /// sooner on dark materials.
+    /// Graphic-black threshold under the studio rig. It is tested against the unwrapped key light
+    /// alone, since the studio rig has no shadows and its fill lights reach everywhere.
     /// </summary>
     public float InkThreshold { get; init; } = 0.03f;
 
-    /// <summary>
-    /// Wrap of the key light in the studio rig's graphic-black test (0 = unwrapped, black from
-    /// the terminator on). Larger values light the test past the terminator, so black keeps to
-    /// the side turned furthest from the key.
-    /// </summary>
+    /// <summary>Wrap of the key light in the studio rig's graphic-black test (0 = black from the terminator on).</summary>
     public float InkKeyWrap { get; init; }
 
-    /// <summary>
-    /// Graphic-black threshold under a scene's own lights, tested against the full lit
-    /// luminance including ambient, as the game does (its scenes use 0.006-0.013).
-    /// </summary>
+    /// <summary>Graphic-black threshold under a scene's own lights, tested against the full lit luminance like the game.</summary>
     public float InkSceneThreshold { get; init; } = 0.008f;
 
-    /// <summary>Graphic-black edge width under the studio rig (the shader uses at least 0.001).</summary>
+    /// <summary>Graphic-black edge width under the studio rig.</summary>
     public float InkSoftness { get; init; } = 0.004f;
 
-    /// <summary>Graphic-black edge width under a scene's lights (the scenes' "Graphic Black Softness", 0 → the shader's 0.001).</summary>
+    /// <summary>Graphic-black edge width under a scene's lights. The shader uses 0.001 when the scene sets 0.</summary>
     public float InkSceneSoftness { get; init; } = 0.001f;
 
-    /// <summary>Color of ink lines and graphic black (the materials' "Ink Color", black).</summary>
+    /// <summary>Color of ink lines and graphic black.</summary>
     public Vector3 InkColor { get; init; } = Vector3.Zero;
 
-    /// <summary>
-    /// Distance from the eye where graphic black starts to fade in under the studio rig; with
-    /// <see cref="InkFadeFar"/> not above it, it is always full.
-    /// </summary>
+    /// <summary>Distance where graphic black starts to fade in under the studio rig.</summary>
     public float InkFadeNear { get; init; }
 
     /// <summary>Distance where graphic black is full under the studio rig.</summary>
     public float InkFadeFar { get; init; }
 
-    /// <summary>
-    /// Distance from the eye where graphic black starts to fade in under a scene's lights (the
-    /// scenes' "Graphic Black Near"; most set 0).
-    /// </summary>
+    /// <summary>Distance where graphic black starts to fade in under a scene's lights.</summary>
     public float InkSceneFadeNear { get; init; }
 
     /// <summary>
-    /// Distance where graphic black is full under a scene's lights (the scenes' "Graphic Black
-    /// Far"; most set 2 m, so it is partial in close-ups). Not above <see cref="InkSceneFadeNear"/>: always full.
+    /// Distance where graphic black is full under a scene's lights. When not above
+    /// <see cref="InkSceneFadeNear"/>, it is always full.
     /// </summary>
     public float InkSceneFadeFar { get; init; }
 
@@ -231,12 +182,8 @@ public sealed record GameLookStyle
     };
 
     /// <summary>
-    /// The Walking Dead: The Telltale Definitive Series: soft wrapped physical light (no bands,
-    /// no rim), the materials' ink lines, and a softened graphic black that keeps to the side
-    /// turned furthest from the key (<see cref="RenderMode.GraphicBlack"/> shows it at full
-    /// strength). Scenes use the game's own threshold. No edge lines: the PC build ships no shaders for
-    /// the engine's generated NPR lines (nor the screen-space lines), and the characters'
-    /// materials have no toon-outline pass, so in the game every line comes from the ink textures.
+    /// The Walking Dead: The Telltale Definitive Series: soft wrapped light, ink lines and a
+    /// softened graphic black. No edge lines, since in this game every line comes from the ink textures.
     /// </summary>
     public static GameLookStyle WalkingDeadDefinitive { get; } = new()
     {
@@ -254,10 +201,7 @@ public sealed record GameLookStyle
         InkSceneFadeFar = 2f,
     };
 
-    /// <summary>
-    /// The Walking Dead seasons before the Definitive Series (Season Two, Michonne, A New
-    /// Frontier): the same ink lines with thin edge lines, no graphic black.
-    /// </summary>
+    /// <summary>The Walking Dead before the Definitive Series: the same ink lines with thin edge lines, no graphic black.</summary>
     public static GameLookStyle WalkingDead { get; } = WalkingDeadDefinitive with
     {
         Name = "The Walking Dead",
@@ -267,10 +211,7 @@ public sealed record GameLookStyle
         InkStrength = 0f,
     };
 
-    /// <summary>
-    /// Tales from the Borderlands: the black inverted-hull outline, wrapped Lambert light with
-    /// no specular, and the materials' hand-drawn line art.
-    /// </summary>
+    /// <summary>Tales from the Borderlands: black hull outline, wrapped light with no specular, and line art.</summary>
     public static GameLookStyle TalesFromTheBorderlands { get; } = new()
     {
         Name = "Tales from the Borderlands",
@@ -285,11 +226,7 @@ public sealed record GameLookStyle
         Saturation = 1.05f,
     };
 
-    /// <summary>
-    /// The Wolf Among Us: the inverted-hull outline and the toon light model, one key light
-    /// through the character ramp (0, 0.773 from 0.289, 1 from 0.52), hard highlights, and
-    /// the ink-line textures.
-    /// </summary>
+    /// <summary>The Wolf Among Us: hull outline, toon light through the character ramp, hard highlights and ink lines.</summary>
     public static GameLookStyle WolfAmongUs { get; } = new()
     {
         Name = "The Wolf Among Us",
@@ -303,8 +240,7 @@ public sealed record GameLookStyle
         BandLevels = new[] { 0f, 0.773f, 1f },
         BandSoftness = 0.004f,
         ToonKeyLightOnly = true,
-        // The ramp's dark band is 0, so shadowed sides show only ambient; in the game the
-        // scene's ambient fills them with a soft violet. Lift it to match.
+        // The ramp's dark band is 0, so lift ambient to match the game's violet shadows.
         ShadowTint = new Vector3(1.55f, 1.4f, 1.85f),
         NormalMapInfluence = 0.5f,
         SpecularThreshold = 0.5f,
@@ -312,10 +248,7 @@ public sealed record GameLookStyle
         Saturation = 1.1f,
     };
 
-    /// <summary>
-    /// Game of Thrones: the inverted-hull outline plus a soft brush outline from depth and
-    /// normal edges, over smooth light shaped by the painted brush normals.
-    /// </summary>
+    /// <summary>Game of Thrones: hull outline plus a soft brush outline, over smooth light.</summary>
     public static GameLookStyle GameOfThrones { get; } = new()
     {
         Name = "Game of Thrones",
@@ -334,10 +267,7 @@ public sealed record GameLookStyle
     /// <summary>Graphic-black threshold of <see cref="WithGraphicBlack"/> under the studio rig.</summary>
     public const float FullGraphicBlackThreshold = 0.012f;
 
-    /// <summary>
-    /// This look with full graphic black: black from the key light's terminator on, and on
-    /// dark materials a little before it; scenes keep their own threshold and fade.
-    /// </summary>
+    /// <summary>This look with full graphic black. Scenes keep their own threshold and fade.</summary>
     public GameLookStyle WithGraphicBlack() => this with
     {
         Name = Name + " (graphic black)",

@@ -4,11 +4,7 @@ using TelltaleModding.Core.Scene;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// How the 3D viewports shade: studio lighting, the open game's stylised look, or that look
-/// with full graphic black. One
-/// instance is shared by every workspace, so switching in one viewport switches them all.
-/// </summary>
+/// <summary>How the 3D viewports shade. Shared by every workspace.</summary>
 public sealed partial class ViewportLookViewModel : ViewModelBase
 {
     [ObservableProperty]
@@ -29,7 +25,7 @@ public sealed partial class ViewportLookViewModel : ViewModelBase
 
     public bool IsGraphicBlack => Mode == RenderMode.GraphicBlack;
 
-    /// <summary>True in the Game look of a game whose own look has graphic black, so its intensity applies.</summary>
+    /// <summary>True in the Game look when the game has its own graphic black.</summary>
     public bool ShowEngineIntensity => IsGameLook && Style.InkStrength > 0f;
 
     public string GameLookTip => Style == GameLookStyle.Default

@@ -4,8 +4,7 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// Character agent props extracted from the games: Clementine 400 from the Definitive
-/// Series (WalkingDead401_data, MSV6) and Rhys from Tales from the Borderlands (101, MSV5).
+/// Character props from Clementine 400 (Definitive Series) and Rhys (Tales from the Borderlands).
 /// </summary>
 public class CharacterPropTests
 {
@@ -20,7 +19,7 @@ public class CharacterPropTests
     [SkippableFact]
     public void BoolTypeSymbol_MatchesTheEnginesTypeName()
     {
-        // Bytes c0 d6 75 75 58 c5 04 90 precede every bool run in real props.
+        // These bytes come before every bool run in real props.
         Assert.Equal(0x9004C5587575D6C0UL, CharacterProp.BoolType);
     }
 
@@ -47,8 +46,7 @@ public class CharacterPropTests
         var off = ClementineMeshes.Where(m => prop.IsMeshVisible($"sk62_clementine400_{m}.d3dmesh") == false).ToArray();
 
         Assert.Equal(new[] { "bodyLowerB", "bodyUpperB", "eyesMouth", "hairCap", "hands", "head" }, on);
-        // The nested style sets ("bandageOnHead", "headHatless", "handsMissingFinger") flip
-        // hairBandage / hairSidePony / handsNoFinger on, but they are not the defaults.
+        // Nested style sets turn these on, but they are not the defaults.
         Assert.Equal(new[] { "bodyUpperBBackpack", "hairBandage", "hairSidePony", "handsNoFinger" }, off);
     }
 

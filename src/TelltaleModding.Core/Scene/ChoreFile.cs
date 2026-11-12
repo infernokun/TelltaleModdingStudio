@@ -10,10 +10,7 @@ public readonly record struct ChoreBlock(float Start, float End, bool Looping, f
 /// <summary>A key of a chore curve: its value at a time (seconds into the chore), and how it eases.</summary>
 public readonly record struct ChoreCurveKey(float Time, float Value, int TangentMode);
 
-/// <summary>
-/// A float curve a chore keys for one of its resources (KeyframedValue&lt;float&gt;): how much
-/// the resource contributes, or where in the resource the chore is at each moment.
-/// </summary>
+/// <summary>A float curve a chore keys for one of its resources, such as its time or contribution.</summary>
 public sealed class ChoreCurve
 {
     private const int Stepped = 1, Flat = 4;
@@ -23,8 +20,8 @@ public sealed class ChoreCurve
     public IReadOnlyList<ChoreCurveKey> Keys { get; }
 
     /// <summary>
-    /// The value at <paramref name="time"/>, holding the end keys beyond them. Flat keys ease
-    /// in and out, stepped ones hold until the next key, others run in a straight line.
+    /// The value at <paramref name="time"/>. Flat keys ease in and out, stepped ones hold,
+    /// others are linear.
     /// </summary>
     public float Evaluate(float time)
     {
@@ -51,10 +48,7 @@ public sealed class ChoreCurve
 /// <summary>A key of a chore's transform track: the rotation and position at a time, and how it eases.</summary>
 public readonly record struct ChoreTransformKey(float Time, Quaternion Rotation, Vector3 Position, int TangentMode);
 
-/// <summary>
-/// An agent's transform keyed in a chore (KeyframedValue&lt;Transform&gt;): where a camera rig,
-/// for one, moves over the chore, relative to what it is attached to.
-/// </summary>
+/// <summary>An agent's transform keyed in a chore, relative to what it is attached to.</summary>
 public sealed class ChoreTransformTrack
 {
     public ChoreTransformTrack(IReadOnlyList<ChoreTransformKey> keys) => Keys = keys;
@@ -87,11 +81,8 @@ public sealed class ChoreTransformTrack
     }
 }
 
-/// <summary>
-/// One resource a chore plays: an animation, a voice line (<c>LanguageRes</c>), a nested
-/// chore and so on, named by the symbol of its file name, with the spans it plays in.
-/// </summary>
-/// <param name="Name">Symbol of the resource's name (<c>sk63_ajStandA_toArmsX.anm</c>).</param>
+/// <summary>One resource a chore plays, such as an animation, voice line or nested chore, with the spans it plays in.</summary>
+/// <param name="Name">Symbol of the resource's file name.</param>
 /// <param name="Type">Type hash of the resource (see <see cref="ChoreFile.AnimationType"/>), or 0 for none.</param>
 /// <param name="Length">The resource's own length in seconds.</param>
 /// <param name="Priority">Higher priorities win over lower ones on the same bones.</param>
@@ -103,19 +94,13 @@ public sealed record ChoreResource(
     /// <summary>The chore stored inside this resource, for an embedded chore.</summary>
     public ChoreFile? EmbeddedChore { get; init; }
 
-    /// <summary>
-    /// Where in the resource the chore is at each moment, as a fraction of <see cref="Length"/>
-    /// (the chore can slow a resource down, speed it up or hold one frame of it), or null.
-    /// </summary>
+    /// <summary>Where in the resource the chore is at each moment, as a fraction of <see cref="Length"/>, or null.</summary>
     public ChoreCurve? TimeCurve { get; init; }
 
     /// <summary>How much the resource counts at each moment (0 to 1), or null for fully.</summary>
     public ChoreCurve? Contribution { get; init; }
 
-    /// <summary>
-    /// For a resource that keys its agent itself (a camera), the "Field of View" the chore gives
-    /// it over time (degrees), or null.
-    /// </summary>
+    /// <summary>For a resource that keys its agent itself, the field of view over time in degrees, or null.</summary>
     public ChoreCurve? FieldOfView { get; init; }
 
     /// <summary>For a resource that keys its agent itself, the agent's transform over time, or null.</summary>
@@ -129,12 +114,8 @@ public sealed record ChoreResource(
 public sealed record ChoreAgent(string Name, uint Flags, IReadOnlyList<int> Resources);
 
 /// <summary>
-/// Reads a <c>.chore</c> file (MSV6), the timeline the engine plays a cutscene or a
-/// dialogue exchange from: a list of resources, each with its play spans, and the agents
-/// that own them. Only the parts needed to replay animations and voice timing are kept.
-/// An embedded resource is followed by its data, tagged with its type: an embedded chore
-/// is read in full, and other data (procedural look-ats and such) is skipped by finding
-/// the next resource by its shape.
+/// Reads a <c>.chore</c> file (MSV6), the timeline for a cutscene or dialogue. Embedded
+/// chores are read in full; other embedded data is skipped by finding the next resource.
 /// </summary>
 public sealed class ChoreFile
 {
@@ -142,7 +123,7 @@ public sealed class ChoreFile
     public static readonly ulong ChoreType = TelltaleCrc64.HashSymbol("Chore");
     public static readonly ulong LanguageResType = TelltaleCrc64.HashSymbol("LanguageRes");
 
-    // Embedded data seen so far is a few dozen bytes; anything further away is a misread.
+    // Embedded data is small, so anything further away is a misread.
     private const int MaxEmbeddedSkip = 16 * 1024;
 
     public string Name { get; }
@@ -194,11 +175,7 @@ public sealed class ChoreFile
         return false;
     }
 
-    /// <summary>
-    /// The fields that differ between engine generations: newer chores (Michonne on) hold
-    /// a localization block where older ones hold a symbol, block the auto-act status, and
-    /// may add walk paths, a resource flag and an actor binding per agent.
-    /// </summary>
+    /// <summary>The fields that differ between engine generations.</summary>
     private readonly record struct Layout(bool LocalizationBlock, bool WalkPaths, int ResourceFlags, bool StatusBlock, int AgentBlocks);
 
     private static readonly Layout[] Layouts = BuildLayouts();
@@ -311,13 +288,11 @@ public sealed class ChoreFile
         };
     }
 
-    // The control animation is a small animation of keyframed values: "time" and
-    // "contribution" for any resource, and for a resource that keys an agent itself (a camera)
-    // its transform and values such as "Field of View". It holds a table of value types with
-    // a count each, then the values of each type in turn. Each value:
+    // The control animation: a table of value types with a count each, then the values.
+    // Each value:
     //   [u32 size [u32 size, u64 name, u32 flags]] min, max,
     //   [u32 size, u32 count, count x (f32 time, bool, u32 tangent mode, value)]
-    // A type this reader does not know ends the reading with what it has so far.
+    // An unknown type stops reading and keeps what was read so far.
     private static ControlValues ReadControlValues(Reader r, int start, int end)
     {
         var values = new ControlValues();
@@ -452,8 +427,7 @@ public sealed class ChoreFile
         return new ChoreAgent(name, flags, resources);
     }
 
-    // Moves past an embedded resource's data to where the next resource (or, after the
-    // last one, the first agent of a chore with that many resources) parses.
+    // Skips an embedded resource's data to where the next resource, or the first agent, parses.
     private static void SkipEmbedded(ref Reader r, int? agentsOf)
     {
         int from = r.Pos, limit = Math.Min(r.End, from + MaxEmbeddedSkip);

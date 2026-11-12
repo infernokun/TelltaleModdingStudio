@@ -46,7 +46,7 @@ public partial class ScriptsView : UserControl
         };
     }
 
-    // The editor's text is not bindable; mirror the view model's code into it.
+    // The editor's text isn't bindable, so copy the code in by hand.
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ScriptsViewModel.Code) && _vm is not null)
@@ -56,8 +56,7 @@ public partial class ScriptsView : UserControl
         }
     }
 
-    // Jumps to where a function is defined ("function Name", "Name = function"),
-    // falling back to its first mention.
+    // Jumps to where a function is defined, or else its first mention.
     private void Reveal(string name)
     {
         var text = Editor.Text;
@@ -79,7 +78,7 @@ public partial class ScriptsView : UserControl
 
     private Services.UserPreferences? _prefs;
 
-    // Font size and wrapping follow Settings (the shell's preferences exist once the view model does).
+    // Font size and wrapping follow Settings.
     private void AttachEditorPreferences()
     {
         var prefs = Services.UserPreferences.Current;

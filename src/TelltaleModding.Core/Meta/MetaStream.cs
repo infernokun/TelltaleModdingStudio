@@ -8,13 +8,13 @@ public enum MetaStreamFormat
     /// <summary>"5VSM": Meta Stream Version 5.</summary>
     Msv5,
 
-    /// <summary>"6VSM": Meta Stream Version 6 (GoT / Michonne / TTDS era).</summary>
+    /// <summary>"6VSM": Meta Stream Version 6.</summary>
     Msv6,
 }
 
 /// <summary>One class-version record from a meta stream header.</summary>
-/// <param name="TypeHash">CRC64 of the lowercased type name (<see cref="TelltaleCrc64.HashSymbol"/>).</param>
-/// <param name="VersionCrc">CRC of the class's serialized layout; changes when the game changes the struct.</param>
+/// <param name="TypeHash">CRC64 of the lowercased type name.</param>
+/// <param name="VersionCrc">CRC of the class's serialized layout.</param>
 public readonly record struct MetaClassRecord(ulong TypeHash, uint VersionCrc)
 {
     /// <summary>Readable type name, or null when the hash isn't in <see cref="KnownTypeNames"/>.</summary>
@@ -22,17 +22,15 @@ public readonly record struct MetaClassRecord(ulong TypeHash, uint VersionCrc)
 }
 
 /// <summary>
-/// Parsed header of an MSV5/MSV6 meta stream, the container wrapping every Telltale
-/// asset (.d3dmesh, .d3dtx, .skl, ...). The header is followed by three sections:
-/// "default" (the serialized object tree), "debug" (usually empty), and "async"
-/// (bulk payload: vertex/index buffers for meshes, pixel data for textures).
+/// Header of an MSV5/MSV6 meta stream, the container around Telltale assets.
+/// It's followed by the default (object data), debug and async (bulk data) sections.
 /// </summary>
 public sealed class MetaStreamHeader
 {
     public MetaStreamFormat Format { get; }
     public IReadOnlyList<MetaClassRecord> Classes { get; }
 
-    /// <summary>Size of the header itself; the default section starts here.</summary>
+    /// <summary>Size of the header. The default section starts right after it.</summary>
     public int HeaderSize { get; }
 
     public int DefaultSectionSize { get; }
@@ -43,7 +41,7 @@ public sealed class MetaStreamHeader
     public int DebugSectionOffset => HeaderSize + DefaultSectionSize;
     public int AsyncSectionOffset => HeaderSize + DefaultSectionSize + DebugSectionSize;
 
-    /// <summary>Header plus all three sections; it must equal the file size.</summary>
+    /// <summary>Header plus all three sections, which should match the file size.</summary>
     public long TotalSize => (long)HeaderSize + DefaultSectionSize + DebugSectionSize + AsyncSectionSize;
 
     private MetaStreamHeader(
@@ -61,7 +59,7 @@ public sealed class MetaStreamHeader
     private const uint MagicMsv6 = 0x3656534D; // ASCII "6VSM" read big-endian
     private const uint MagicMsv5 = 0x3556534D; // ASCII "5VSM"
 
-    /// <summary>Magics of older Telltale container generations we recognise but do not parse yet.</summary>
+    /// <summary>Older container magics we recognize but don't parse.</summary>
     private static readonly Dictionary<string, string> LegacyMagics = new()
     {
         ["ERTM"] = "MTRE (pre-MSV meta stream, ~2006-2014 era)",
@@ -70,7 +68,7 @@ public sealed class MetaStreamHeader
         ["NIBM"] = "MBIN (byte-swapped)",
     };
 
-    /// <summary>Human-readable one-line summary, e.g. for a file-info status line.</summary>
+    /// <summary>One-line summary of the header.</summary>
     public string Describe()
     {
         var root = Classes.Count > 0
@@ -106,10 +104,8 @@ public sealed class MetaStreamHeader
     }
 
     /// <summary>
-    /// Attempts to parse a meta stream header from the start of a file's bytes.
-    /// <paramref name="data"/> may be the whole file or just its first few KB, but
-    /// section sizes are validated against <paramref name="data"/>'s length when it
-    /// covers the whole file (pass <paramref name="isCompleteFile"/> = false otherwise).
+    /// Tries to parse a meta stream header. Pass <paramref name="isCompleteFile"/> = false
+    /// when <paramref name="data"/> is only the start of the file, so sizes aren't checked.
     /// </summary>
     public static bool TryParse(
         ReadOnlySpan<byte> data, out MetaStreamHeader? header, out string? error,
@@ -153,7 +149,7 @@ public sealed class MetaStreamHeader
             return false;
         }
 
-        // Real files have a handful of records; an absurd count means we misread the file.
+        // A huge count means we misread the file.
         if (classCount is < 0 or > 4096)
         {
             error = $"Malformed meta stream header: implausible class count {classCount}.";

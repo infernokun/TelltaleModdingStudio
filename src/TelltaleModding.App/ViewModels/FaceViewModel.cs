@@ -12,10 +12,7 @@ using TelltaleModding.Core.Scene;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// The Face tab: poses the shown character's face over the body clip (a mood's expression,
-/// mouth shapes, a head/face gesture, per-bone tweaks) and lip-syncs their voice lines.
-/// </summary>
+/// <summary>The Face tab: poses the character's face and lip-syncs their voice lines.</summary>
 public sealed partial class FaceViewModel : ViewModelBase
 {
     private static readonly IReadOnlyDictionary<string, FaceClipSet> NoClips = new Dictionary<string, FaceClipSet>();
@@ -44,13 +41,13 @@ public sealed partial class FaceViewModel : ViewModelBase
         Player.Ended += () => StopLine();
     }
 
-    /// <summary>Raised when the face changed and the frame should be drawn again.</summary>
+    /// <summary>Raised when the face changed and needs a redraw.</summary>
     public event Action? PoseChanged;
 
-    /// <summary>Raised with a camera distance (see <c>MeshViewport.FocusFace</c>) to frame the face.</summary>
+    /// <summary>Raised with a camera distance to frame the face.</summary>
     public event Action<float>? FrameFaceRequested;
 
-    /// <summary>The game's voice lines; set by the shell.</summary>
+    /// <summary>The game's voice lines, set by the shell.</summary>
     public Func<DialogueIndex?>? DialogueSource { get; set; }
 
     /// <summary>Plays the voice line being lip-synced.</summary>
@@ -59,12 +56,12 @@ public sealed partial class FaceViewModel : ViewModelBase
     /// <summary>The rig, while the shown model can be posed.</summary>
     public FaceRig? Rig => _rig;
 
-    /// <summary>True when the face differs from the body clip (so frames go through the rig).</summary>
+    /// <summary>True when the face differs from the body clip.</summary>
     public bool IsActive => _rig is { IsNeutral: false };
 
     // ---- Sources -----------------------------------------------------------
 
-    /// <summary>Where clips come from: the open game, or loose files (<paramref name="catalog"/> null).</summary>
+    /// <summary>Sets where face clips come from. <paramref name="catalog"/> is null for loose files.</summary>
     public void UseSource(GameCatalog? catalog, Func<string, byte[]?> read, IEnumerable<string> fileNames)
     {
         Clear();
@@ -75,7 +72,7 @@ public sealed partial class FaceViewModel : ViewModelBase
         _index = Task.Run(() => FaceClipSet.Index(names));
     }
 
-    /// <summary>Forgets the source, the character and the rig.</summary>
+    /// <summary>Clears the source, character and rig.</summary>
     public void Clear()
     {
         StopLine();
@@ -125,7 +122,7 @@ public sealed partial class FaceViewModel : ViewModelBase
         MouthNote = LineStatus = "";
     }
 
-    /// <summary>Builds the rig for a (re)built model; face settings carry over outfit changes.</summary>
+    /// <summary>Builds the rig for a model. Face settings carry over outfit changes.</summary>
     public async Task SetModelAsync(AssembledModel? model)
     {
         int generation = ++_modelGeneration;
@@ -144,7 +141,7 @@ public sealed partial class FaceViewModel : ViewModelBase
         var set = prefix is null ? null : index[prefix];
         var skeleton = model.Skeleton!;
 
-        // The rig, the neutral mouth and one face gesture (to find every face bone) load off the UI thread.
+        // Load a few face clips off the UI thread to find which bones the face uses.
         var (rig, bones) = await Task.Run(() =>
         {
             var r = new FaceRig(model.Geometry, skeleton);
@@ -277,7 +274,7 @@ public sealed partial class FaceViewModel : ViewModelBase
 
     private bool _changePending;
 
-    // Many changes in one pass (a reset, a slider drag) draw one frame.
+    // Batch changes into one redraw.
     private void Changed()
     {
         if (_changePending)
@@ -293,7 +290,7 @@ public sealed partial class FaceViewModel : ViewModelBase
     [RelayCommand]
     private void FrameFace() => FrameFaceRequested?.Invoke(1.8f);
 
-    /// <summary>Everything back to the body clip's own face.</summary>
+    /// <summary>Resets the face to the body clip's own.</summary>
     [RelayCommand]
     private void ResetAll()
     {
@@ -364,7 +361,7 @@ public sealed partial class FaceViewModel : ViewModelBase
             FacePose? face = null;
             if (mood?.ExpressionClip is { } exprName && LoadClip(exprName) is { } expr)
                 face = rig.SamplePose(expr, exprName);
-            // The mood's own closed mouth is part of its expression.
+            // Include the mood's closed mouth in its expression.
             if (mood?.PhonemeSuffix is { } suffix && set.MouthClip(FaceClipSet.ClosedShape, mood) is { } closedName &&
                 closedName.EndsWith($"_{suffix}.anm", StringComparison.OrdinalIgnoreCase) && LoadClip(closedName) is { } closedClip)
             {
@@ -395,7 +392,7 @@ public sealed partial class FaceViewModel : ViewModelBase
             : null;
         MouthNote = _set is null || Shapes.Count == 0 ? ""
             : mood?.PhonemeSuffix is not null ? $"Mood variant: {mood.Label} mouth shapes"
-            : mood is not null ? $"{mood.Label} has no mouth shapes of its own · neutral ones"
+            : mood is not null ? $"{mood.Label} uses the neutral mouth shapes"
             : fallback is not null ? $"No neutral mouth shapes · using {fallback}"
             : "Neutral mouth shapes";
     }
@@ -571,7 +568,7 @@ public sealed partial class FaceViewModel : ViewModelBase
         if (generation != _lineGeneration)
             return;
 
-        // With no mood picked, the line plays in the mood its direction tags name.
+        // With no mood picked, use the one from the line's direction tags.
         _lineMood = SelectedMood?.Mood is null ? _set?.FindMood(entry.Line.Directions) : null;
         if (_lineMood is not null)
             await ApplyMoodAsync();
@@ -655,7 +652,7 @@ public sealed partial class FaceViewModel : ViewModelBase
     }
 }
 
-/// <summary>A mood chip (null mood = neutral).</summary>
+/// <summary>A mood chip. A null mood is neutral.</summary>
 public sealed class FaceMoodViewModel
 {
     public FaceMoodViewModel(FaceMood? mood) => Mood = mood;
@@ -693,7 +690,7 @@ public sealed partial class FaceShapeViewModel : ViewModelBase
     partial void OnValueChanged(double value) => _changed(this);
 }
 
-/// <summary>A gesture in the picker (null = none).</summary>
+/// <summary>A gesture in the picker. Null means none.</summary>
 public sealed class FaceGestureViewModel
 {
     public FaceGestureViewModel(FaceGesture? gesture) => Gesture = gesture;
@@ -724,7 +721,7 @@ public sealed partial class FaceBoneGroupViewModel : ViewModelBase
     }
 }
 
-/// <summary>One face bone's rotation offsets (degrees about its own axes).</summary>
+/// <summary>One face bone's rotation offsets in degrees.</summary>
 public sealed partial class FaceBoneViewModel : ViewModelBase
 {
     private readonly Action<FaceBoneViewModel> _changed;

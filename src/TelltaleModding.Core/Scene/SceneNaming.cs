@@ -5,14 +5,11 @@ namespace TelltaleModding.Core.Scene;
 /// <summary>Readable names for scene files and the episode archives they come from.</summary>
 public static class SceneNaming
 {
-    /// <summary>True for location scenes (<c>adv_*.scene</c>); menus and interface scenes are not.</summary>
+    /// <summary>True for location scenes (<c>adv_*.scene</c>).</summary>
     public static bool IsLocation(string fileName) =>
         Path.GetFileName(fileName).StartsWith("adv_", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// A scene's display name: <c>adv_boardingSchoolExteriorDusk.scene</c> → "Boarding School
-    /// Exterior Dusk", <c>adv_arenaGortysCoreSilo102.scene</c> → "Arena Gortys Core Silo 102".
-    /// </summary>
+    /// <summary>A scene's display name, such as "Boarding School Exterior Dusk".</summary>
     public static string DisplayName(string fileName)
     {
         var stem = Path.GetFileNameWithoutExtension(fileName);
@@ -21,10 +18,7 @@ public static class SceneNaming
         return SplitWords(stem);
     }
 
-    /// <summary>
-    /// The episode an archive holds, from its name: <c>WDC_pc_WalkingDead401_data.ttarch2</c> →
-    /// "Walking Dead 401", <c>Borderlands_pc_Borderlands101_data.ttarch2</c> → "Borderlands 101".
-    /// </summary>
+    /// <summary>The episode an archive holds, from its name, such as "Walking Dead 401".</summary>
     public static string Episode(string archivePath)
     {
         var stem = Path.GetFileNameWithoutExtension(archivePath);

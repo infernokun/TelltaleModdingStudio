@@ -4,7 +4,7 @@ using TelltaleModding.App.ViewModels;
 
 namespace TelltaleModding.App.Views;
 
-/// <summary>The popup that offers a newer release; closes with the user's <see cref="UpdateChoice"/>.</summary>
+/// <summary>The popup that offers a newer release.</summary>
 public partial class UpdateWindow : Window
 {
     public UpdateWindow()
@@ -17,7 +17,7 @@ public partial class UpdateWindow : Window
         DataContext = prompt;
     }
 
-    /// <summary>Shows the popup over <paramref name="owner"/>; closing it any other way means Later.</summary>
+    /// <summary>Shows the popup over <paramref name="owner"/>. Closing it counts as Later.</summary>
     public static async Task<UpdateChoice> AskAsync(Window owner, UpdatePrompt prompt) =>
         await new UpdateWindow(prompt).ShowDialog<UpdateChoice?>(owner) ?? UpdateChoice.Later;
 

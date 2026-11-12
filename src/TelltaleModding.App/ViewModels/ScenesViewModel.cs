@@ -11,10 +11,7 @@ using TelltaleModding.Core.Scene;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// The game's locations: pick a scene to assemble its environment (every visible agent's
-/// meshes placed where the scene puts them), browse and toggle its agents, and export it.
-/// </summary>
+/// <summary>The game's locations: load a scene, toggle its agents and lights, and export it.</summary>
 public sealed partial class ScenesViewModel : ViewModelBase
 {
     private const string AllEpisodes = "All episodes";
@@ -36,25 +33,25 @@ public sealed partial class ScenesViewModel : ViewModelBase
     /// <summary>Set by the shell so pickers can be shown.</summary>
     public IDialogService? Dialogs { get; set; }
 
-    /// <summary>How the viewport shades (shared by the workspaces; set by the shell).</summary>
+    /// <summary>How the viewport shades, shared by all workspaces.</summary>
     public ViewportLookViewModel Look { get; set; } = new();
 
-    /// <summary>Raised with a short status message for the status bar.</summary>
+    /// <summary>Raised with a message for the status bar.</summary>
     public event Action<string>? StatusMessage;
 
-    /// <summary>Raised to show an assembled environment; the flag asks to keep the camera where it is.</summary>
+    /// <summary>Raised to show an assembled scene. The flag keeps the camera where it is.</summary>
     public event Action<AssembledScene, bool>? SceneReady;
 
-    /// <summary>Raised to show or hide batches of the shown environment (null shows all).</summary>
+    /// <summary>Raised to show or hide batches. Null shows all.</summary>
     public event Action<IReadOnlyList<bool>?>? BatchVisibilityChanged;
 
-    /// <summary>Raised to frame the environment again.</summary>
+    /// <summary>Raised to frame the scene again.</summary>
     public event Action? ResetViewRequested;
 
     /// <summary>Raised when the viewport should be emptied.</summary>
     public event Action? SceneCleared;
 
-    /// <summary>Raised with the rig the viewport should light the scene with (null = studio lighting).</summary>
+    /// <summary>Raised with the light rig to use. Null means studio lighting.</summary>
     public event Action<LightRig?>? LightingChanged;
 
     [ObservableProperty]
@@ -62,10 +59,7 @@ public sealed partial class ScenesViewModel : ViewModelBase
 
     private SceneAssemblerOptions _assemblyOptions = new();
 
-    /// <summary>
-    /// Texture detail (largest side, 0 = full) and lightmaps for scenes assembled from now
-    /// on; the open game's cache is rebuilt so the next scene picks them up.
-    /// </summary>
+    /// <summary>Sets texture size and lightmaps for scenes loaded from now on.</summary>
     public void SetAssemblyOptions(int maxTextureSize, bool lightmaps)
     {
         var options = _assemblyOptions with { MaxTextureSize = maxTextureSize, Lightmaps = lightmaps };
@@ -148,7 +142,7 @@ public sealed partial class ScenesViewModel : ViewModelBase
                 terms.All(t => s.DisplayName.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                                s.FileName.Contains(t, StringComparison.OrdinalIgnoreCase)))
             .ToList();
-        // Refilling the list clears the selection; put it back without reloading the scene.
+        // Refilling clears the selection, so restore it without reloading the scene.
         var keep = SelectedScene;
         _restoringSelection = true;
         Scenes.Clear();
@@ -201,7 +195,7 @@ public sealed partial class ScenesViewModel : ViewModelBase
     [ObservableProperty]
     private string? _error;
 
-    /// <summary>Meshes that could not be loaded, and similar notes.</summary>
+    /// <summary>Meshes that could not be loaded.</summary>
     public ObservableCollection<string> Problems { get; } = new();
 
     private async Task LoadSceneAsync(SceneRowViewModel row)
@@ -378,10 +372,7 @@ public sealed partial class ScenesViewModel : ViewModelBase
         OnAgentToggled();
     }
 
-    /// <summary>
-    /// Shows the agents that are switched on: hides batches when everything wanted is already
-    /// assembled, otherwise re-assembles (decoded meshes and textures are cached).
-    /// </summary>
+    /// <summary>Shows the agents that are switched on, rebuilding the scene if needed.</summary>
     private async Task ApplyVisibilityAsync()
     {
         if (_layout is not { } layout || _assembler is not { } assembler)
@@ -432,8 +423,7 @@ public sealed partial class ScenesViewModel : ViewModelBase
                 Problems.Clear();
                 foreach (var (mesh, error) in rebuilt.Model.Failures.DistinctBy(f => f.Mesh))
                     Problems.Add($"{mesh}: {error}");
-                // A scene that showed nothing at the start (jackAI.scene, whose agents start
-                // hidden) is framed when the first agent is switched on.
+                // Frame the camera if the scene was empty until now.
                 bool first = !HasScene;
                 Error = null;
                 SceneReady?.Invoke(rebuilt, !first);
@@ -494,22 +484,22 @@ public sealed partial class ScenesViewModel : ViewModelBase
     private List<SceneLightRowViewModel> _allLights = new();
     private bool _bulkLights;
 
-    /// <summary>The scene's lights shown in the list (see <see cref="ShowAllLights"/>).</summary>
+    /// <summary>The scene's lights shown in the list.</summary>
     public ObservableCollection<SceneLightRowViewModel> Lights { get; } = new();
 
-    /// <summary>Light the scene with its own lights (false: the studio rig).</summary>
+    /// <summary>Light the scene with its own lights.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UseStudioLighting))]
     private bool _useSceneLighting = true;
 
-    /// <summary>The inverse of <see cref="UseSceneLighting"/>, for the radio buttons.</summary>
+    /// <summary>The inverse of <see cref="UseSceneLighting"/>.</summary>
     public bool UseStudioLighting
     {
         get => !UseSceneLighting;
         set => UseSceneLighting = !value;
     }
 
-    /// <summary>Also list character rig lights, effect lights and lights for the sky dome or foliage.</summary>
+    /// <summary>Also list character, effect, sky and foliage lights.</summary>
     [ObservableProperty]
     private bool _showAllLights;
 
@@ -519,7 +509,7 @@ public sealed partial class ScenesViewModel : ViewModelBase
     [ObservableProperty]
     private string _lightSummary = "";
 
-    /// <summary>The rig the viewport is lit with; null for studio lighting.</summary>
+    /// <summary>The current light rig. Null for studio lighting.</summary>
     public LightRig? CurrentRig { get; private set; }
 
     partial void OnUseSceneLightingChanged(bool value) => UpdateLighting();
@@ -552,7 +542,7 @@ public sealed partial class ScenesViewModel : ViewModelBase
             UpdateLighting();
     }
 
-    /// <summary>Back to the lights the scene starts with.</summary>
+    /// <summary>Resets to the lights the scene starts with.</summary>
     [RelayCommand]
     private void DefaultLights()
     {
@@ -581,7 +571,7 @@ public sealed partial class ScenesViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(HasScene))]
     private void ResetView() => ResetViewRequested?.Invoke();
 
-    /// <summary>Back to the scene's own start: visible environment and props only.</summary>
+    /// <summary>Resets to the agents the scene starts with.</summary>
     [RelayCommand(CanExecute = nameof(HasScene))]
     private void ShowDefault()
     {
@@ -661,7 +651,7 @@ public sealed class SceneRowViewModel
     public string SizeText => Entry.Size < 1024 * 1024 ? $"{Entry.Size / 1024.0:0} KB" : $"{Entry.Size / (1024.0 * 1024.0):0.0} MB";
 }
 
-/// <summary>One agent of the loaded scene, with a visibility toggle when it has meshes.</summary>
+/// <summary>One agent of the loaded scene.</summary>
 public sealed partial class SceneAgentRowViewModel : ObservableObject
 {
     private readonly ScenesViewModel _owner;
@@ -704,7 +694,7 @@ public sealed partial class SceneAgentRowViewModel : ObservableObject
     partial void OnIsOnChanged(bool value) => _owner.OnAgentToggled();
 }
 
-/// <summary>A kind of agent (environment, props, characters…) with a toggle for all of them.</summary>
+/// <summary>A kind of agent, with a toggle for all of them.</summary>
 public sealed partial class SceneKindViewModel : ObservableObject
 {
     private readonly IReadOnlyList<SceneAgentRowViewModel> _agents;
@@ -775,7 +765,7 @@ public sealed partial class SceneLightRowViewModel : ObservableObject
     /// <summary>The light's hue at full brightness.</summary>
     public IBrush Swatch { get; }
 
-    /// <summary>Lights the location itself (not a character rig, effect, sky dome or foliage light).</summary>
+    /// <summary>True for lights that light the location itself.</summary>
     public bool IsMain => Light.AffectsMainGeometry && !Light.IsCharacterLight && !SceneLighting.LooksLikeEffectLight(Light.Name);
 
     public string TypeLabel => Light.Type switch

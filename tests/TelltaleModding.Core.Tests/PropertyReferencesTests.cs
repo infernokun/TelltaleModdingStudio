@@ -30,7 +30,7 @@ public class PropertyReferencesTests
         using var catalog = await Open(DefinitiveSeries);
         Assert.Equal("sk63_idle_ajStandA.anm", Find(catalog, "sk63_aj.prop", PropertyReferences.IdleAnimation, ".anm", ".chore"));
         Assert.Equal("aj_face_default.chore", Find(catalog, "sk63_aj.prop", PropertyReferences.IdleFace, ".chore", ".anm"));
-        // An idle can be a chore: Clementine 402 stands, breathes and glances in adv_everywhere_clementine.
+        // An idle can be a chore.
         Assert.Equal("adv_everywhere_clementine.chore", Find(catalog, "sk62_clementine402.prop", PropertyReferences.IdleAnimation, ".anm", ".chore"));
     }
 
@@ -38,7 +38,7 @@ public class PropertyReferencesTests
     public async Task Unset_keys_find_nothing_and_phoneme_tables_list_their_poses()
     {
         using var catalog = await Open(Borderlands);
-        // Hologram Jack's idle is a chore held in an animation-or-chore value; the plain Jack sets none.
+        // Hologram Jack's idle is a chore; plain Jack has none.
         Assert.Equal("skB1_idle_handsomeJackStandA.chore", Find(catalog, "skB1_handsomeJackAI102.prop", PropertyReferences.IdleAnimation, ".anm", ".chore"));
         Assert.Null(Find(catalog, "skB1_handsomeJack.prop", PropertyReferences.IdleAnimation, ".anm", ".chore"));
 

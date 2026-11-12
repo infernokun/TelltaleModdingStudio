@@ -12,10 +12,7 @@ namespace TelltaleModding.App.ViewModels;
 /// <summary>How a script is shown.</summary>
 public enum ScriptViewMode { Decompiled, Disassembly }
 
-/// <summary>
-/// The open game's Lua scripts: find a script by name or by what it contains, read
-/// it as decompiled Lua or as an annotated listing, and save it.
-/// </summary>
+/// <summary>Find, read and save the open game's Lua scripts.</summary>
 public sealed partial class ScriptsViewModel : ViewModelBase
 {
     private GameCatalog? _catalog;
@@ -30,10 +27,10 @@ public sealed partial class ScriptsViewModel : ViewModelBase
     /// <summary>Set by the shell so pickers can be shown.</summary>
     public IDialogService? Dialogs { get; set; }
 
-    /// <summary>Raised with a short status message for the status bar.</summary>
+    /// <summary>Raised with a message for the status bar.</summary>
     public event Action<string>? StatusMessage;
 
-    /// <summary>Raised to scroll the code view to the first occurrence of a text.</summary>
+    /// <summary>Raised to scroll the code view to some text.</summary>
     public event Action<string>? RevealRequested;
 
     [ObservableProperty]
@@ -49,7 +46,7 @@ public sealed partial class ScriptsViewModel : ViewModelBase
             .Select(e => new ScriptRowViewModel(e))
             .ToList();
         HasSource = true;
-        // Cleared through the field so the search doesn't run against the old list.
+        // Set the field directly so no search runs on the old list.
 #pragma warning disable MVVMTK0034
         _query = "";
 #pragma warning restore MVVMTK0034
@@ -89,7 +86,7 @@ public sealed partial class ScriptsViewModel : ViewModelBase
     [ObservableProperty]
     private string _query = "";
 
-    /// <summary>Also match the strings and function names inside each script.</summary>
+    /// <summary>Also search inside each script.</summary>
     [ObservableProperty]
     private bool _searchContents;
 
@@ -158,7 +155,7 @@ public sealed partial class ScriptsViewModel : ViewModelBase
         Summary = hits.Count == all.Count ? $"{all.Count:N0} scripts" : $"{hits.Count:N0} of {all.Count:N0} scripts";
     }
 
-    // Function names and string constants of every script, read once.
+    // Searchable text for every script, built once.
     private Task EnsureContentIndexAsync()
     {
         if (_contentIndexTask is not null || _catalog is null)

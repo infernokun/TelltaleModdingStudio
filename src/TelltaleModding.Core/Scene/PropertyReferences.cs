@@ -5,12 +5,8 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// Files a property set (<c>.prop</c>) refers to under a key: a character's idle animation
-/// ("Walk Animation - Idle"), default face ("Walk Animation - Idle Face") or phoneme table
-/// ("Phoneme Table"). A value follows its key's symbol as a handle (a small block holding the
-/// file's symbol) or a pair of them (animation or chore), so the file is the first symbol
-/// after the key that names a file of the wanted kind. Keys a property set does not set come
-/// from the property sets it inherits.
+/// Files a property set (<c>.prop</c>) refers to under a key, such as a character's idle
+/// animation. The file is the first symbol after the key that names a file of the wanted kind.
 /// </summary>
 public static class PropertyReferences
 {
@@ -18,14 +14,14 @@ public static class PropertyReferences
     public const string IdleFace = "Walk Animation - Idle Face";
     public const string PhonemeTable = "Phoneme Table";
 
-    // A handle pair (animation, chore) with its block sizes fits well inside this.
+    // Enough room for a handle pair with its block sizes.
     private const int Reach = 48;
     private const int MaxDepth = 4;
     private const int HandleBlock = 12;
 
     /// <summary>
-    /// The file <paramref name="key"/> names in <paramref name="prop"/> (a <c>.prop</c> file) or
-    /// the property sets it inherits, with one of <paramref name="extensions"/>; null when unset.
+    /// The file <paramref name="key"/> names in <paramref name="prop"/> or its parents, with one
+    /// of <paramref name="extensions"/>; null when unset.
     /// </summary>
     /// <param name="nameOf">The file name of a symbol, or null.</param>
     /// <param name="read">Reads a file by name, or null.</param>
@@ -53,11 +49,7 @@ public static class PropertyReferences
         return null;
     }
 
-    /// <summary>
-    /// The phoneme poses a <c>.ptable</c> lists, by phoneme symbol (<c>AA</c> to its
-    /// <c>handsomeJack_phoneme_AA.anm</c>). Each entry's key is the phoneme's symbol, followed
-    /// by its animation.
-    /// </summary>
+    /// <summary>The phoneme poses a <c>.ptable</c> lists, by phoneme symbol.</summary>
     public static Dictionary<ulong, string> PhonemeClips(byte[] table, IEnumerable<string> phonemes, Func<ulong, string?> nameOf)
     {
         var clips = new Dictionary<ulong, string>();
@@ -81,8 +73,8 @@ public static class PropertyReferences
             if (at < 0)
                 return null;
             at += from;
-            // Handles are 12-byte blocks (size, symbol); an animation-or-chore value is two of them.
-            // Walking the blocks keeps an empty value from reaching into the next key's.
+            // Handles are 12-byte blocks (size, symbol), up to two per value. Walking the blocks
+            // stops an empty value from reading into the next key.
             if (at + 20 <= span.Length && BinaryPrimitives.ReadUInt32LittleEndian(span[(at + 8)..]) == HandleBlock)
             {
                 for (int p = at + 8, n = 0; n < 2 && p + HandleBlock <= span.Length &&

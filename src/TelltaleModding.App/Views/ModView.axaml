@@ -20,11 +20,11 @@
                     </StackPanel>
                 </Grid>
                 <TextBlock Grid.Row="1" Classes="muted" TextWrapping="Wrap" Margin="0,6,0,14"
-                           Text="A mod replaces game files with your own. Pick files in Assets and choose “Replace in mod…”, or type a file name below. Building creates a small patch archive the game loads over its originals." />
+                           Text="A mod replaces game files with your own. Use “Replace in mod…” in Assets or type a file name below, then build a patch archive." />
 
                 <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
                     <TextBox Text="{Binding NewTargetName}"
-                             Watermark="File to replace, e.g. sk62_clementine400_head.d3dtx" />
+                             Watermark="File name to replace" />
                     <Button Grid.Column="1" Margin="8,0,0,0" Command="{Binding AddSwapCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <PathIcon Data="{StaticResource IconSwap}" Width="14" Height="14" />

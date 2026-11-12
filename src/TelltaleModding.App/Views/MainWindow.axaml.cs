@@ -24,10 +24,9 @@ public partial class MainWindow : Window
             }
         };
 
-        // Debug hooks for automated verification with loose extracted files:
+        // Debug flags for loose files:
         //   --preview-mesh <path> [<path>...]  shows the meshes as one model
         //   --play-anim <path>                  plays an animation on it
-        // Otherwise the library is restored and the last game reopened.
         Opened += async (_, _) =>
         {
             if (DataContext is not ShellViewModel vm)
@@ -45,9 +44,7 @@ public partial class MainWindow : Window
         };
     }
 
-    // The header stands in for the system title bar: dragging it moves the window (with the
-    // system's snapping) and a double-click maximizes or restores. Buttons in it handle their
-    // own presses, so only its empty parts and labels get here.
+    // The header acts as the title bar: drag to move, double-click to maximize.
     private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)

@@ -67,7 +67,7 @@ public class ChoreTimelineTests
         Assert.Equal(3, idle.Blocks.Count);
         Assert.Contains(tracks.Single(t => t.Agent == "Clementine").Items, i => i.Name == "particle IK");
 
-        // Every embedded resource of this chore has a known type, so none is left as plain data.
+        // Every embedded resource here has a known type.
         Assert.DoesNotContain(tracks.SelectMany(t => t.Items), i => i.Name == "data stored in the chore");
         var (name, details) = ChoreTimeline.Describe(chore, target, new Dictionary<ulong, DialogueLine>());
         Assert.Equal("look at Clementine (eyes)", name);
@@ -80,7 +80,7 @@ public class ChoreTimelineTests
         var chore = Read("env_cave_act1_cs_hardWorld_1.chore");
         var files = new[] { "sk63_ajStandA_toArmsX.anm", "aJ_face_blink.chore", "adv_cave.scene" }
             .ToDictionary(TelltaleCrc64.HashSymbol);
-        // The first of AJ's lines, as the scene's subtitle database would give it.
+        // AJ's first line, as the subtitle database would give it.
         int ajIndex = chore.Agents.Single(a => a.Name == "AJ").Resources
             .First(i => chore.Resources[i].Type == ChoreFile.LanguageResType && chore.Resources[i].Blocks[0].Start < 4);
         var voice = chore.Resources[ajIndex];
@@ -95,11 +95,11 @@ public class ChoreTimelineTests
         Assert.Equal("env_cave_act1_cs_hardWorld_1.chore", rows[0]);
         Assert.Equal("scene    adv_cave.scene", rows[1]);
         Assert.Equal("length   47.75 s, 150 resources, 13 agents", rows[2]);
-        // A heading per agent with what it does, then its rows.
+        // A heading per agent, then its rows.
         Assert.Contains(rows, r => r.StartsWith("AJ  (3 voice lines · ", StringComparison.Ordinal));
         Assert.Contains("  3.4–7.4s       Voice line  Aj: \"Killing Lilly made us safe.\"  [line 396764596]", rows);
         Assert.Contains("  8.7–11.8s      Animation   sk63_ajStandA_toArmsX.anm", rows);
-        // Every span of a resource that plays more than once.
+        // All spans of a resource that plays more than once.
         Assert.Contains(rows, r => r.Contains("aJ_face_blink.chore  [at 3.0–3.6s, 8.4–8.9s]"));
         Assert.Contains(rows, r => r.Contains("Procedural  style idle  [type StyleIdleTransitionsRes; at 3.1–3.6s, 4.6–5.1s, 6.7–8.2s]"));
         Assert.Contains("  throughout     Procedural  look at AJ (eyes)  [type PointOfInterestBlocking]", rows);

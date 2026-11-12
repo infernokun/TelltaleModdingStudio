@@ -7,38 +7,31 @@ namespace TelltaleModding.Core.Meshes;
 /// <summary>One bone of a skeleton: identity, hierarchy, and local rest transform.</summary>
 /// <param name="JointSymbol">CRC64 of the bone's name.</param>
 /// <param name="ParentIndex">-1 for the root.</param>
-/// <param name="RestRotation">Rotation of the entry's mRestXForm (usually equals LocalRotation).</param>
+/// <param name="RestRotation">Rotation of the entry's mRestXForm.</param>
 public readonly record struct SkeletonBone(
     ulong JointSymbol, ulong ParentNameSymbol, int ParentIndex,
     Vector3 LocalPosition, Quaternion LocalRotation,
     Vector3 RestPosition, Quaternion RestRotation)
 {
     /// <summary>
-    /// The entry's mAnimTranslationScale (global × local translation scale): how this bone's
-    /// proportions differ from the rig its animations were authored on. The engine uses it to
-    /// turn an animation's translation direction onto this skeleton's rest direction (see
-    /// <see cref="CspkDecoder.TranslationFrame"/>).
+    /// The entry's mAnimTranslationScale. The engine uses it to turn an animation's translation
+    /// onto this skeleton's rest direction (see <see cref="CspkDecoder.TranslationFrame"/>).
     /// </summary>
     public Vector3 AnimTranslationScale { get; init; }
 
-    /// <summary>
-    /// The entry's mResourceGroupMembership: the resource groups this bone belongs to (group
-    /// name symbol) and how much, or null when it lists none.
-    /// </summary>
+    /// <summary>The resource groups this bone belongs to and how much, or null when it lists none.</summary>
     public IReadOnlyDictionary<ulong, float>? ResourceGroups { get; init; }
 }
 
 /// <summary>
-/// A parsed Telltale .skl skeleton (Wolf Among Us / Game of Thrones through Tales from
-/// the Borderlands era). Layout from TelltaleToolLib's serializer registration, verified
-/// byte-exact against full games' skeletons. The older MSV5 games (The Wolf Among Us,
-/// Game of Thrones) write the same entries without the mirror bone name and index.
+/// A parsed Telltale .skl skeleton. Older MSV5 games write entries without the mirror bone
+/// name and index.
 /// </summary>
 public sealed class SkeletonFile
 {
     public IReadOnlyList<SkeletonBone> Bones { get; private init; } = Array.Empty<SkeletonBone>();
 
-    /// <summary>Joint symbols as a set, for fast mesh/animation compatibility checks.</summary>
+    /// <summary>Joint symbols as a set.</summary>
     public IReadOnlySet<ulong> JointSymbols { get; private init; } = new HashSet<ulong>();
 
     private SkeletonFile() { }
@@ -88,9 +81,8 @@ public sealed class SkeletonFile
         if (count is < 0 or > 4096)
             throw new InvalidDataException($"implausible bone count {count}");
 
-        // Entries of the MSV5 games lack the mirror bone fields. Tell the layouts apart by
-        // where the first entry's rest transform block (32 bytes, counting its own size)
-        // starts: after joint/parent/index (20), [mirror name + index (12),] local pos + quat (28).
+        // MSV5 entries lack the mirror fields. Tell them apart by where the first entry's
+        // 32-byte rest transform block starts: offset 60 with mirror fields, 48 without.
         bool hasMirror = true;
         if (count > 0)
         {
@@ -119,8 +111,7 @@ public sealed class SkeletonFile
             off = restEnd;
             off += 24;                                // global/local translation scales
             var animScale = new Vector3(F32(), F32(), F32());
-            // Resource group membership: how much each named group (a chore resource can
-            // include only some, such as the head) covers this bone.
+            // Resource group membership.
             int groupsEnd = Block();
             int groupCount = I32();
             Dictionary<ulong, float>? groups = null;
@@ -150,8 +141,8 @@ public sealed class SkeletonFile
     }
 
     /// <summary>
-    /// Index of each joint symbol in <see cref="Bones"/>. A few skeletons list a joint twice
-    /// (sk55_zombiePole); the first bone with the symbol wins.
+    /// Index of each joint symbol in <see cref="Bones"/>. A few skeletons list a joint twice;
+    /// the first one wins.
     /// </summary>
     public IReadOnlyDictionary<ulong, int> BoneIndexBySymbol =>
         _boneIndex ??= Bones.Select((b, i) => (b.JointSymbol, i))
@@ -160,10 +151,7 @@ public sealed class SkeletonFile
 
     private Dictionary<ulong, int>? _boneIndex;
 
-    /// <summary>
-    /// World (model-space) transform of every bone from the given local pose,
-    /// composed down the parent chain. Row-vector convention (v' = v · M).
-    /// </summary>
+    /// <summary>Model-space transform of every bone from the given local pose (row vectors).</summary>
     public Matrix4x4[] ComposeWorld(Func<SkeletonBone, (Vector3 Pos, Quaternion Rot)> localPose)
     {
         var world = new Matrix4x4[Bones.Count];
@@ -179,10 +167,7 @@ public sealed class SkeletonFile
     /// <summary>World transforms of the rest (bind) pose.</summary>
     public Matrix4x4[] BindPoseWorld() => ComposeWorld(b => (b.LocalPosition, b.LocalRotation));
 
-    /// <summary>
-    /// Fraction of the given bone symbols this skeleton contains (1.0 = every bone
-    /// of the mesh/animation exists in this skeleton).
-    /// </summary>
+    /// <summary>Fraction of the given bone symbols this skeleton contains.</summary>
     public double Coverage(IEnumerable<ulong> boneSymbols)
     {
         int total = 0, hit = 0;

@@ -18,7 +18,7 @@
         </Style>
     </UserControl.Styles>
 
-    <!-- Results and preview; drag the gap between them to give either more room. -->
+    <!-- Results and preview -->
     <Grid Margin="12">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" MinWidth="360" />
@@ -33,7 +33,7 @@
                     <TextBlock Classes="h2" Text="Assets" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
                     <CheckBox IsChecked="{Binding ConvertOnExport}" FontSize="12" Content="Convert"
-                              ToolTip.Tip="Textures → PNG, sounds → MP3/Ogg, scripts → decompiled Lua, subtitles → transcript, chores → text timeline" />
+                              ToolTip.Tip="Convert files to common formats like PNG, MP3 and Lua" />
                     <Button Command="{Binding ExportResultsCommand}" FontSize="12" Padding="10,4"
                             ToolTip.Tip="Export every file in the results to a folder">
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -45,7 +45,7 @@
                 </Grid>
                 <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
                     <TextBox Classes="search" Text="{Binding Query}" IsEnabled="{Binding HasSource}"
-                             Watermark="Search every file in the game by name or episode (e.g. clementine400 head, WalkingDead203 .d3dtx)…" />
+                             Watermark="Search files by name or episode…" />
                     <ComboBox Grid.Column="1" Margin="8,0,0,0" MinWidth="160" VerticalAlignment="Stretch"
                               ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}"
                               IsEnabled="{Binding HasSource}">
@@ -110,7 +110,7 @@
                         <Panel x:Name="ViewportHost" Background="Transparent" IsVisible="{Binding IsMeshPreview}">
                             <views:MeshViewport x:Name="Viewport" />
                         </Panel>
-                        <!-- A chore: what each agent plays and when, with a bar across the chore's length. -->
+                        <!-- Chore timeline per agent -->
                         <ScrollViewer IsVisible="{Binding IsChorePreview}" Padding="12,10">
                             <ItemsControl ItemsSource="{Binding ChoreTracks}">
                                 <ItemsControl.ItemTemplate>

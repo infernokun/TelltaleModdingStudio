@@ -3,11 +3,8 @@ using System.Numerics;
 namespace TelltaleModding.Core.Meshes;
 
 /// <summary>
-/// CPU skinning of a mesh against a skeleton pose. Mesh vertices are authored in
-/// model space at the skeleton's bind pose, so skinning applies
-/// inverse-bind × posed-world per influencing bone: with the rest pose in, the
-/// output equals the input (verified in tests; this pins down the palette
-/// mapping and the bind-pose source).
+/// CPU skinning of a mesh against a skeleton pose. Vertices are stored at the bind pose, so
+/// each bone applies inverse bind times posed world.
 /// </summary>
 public sealed class MeshSkinner
 {
@@ -79,8 +76,8 @@ public sealed class MeshSkinner
     }
 
     /// <summary>
-    /// Skins positions (and normals, rotation-only) for the given posed world
-    /// transforms (from <see cref="SkeletonFile.ComposeWorld"/>).
+    /// Skins positions and normals for posed world transforms from
+    /// <see cref="SkeletonFile.ComposeWorld"/>.
     /// </summary>
     public void Skin(Matrix4x4[] posedWorld, Vector3[] outPositions, Vector3[] outNormals)
     {

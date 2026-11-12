@@ -1,20 +1,15 @@
 namespace TelltaleModding.Core.Scripts;
 
-/// <summary>Raised inside the decompiler when a construct can't be reconstructed.</summary>
+/// <summary>Thrown inside the decompiler when a construct can't be rebuilt.</summary>
 internal sealed class DecompileException : Exception
 {
     public DecompileException(string message) : base(message) { }
 }
 
 /// <summary>
-/// Turns a Lua 5.1/5.2 chunk back into source. Each function is decompiled on its own:
-/// value-producing and/or/comparison expressions are found first from their jump pattern
-/// (all exits converge on one register) and collapsed; statements are then rebuilt by a
-/// walk over the instruction ranges, recognising loops from their back jumps, for-loop
-/// instructions, and if/elseif/else from condition chains whose short-circuit graph is
-/// reduced to a single and/or/not expression. Registers hold pending expressions until an
-/// instruction consumes them or a local's debug scope begins. Anything that doesn't fit is
-/// emitted as a commented instruction listing for that range only.
+/// Turns a Lua 5.1/5.2 chunk back into source. Value-producing and/or expressions are found
+/// first from their jump pattern, then statements and loops are rebuilt from the jumps.
+/// Anything that doesn't fit is written as a commented instruction listing for that range.
 /// </summary>
 internal sealed class LuaDecompiler
 {
@@ -42,7 +37,7 @@ internal sealed class LuaDecompiler
         return w.ToString();
     }
 
-    /// <param name="upvalueNames">Names the enclosing function uses for the captured values, for stripped code.</param>
+    /// <param name="upvalueNames">The enclosing function's names for captured values, for stripped code.</param>
     public FunctionExpr DecompileFunction(LuaFunction f, IReadOnlyList<string>? upvalueNames = null) =>
         new FunctionDecompiler(this, f, upvalueNames).Run();
 }
@@ -51,7 +46,7 @@ internal sealed class LuaDecompiler
 internal sealed partial class FunctionDecompiler
 {
     private const int ExitTrue = -1, ExitFalse = -2;
-    /// <summary>Real compilers stop at about 200 levels; deeper trees only come from damaged data.</summary>
+    /// <summary>Real compilers stop around 200 levels, so anything deeper is damaged data.</summary>
     private const int MaxDepth = 250;
     private int _blockDepth;
 
@@ -95,7 +90,7 @@ internal sealed partial class FunctionDecompiler
         public int Pt = -1, Pf = -1, Fj = -1;
         public List<int> Tests = new();
         public int ValueEnd => Pf >= 0 ? (Fj >= 0 ? Fj : Pf) : Fin;
-        /// <summary>The last operand is a value (not a comparison feeding the LOADBOOL pair).</summary>
+        /// <summary>The last operand is a value, not a comparison feeding the LOADBOOL pair.</summary>
         public bool HasFinal => Pf < 0 || Fj >= 0;
     }
 
@@ -109,7 +104,7 @@ internal sealed partial class FunctionDecompiler
         _v51 = d.Chunk.IsLua51;
         int regs = Math.Max(f.MaxStackSize, 1) + 2;
 
-        // Stripped functions: treat every register as a local live for the whole function.
+        // Stripped functions treat every register as a local that lives for the whole function.
         _synthetic = f.Locals.Length == 0 && f.LineInfo.Length == 0 && (f.NumParams > 0 || _n > 1);
         if (_synthetic)
         {
@@ -261,7 +256,7 @@ internal sealed partial class FunctionDecompiler
 
     private bool IsTemp(int reg, int pc) => _locals.IndexAt(reg, pc) < 0;
 
-    /// <summary>True when the instruction only builds an expression (writes temporaries).</summary>
+    /// <summary>True when the instruction only builds an expression in temporaries.</summary>
     private bool ExprOnly(int pc, int allowReg = -1)
     {
         if (_pseudo[pc]) return true;
@@ -288,7 +283,7 @@ internal sealed partial class FunctionDecompiler
         return false;
     }
 
-    /// <summary>True when <paramref name="reg"/> was last written by NEWTABLE (a constructor in progress).</summary>
+    /// <summary>True when <paramref name="reg"/> was last written by NEWTABLE, so a constructor is in progress.</summary>
     private bool BuildsTable(int reg, int pc)
     {
         if (_buildsTable.TryGetValue(pc, out bool known)) return known;
@@ -375,11 +370,11 @@ internal sealed partial class FunctionDecompiler
         return false;
     }
 
-    /// <summary>True when <paramref name="reg"/>'s value at <paramref name="from"/> is used before being overwritten on some path.</summary>
+    /// <summary>True when <paramref name="reg"/>'s value at <paramref name="from"/> is read before it's overwritten on some path.</summary>
     private bool LiveAt(int reg, int from)
     {
         foreach (int li in _locals.StartingAt(from))
-            if (_locals.RegisterOf(li) == reg) return true; // the value initialises a local
+            if (_locals.RegisterOf(li) == reg) return true; // the value initializes a local
         var seen = new HashSet<int>();
         var work = new Stack<int>();
         work.Push(from);

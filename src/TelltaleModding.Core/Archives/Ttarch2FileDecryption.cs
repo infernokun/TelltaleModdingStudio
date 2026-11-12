@@ -3,17 +3,14 @@ using System.Buffers.Binary;
 namespace TelltaleModding.Core.Archives;
 
 /// <summary>
-/// The per-file decryption ttarchext applies to every file it extracts
-/// (<c>ttarch_dumpa</c>): legacy block-encrypted meta streams are deciphered and
-/// encrypted Lua scripts are decrypted. Everything else passes through untouched,
-/// so <see cref="Ttarch2Archive.Read"/> returns exactly what ttarchext writes.
+/// The per-file decryption ttarchext's <c>ttarch_dumpa</c> applies to old meta streams and
+/// Lua scripts, so <see cref="Ttarch2Archive.Read"/> returns the same bytes ttarchext writes.
 /// </summary>
 internal static class Ttarch2FileDecryption
 {
     /// <summary>
-    /// Decrypts <paramref name="data"/> (the stored bytes of <paramref name="name"/>)
-    /// in place where needed and returns it, or a shortened copy for
-    /// <c>\x1bLEo</c> Lua scripts, whose 4-byte tag ttarchext drops.
+    /// Decrypts the stored bytes of <paramref name="name"/> in place and returns them, or a copy
+    /// without the 4-byte tag for <c>\x1bLEo</c> Lua scripts.
     /// </summary>
     public static byte[] Apply(string name, byte[] data, TtarchBlowfish? cipher)
     {
@@ -28,9 +25,8 @@ internal static class Ttarch2FileDecryption
         return data;
     }
 
-    // ttarch_meta_crypt: older meta streams are split into fixed blocks after the
-    // 4-byte tag; every Nth block is Blowfish-encrypted, every Mth left clear, and
-    // the rest XORed with 0xFF. Modern tags (MSV5/MSV6/ERTM/MBIN) are not listed.
+    // ttarch_meta_crypt: older meta streams are split into blocks after the 4-byte tag.
+    // Every Nth block is Blowfish-encrypted, every Mth is clear, and the rest are XORed with 0xFF.
     private static void DecryptMeta(byte[] data, TtarchBlowfish cipher)
     {
         (int size, int crypt, int clean) = BinaryPrimitives.ReadUInt32LittleEndian(data) switch
@@ -65,9 +61,8 @@ internal static class Ttarch2FileDecryption
         }
     }
 
-    // The Lua branch of ttarch_meta_dump. "\x1bLEn" scripts are decrypted after
-    // the tag, which becomes "\x1bLua"; "\x1bLEo" scripts lose the tag; untagged
-    // scripts are decrypted whole if that yields a Lua header.
+    // The Lua branch of ttarch_meta_dump. "\x1bLEn" scripts get their tag replaced with "\x1bLua",
+    // "\x1bLEo" scripts lose the tag, and untagged ones are decrypted whole if that gives a Lua header.
     private static byte[] DecryptLua(byte[] data, TtarchBlowfish cipher)
     {
         if (data[0] == 0x1B && data[1] == 'L' && data[2] == 'E' && data[3] == 'n')
@@ -82,8 +77,8 @@ internal static class Ttarch2FileDecryption
             return data[4..];
         }
 
-        // Untagged: test-decrypt the first block. (ttarchext also tries the
-        // pre-version-7 Blowfish here; no .ttarch2 game is known to need it.)
+        // Untagged, so test-decrypt the first block. ttarchext also tries the older Blowfish
+        // here, but no .ttarch2 game needs it.
         if (data.Length < 8)
             return data;
         Span<byte> probe = stackalloc byte[8];

@@ -13,7 +13,7 @@ public sealed partial class SwapViewModel : ViewModelBase
         _replacementFilePath = swap.ReplacementFilePath;
     }
 
-    /// <summary>The underlying project model this row edits.</summary>
+    /// <summary>The project entry this row edits.</summary>
     public AssetSwap Swap { get; }
 
     public string TargetAssetName => Swap.TargetAssetName;

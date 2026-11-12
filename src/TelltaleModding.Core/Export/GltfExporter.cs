@@ -62,7 +62,7 @@ public static class GltfExporter
     private static readonly Vector3 UntexturedColor = new(0.72f, 0.72f, 0.75f);
 
     /// <summary>Writes <paramref name="model"/> as a .glb file to <paramref name="output"/>.</summary>
-    /// <param name="clips">Clips to bake; ignored when the model cannot be animated. Each player must have been created for this model's geometry and skeleton.</param>
+    /// <param name="clips">Clips to bake. Each player must be set up for this model.</param>
     public static GltfExportSummary WriteGlb(AssembledModel model, Stream output,
         IReadOnlyList<GltfClip>? clips = null, GltfExportOptions? options = null)
     {
@@ -224,15 +224,14 @@ public static class GltfExporter
             {
                 if (!Matrix4x4.Invert(bind[i], out inverse[i]))
                     inverse[i] = Matrix4x4.Identity;
-                // Keep the affine row exact (inversion leaves tiny round-off there).
+                // Clean up round-off in the affine row.
                 inverse[i].M14 = inverse[i].M24 = inverse[i].M34 = 0;
                 inverse[i].M44 = 1;
             }
             if (staticNode is not null)
                 inverse[^1] = Matrix4x4.Identity;
 
-            // Row-vector matrices written row by row are the column-vector matrices glTF
-            // expects, in its column-major order.
+            // Our matrices use row vectors, so written row by row they're in glTF's column-major layout.
             int view = AddView(MemoryMarshal.AsBytes(inverse.AsSpan()), null);
             int accessor = AddAccessor(view, Float, count, "MAT4");
 
@@ -255,16 +254,15 @@ public static class GltfExporter
         private readonly record struct Skinning(ushort[] Joints, float[] Weights, bool NeedsStaticJoint);
 
         /// <summary>
-        /// Per-vertex joints and normalised weights, resolved the way <see cref="MeshSkinner"/>
-        /// does: palette-relative indices through the drawing batch's bone palette into
-        /// skeleton bones. Vertices it leaves at rest go to an extra static joint.
+        /// Per-vertex joints and weights, resolved the same way as <see cref="MeshSkinner"/>.
+        /// Vertices it leaves at rest go to an extra static joint.
         /// </summary>
         private Skinning ResolveSkinning(SkeletonFile skeleton)
         {
             int vertexCount = _geometry.Positions.Length;
             var bones = MeshSkinner.ResolveVertexBones(_geometry, skeleton);
 
-            // Vertices no visible batch draws (e.g. a hidden overlay's) need no real binding.
+            // Vertices no visible batch draws don't need a real binding.
             var drawn = new bool[vertexCount];
             foreach (var batch in _geometry.Batches)
             {
@@ -307,7 +305,7 @@ public static class GltfExporter
                     else
                         w[k] = 0;
                 }
-                // A bone named in two slots blends linearly, so its weights simply add up.
+                // Merge weights when the same bone is in two slots.
                 for (int k = 1; k < 4; k++)
                 {
                     for (int j = 0; j < k && w[k] > 0; j++)
@@ -370,7 +368,6 @@ public static class GltfExporter
                 groups.Add((default, new List<MeshBatch> { new(0, g.Indices.Length / 3, -1, 0, vertexCount - 1, -1, -1) }));
             bool anyNormalMap = groups.Any(x => x.Key.Normal is not null) && g.Tangents.Length == vertexCount;
 
-            // Shared vertex attributes.
             var attributes = new JsonObject();
             var positions = g.Positions.Select(Finite).ToArray();
             var min = new Vector3(float.MaxValue);
@@ -457,9 +454,8 @@ public static class GltfExporter
         }
 
         /// <summary>
-        /// The texture file each diffuse image came from. The assembler lists the textures it
-        /// used in the order its batches first use them, so the distinct batch images line up
-        /// with that list; when they do not, images go unnamed.
+        /// The texture file each diffuse image came from. Relies on the assembler listing textures
+        /// in first-use order; if the counts don't match, images go unnamed.
         /// </summary>
         private Dictionary<DdsImage, string> DiffuseNames()
         {
@@ -530,10 +526,8 @@ public static class GltfExporter
         private enum AlphaUse { Opaque, Cutout, Blend }
 
         /// <summary>
-        /// How a color texture's alpha is used. Like the viewer, a texture with more than a
-        /// few clearly transparent pixels is see-through, unless they are only a stray handful
-        /// (block-compression noise); mostly hard-edged alpha (eyelash and hair cards) is a
-        /// cut-out, mostly soft alpha blends.
+        /// How a color texture uses alpha, matching the viewer. A few stray transparent pixels
+        /// are compression noise; mostly hard edges mean cut-out, mostly soft means blend.
         /// </summary>
         private static AlphaUse ClassifyAlpha(DdsImage image)
         {
@@ -555,9 +549,8 @@ public static class GltfExporter
         }
 
         /// <summary>
-        /// A standard tangent-space normal map. Telltale's pack X in blue and Y in alpha (the
-        /// viewer reconstructs Z), so those become red/green with Z rebuilt into blue; a map
-        /// without alpha is taken as an ordinary RGB normal map.
+        /// Converts to a standard normal map. Telltale packs X in blue and Y in alpha, so we
+        /// move those to red and green and rebuild Z. Maps without alpha are left as they are.
         /// </summary>
         private static byte[] EncodeNormalMap(DdsImage image)
         {
@@ -591,9 +584,8 @@ public static class GltfExporter
         // ---- Animation --------------------------------------------------------
 
         /// <summary>
-        /// Bakes a clip: every bone gets translation and rotation channels sampled at the
-        /// export frame rate from the player's bone-local transforms (a single key where the
-        /// value never changes), so each clip fully defines the pose on its own.
+        /// Bakes a clip with translation and rotation keys for every bone, so each clip
+        /// sets the whole pose on its own.
         /// </summary>
         private void AddAnimation(GltfClip clip, SkeletonFile skeleton, int[] boneNodes)
         {
@@ -604,7 +596,7 @@ public static class GltfExporter
             var pose = clip.Pose;
             float length = pose is null ? Math.Max(0f, player.Length) : 0f;
             float fps = _options.FramesPerSecond;
-            // A pose is one frame; a clip needs at least its first and last frame.
+            // A pose is one frame, a clip needs at least its first and last.
             int frames = pose is not null ? 1 : Math.Max(2, (int)MathF.Ceiling(length * fps - 1e-3f) + 1);
             var times = new float[frames];
             for (int f = 0; f < frames; f++)
@@ -630,10 +622,10 @@ public static class GltfExporter
                     {
                         var (pos, rot) = pose?[bone.JointSymbol] ?? player.SampleLocal(bone, times[f]);
                         translations[f] = Finite(pos);
-                        // A degenerate rotation (zero length or not finite) falls back to the rest rotation.
+                        // Bad rotations fall back to the rest rotation.
                         float lengthSq = rot.LengthSquared();
                         rot = float.IsFinite(lengthSq) && lengthSq > 1e-12f ? Quaternion.Normalize(rot) : Quaternion.Normalize(bone.LocalRotation);
-                        // Keep neighbouring keys in the same hemisphere so interpolation takes the short way.
+                        // Keep keys in the same hemisphere so interpolation takes the short way.
                         if (f > 0 && Quaternion.Dot(rot, rotations[f - 1]) < 0)
                             rot = Quaternion.Negate(rot);
                         rotations[f] = rot;
@@ -759,7 +751,7 @@ public static class GltfExporter
         return length > 1e-6f ? v / length : fallback;
     }
 
-    /// <summary>A unit tangent with w = ±1; degenerate ones are replaced by any direction perpendicular to the normal.</summary>
+    /// <summary>A unit tangent with w = ±1. Broken ones get any direction perpendicular to the normal.</summary>
     private static Vector4 ValidTangent(Vector4 tangent, Vector3 normal)
     {
         var n = UnitOr(Finite(normal), Vector3.UnitY);

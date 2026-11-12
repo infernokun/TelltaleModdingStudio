@@ -7,25 +7,24 @@ namespace TelltaleModding.Core.Meshes;
 public readonly record struct PoseKey<T>(float Time, T Value);
 
 /// <summary>
-/// A decoded CompressedSkeletonPoseKeys2 clip (The Walking Dead: The Telltale Definitive Series and
-/// later games). Every slot has its own rotation and translation keys at their own times; values
-/// between keys blend linearly.
+/// A decoded CompressedSkeletonPoseKeys2 clip. Each slot has its own rotation and translation
+/// keys, blended linearly.
 /// </summary>
 public sealed class PoseKeys2Clip
 {
-    /// <summary>Bone symbol per slot (CRC64 of the joint name).</summary>
+    /// <summary>Bone symbol per slot.</summary>
     public required IReadOnlyList<ulong> BoneSymbols { get; init; }
 
-    /// <summary>[slot] rotation keys, time-ordered; empty when the slot has none.</summary>
+    /// <summary>Rotation keys per slot, in time order.</summary>
     public required PoseKey<Quaternion>[][] Rotations { get; init; }
 
-    /// <summary>[slot] translation keys (local offset from the parent), time-ordered.</summary>
+    /// <summary>Translation keys per slot (offset from the parent), in time order.</summary>
     public required PoseKey<Vector3>[][] Translations { get; init; }
 
     public bool HasRotation(int slot) => Rotations[slot].Length > 0;
     public bool HasTranslation(int slot) => Translations[slot].Length > 0;
 
-    /// <summary>Rotation at a time: normalized blend of the neighbouring keys, the short way round.</summary>
+    /// <summary>Rotation at a time, blended the short way between the nearest keys.</summary>
     public Quaternion SampleRotation(int slot, float time)
     {
         var keys = Rotations[slot];
@@ -39,7 +38,7 @@ public sealed class PoseKeys2Clip
         return Quaternion.Normalize(Quaternion.Lerp(a, b, t));
     }
 
-    /// <summary>Translation at a time: linear blend of the neighbouring keys.</summary>
+    /// <summary>Translation at a time, blended between the nearest keys.</summary>
     public Vector3 SampleTranslation(int slot, float time)
     {
         var keys = Translations[slot];
@@ -67,25 +66,22 @@ public sealed class PoseKeys2Clip
 }
 
 /// <summary>
-/// Decoder for CompressedSkeletonPoseKeys2, following what the game engine's own decoder does.
+/// Decoder for CompressedSkeletonPoseKeys2, matching the engine's decoder.
 ///
 /// Blob layout:
-///   0..72    float windows: translation delta min (0-2) / range (3-5), rotation delta min (6-8) /
-///            range (9-11), absolute translation min (12-14) / range (15-17); float 18 scales key times
+///   0..72    floats: min/range pairs for translation delta (0-5), rotation delta (6-11) and
+///            absolute translation (12-17); float 18 scales key times
 ///   76       u16 slot count
-///   80       u64 offset of the slot symbol table, counted from 0x60
-///   0x60..   packed values (read on demand, see below)
-///   then     slot symbols (u64 each), then control words (u32) to the end of the blob
+///   80       u64 offset of the slot symbol table, from 0x60
+///   0x60..   packed values
+///   then     slot symbols (u64), then control words (u32) to the end
 ///
-/// Each control word is one key: bits 0-15 its time (× float 18 / 65535), bits 16-27 the slot,
-/// bit 30 rotation (else translation), bit 31 delta (else absolute), and for absolute rotations
-/// bits 28-29 the component order. Values come from the shared packed stream, four at a time per
-/// kind: a translation or rotation delta takes one word per four values (10/11/11 bits), an
-/// absolute translation or rotation two words per value as four lo words then four hi words
-/// (20/22/22 bits). Delta translations add to the slot's previous key, delta rotations multiply
-/// onto it (previous · delta). Absolute rotations store three components in a ±1/√2 window and
-/// rebuild the fourth; with order k they land in x, y, z, w as components k, k^1, k^2, k^3.
-/// A slot starts at zero translation and identity rotation.
+/// Each control word is one key: bits 0-15 time, 16-27 slot, 30 rotation (else translation),
+/// 31 delta (else absolute), 28-29 component order for absolute rotations. Values are read four
+/// at a time per kind: deltas pack 10/11/11 bits in one word, absolutes 20/22/22 bits across a
+/// lo and hi word. Deltas add to (or multiply onto) the slot's previous key. Absolute rotations
+/// store three components in a ±1/√2 window and rebuild the fourth; order k puts them in
+/// x, y, z, w as k, k^1, k^2, k^3.
 /// </summary>
 public static class Cspk2Decoder
 {
@@ -173,10 +169,7 @@ public static class Cspk2Decoder
         a.W * b.Z + a.X * b.Y - a.Y * b.X + a.Z * b.W,
         a.W * b.W - a.X * b.X - a.Y * b.Y - a.Z * b.Z);
 
-    /// <summary>
-    /// The packed value stream: four buffers (translation/rotation × delta/absolute), each refilled
-    /// with four values from the stream when used up.
-    /// </summary>
+    /// <summary>The packed value stream, with one four-value buffer per kind.</summary>
     private sealed class ValueStream
     {
         private readonly byte[] _data;
@@ -265,7 +258,7 @@ public static class Cspk2Decoder
             return _ta[_taUsed++];
         }
 
-        /// <summary>The four rotation components before ordering: three stored, the fourth rebuilt.</summary>
+        /// <summary>The four rotation components before ordering, the last one rebuilt.</summary>
         public float[] Rotation()
         {
             if (_raUsed > 3)

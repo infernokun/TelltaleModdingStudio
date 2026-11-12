@@ -10,8 +10,7 @@ internal static class SampleData
     public static string EngineExe => Path.Combine(RepoRoot, "engine", "ttarchext", "ttarchext.exe");
 
     /// <summary>
-    /// A sample's path. Only some samples are in the repository (the rest are game files kept
-    /// locally), so a test whose sample is missing is skipped rather than failed.
+    /// A sample's path. Not every sample is in the repository, so a missing one skips the test.
     /// </summary>
     public static string Sample(string fileName)
     {
@@ -30,7 +29,7 @@ internal static class SampleData
     public static string GameOfThrones => Sample("GameOfThrones_pc_GameOfThrones102_data.ttarch2");
     public static string TestArchive => Sample("test.ttarch2");
 
-    // Real extracted assets (MSV6 era) used by the meta-stream/format tests.
+    // Real extracted assets for the format tests.
     public static string MeshSample => Sample("adv_arenaEntrance_meshesA.d3dmesh");
     public static string TinyMeshSample => Sample("obj_screenCUILayer1.d3dmesh");
     public static string TinyTextureSample => Sample("color_EEE.d3dtx");

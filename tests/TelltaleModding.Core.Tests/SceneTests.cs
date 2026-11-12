@@ -22,10 +22,10 @@ public class SceneTests
         Assert.Equal(model.BoneSymbols.Count, model.SkeletonBonesMatched);
         Assert.True(model.CanAnimate);
         Assert.Contains("sk62_clementine400_head.d3dtx", model.TexturesUsed);
-        // One texture/normal-map entry per rendered batch.
+        // One texture and normal map entry per batch.
         Assert.Equal(model.Geometry.Batches.Count, model.BatchTextures.Count);
         Assert.Equal(model.Geometry.Batches.Count, model.BatchNormalMaps.Count);
-        // The eye-wetness shell (texture-less material) is left out.
+        // The texture-less eye-wetness shell is left out.
         Assert.Contains(model.Details, d => d.Contains("hidden (texture-less overlay"));
     }
 
@@ -39,7 +39,7 @@ public class SceneTests
         Assert.Equal("sk54_bigby.skl", model.SkeletonName);
         Assert.Equal(model.BoneSymbols.Count, model.SkeletonBonesMatched);
         Assert.True(model.CanAnimate);
-        // The batch's diffuse slot resolves through the texture's extension-less name symbol.
+        // The diffuse is found by its name without the extension.
         Assert.Equal(new[] { "sk54_bigby_head.d3dtx" }, model.TexturesUsed);
         Assert.NotNull(Assert.Single(model.BatchTextures));
     }
@@ -60,11 +60,11 @@ public class SceneTests
         var normals = new Vector3[rest.Length];
         player.Evaluate(player.Length / 2, positions, normals);
 
-        // Crouching lowers the head well below its standing height (~1.7 m) ...
+        // Crouching lowers the head well below standing height...
         float restTop = rest.Max(p => p.Y), posedTop = positions.Max(p => p.Y);
         Assert.InRange(restTop, 1.6f, 1.9f);
         Assert.True(posedTop < restTop - 0.3f, $"head top only dropped from {restTop} to {posedTop}");
-        // ... without deforming it: the head moves as a near-rigid whole, so its extent holds.
+        // ...and the head keeps its size.
         static float Extent(Vector3[] ps) => new Vector3(
             ps.Max(p => p.X) - ps.Min(p => p.X), ps.Max(p => p.Y) - ps.Min(p => p.Y),
             ps.Max(p => p.Z) - ps.Min(p => p.Z)).Length();
@@ -91,12 +91,11 @@ public class SceneTests
         for (float t = 0; t <= player.Length; t += player.Length / 8)
         {
             player.Evaluate(t, positions, normals);
-            // The rigid sheath keeps its shape: distances between its vertices hold.
+            // The rigid sheath keeps its shape.
             for (int i = 1; i < positions.Length; i += 37)
                 Assert.InRange((positions[i] - positions[0]).Length() - (rest[i] - rest[0]).Length(), -0.01f, 0.01f);
 
-            // Bones stay connected (within 2 cm of their rest distance to the parent),
-            // apart from the root's direct children, which the clip may translate.
+            // Bones stay connected, except the root's children, which the clip may move.
             var world = player.Pose(t);
             for (int b = 1; b < skeleton.Bones.Count; b++)
             {
@@ -127,7 +126,7 @@ public class SceneTests
         using var catalog = await Catalog.GameCatalog.OpenAsync(install,
             path => Archives.Ttarch2Archive.Open(path, install.Game.GameNum, install.RootFolder));
 
-        // Season 2 Clementine's lashes are cards textured with an A8 (alpha-only) mask.
+        // Season 2 Clementine's lashes use an alpha-only mask.
         var model = new ModelAssembler(new CatalogResolver(catalog))
             .Build(new[] { "sk56_clementine200_headHat.d3dmesh" }, "sk56_clementine200.skl");
         int lashBatch = model.Details.Where(d => d.StartsWith("  batch")).ToList()
@@ -179,8 +178,7 @@ public class SceneTests
         var normals = new Vector3[positions.Length];
         player.Evaluate(player.Length / 2, positions, normals);
 
-        // Hands on hips moves the arms well away from the bind pose, but the model
-        // keeps roughly its size (no exploded vertices).
+        // Hands on hips moves the arms but the model keeps its size.
         float size = (model.Geometry.BoundsMax - model.Geometry.BoundsMin).Length();
         int moved = 0;
         for (int i = 0; i < positions.Length; i++)
@@ -207,7 +205,7 @@ public class SceneTests
         var normals = new Vector3[positions.Length];
         player.Evaluate(1f, positions, normals);
 
-        // Standing she is ~1.6 m tall; lying, the whole mesh stays below 0.5 m yet keeps her length.
+        // Lying down, the mesh stays low but keeps her length.
         Assert.All(positions, p => Assert.True(float.IsFinite(p.X + p.Y + p.Z)));
         Assert.True(positions.Max(p => p.Y) < 0.5f, $"top of mesh at {positions.Max(p => p.Y)}");
         float extent = new Vector3(positions.Max(p => p.X) - positions.Min(p => p.X),
@@ -215,7 +213,7 @@ public class SceneTests
             positions.Max(p => p.Z) - positions.Min(p => p.Z)).Length();
         Assert.InRange(extent, 1.4f, 2.2f);
 
-        // Bones stay connected: every bone keeps (within 2 cm) its rest distance to its parent.
+        // Bones stay connected.
         var world = player.Pose(1f);
         for (int i = 1; i < skeleton.Bones.Count; i++)
         {

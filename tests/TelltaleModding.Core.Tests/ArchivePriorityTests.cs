@@ -7,7 +7,7 @@ namespace TelltaleModding.Core.Tests;
 /// <summary>Resource-set descriptions and the archive override rule built on them.</summary>
 public class ArchivePriorityTests
 {
-    // An archive path in this OS's form (the tests compare file names).
+    // An archive path in this OS's form.
     private static string Archive(string name) => Path.Combine(Path.GetTempPath(), "g", name);
 
     private static ResourceSetDescription Set(string name, int priority, string mode = "bootable",
@@ -35,7 +35,7 @@ public class ArchivePriorityTests
     [SkippableFact]
     public void ParsesCompiledLua51Description_SeasonTwo()
     {
-        // Telltale's Lua 5.1 renumbers opcodes; the reader finds SETTABLE by its "name" store.
+        // Telltale's Lua 5.1 uses its own opcode numbers.
         var set = ResourceSetDescription.Parse(File.ReadAllBytes(SampleData.Sample("resdesc_wd2_Menu.luac")), "x.lua");
 
         Assert.NotNull(set);
@@ -101,7 +101,7 @@ public class ArchivePriorityTests
         Assert.Equal(101, resolved["WDC_pc_WalkingDead401_txmesh.ttarch2"].Priority);
         Assert.Equal(400, resolved["WDC_pc_PC_P01_WalkingDead401_compressed.ttarch2"].Priority);
         Assert.False(resolved["WDC_pc_FrenchProjectSeason1_compressed.ttarch2"].Enabled);
-        // Mounted into a French set, so disabled even though its own mode is "constant".
+        // Disabled because it mounts into a French set.
         Assert.False(resolved["WD4_Fr_FrenchAudio401_uncompressed.ttarch2"].Enabled);
         Assert.True(resolved["WDC_pc_PC_P01_WalkingDead401_compressed.ttarch2"].Enabled);
         Assert.False(resolved["WDC_pc_Mystery_data.ttarch2"].FromDescription);

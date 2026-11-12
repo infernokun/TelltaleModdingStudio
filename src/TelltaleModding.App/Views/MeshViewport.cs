@@ -11,16 +11,10 @@ using TelltaleModding.Core.Textures;
 
 namespace TelltaleModding.App.Views;
 
-/// <summary>
-/// Orbit-camera 3D preview of a decoded mesh. Left-drag rotates, right- or
-/// middle-drag pans, wheel zooms, double-click resets the view. Shades in linear light
-/// under a <see cref="LightRig"/> with specular highlights and tone-mapped output
-/// (<see cref="RenderMode.Studio"/>), or in the game's stylised look (ink outlines,
-/// banded light, ink shadows) per <see cref="Style"/> (<see cref="RenderMode.GameLook"/>).
-/// </summary>
+/// <summary>Orbit-camera 3D preview of a decoded mesh, in studio lighting or the game's own look.</summary>
 public class MeshViewport : OpenGlControlBase
 {
-    // GL constants (the subset we use).
+    // GL constants we use.
     private const int GL_ARRAY_BUFFER = 0x8892, GL_ELEMENT_ARRAY_BUFFER = 0x8893,
         GL_STATIC_DRAW = 0x88E4, GL_FLOAT = 0x1406, GL_TRIANGLES = 0x0004,
         GL_UNSIGNED_INT = 0x1405, GL_DEPTH_TEST = 0x0B71, GL_TEXTURE_2D = 0x0DE1,
@@ -39,12 +33,12 @@ public class MeshViewport : OpenGlControlBase
 
 
     private const int VertexFloats = 16; // pos3 + normal3 + uv2 + tangent4 + lightmap uv2 + ink uv2
-    private const int SkinFloats = 8;    // bone indices 4 + weights 4 (a second buffer)
+    private const int SkinFloats = 8;    // bone indices 4 + weights 4, in a second buffer
     private const int GL_RGBA32F = 0x8814, BoneTextureUnit = 5, EmissiveTextureUnit = 6,
         GL_DYNAMIC_DRAW = 0x88E8, GL_LINES = 0x0001, GL_POINTS = 0x0000, GL_PROGRAM_POINT_SIZE = 0x8642;
     private const int MaxLights = 8;
 
-    // Theme surface color, the background behind the model.
+    // Background behind the model.
     private Vector3 _background = new(0.082f, 0.094f, 0.118f);
 
     private float[]? _pendingVertices;
@@ -70,14 +64,13 @@ public class MeshViewport : OpenGlControlBase
     private PostProgram? _post;
     private int _vao, _vbo, _ebo, _postVao, _skinVbo, _boneTex;
 
-    // Skinning: per-vertex bones and weights (uploaded once per model) and the per-frame
-    // skinning matrices (a float texture, one row of four texels per bone).
+    // Skinning: per-vertex bones and weights, plus per-frame bone matrices in a float texture.
     private float[]? _pendingSkin;
     private bool _skinDirty;
     private float[]? _boneData;
     private int _boneCount;
     private bool _bonesDirty;
-    private bool _gpuSkinning = true;   // false when float textures are unavailable: skin on the CPU
+    private bool _gpuSkinning = true;   // false skins on the CPU when float textures aren't available
     private int[]? _cpuBones;
     private System.Numerics.Vector4[]? _cpuWeights;
     private System.Numerics.Vector3[]? _restPositions, _restNormals;
@@ -89,7 +82,7 @@ public class MeshViewport : OpenGlControlBase
     private bool _glReady;
     private float _maxAnisotropy;
 
-    // Offscreen targets: color, view-space normal and depth, read back by the post pass.
+    // Offscreen targets read by the post pass.
     private int _fbo, _colorTex, _normalTex, _lineTex, _depthTex, _targetWidth, _targetHeight;
     private bool _targetsFailed;
 
@@ -105,10 +98,10 @@ public class MeshViewport : OpenGlControlBase
     /// <summary>Scroll dolly speed multiplier.</summary>
     public float DollySpeed { get; set; } = 1f;
 
-    /// <summary>Vertical mouse movement orbits and looks the other way.</summary>
+    /// <summary>Invert vertical mouse look.</summary>
     public bool InvertLook { get; set; }
 
-    /// <summary>Fly speed in model sizes per second (the wheel adjusts it while flying).</summary>
+    /// <summary>Fly speed. The wheel changes it while flying.</summary>
     public float FlySpeed
     {
         get => _flySpeed;
@@ -135,14 +128,14 @@ public class MeshViewport : OpenGlControlBase
     private Point _lastPointer;
     private bool _rotating, _panning, _flying;
 
-    // Skeleton overlay: bind-pose joint positions and parents, posed by the skin matrices.
+    // Skeleton overlay, posed by the skin matrices.
     private Vector3[]? _skeletonBind;
     private int[]? _skeletonParents;
     private Matrix4x4[]? _lastSkin;
     private bool _showSkeleton;
     private int _lineProgram, _lineMvp, _lineColor, _linePointSize, _lineVao, _lineVbo;
 
-    // Fly mode (right mouse held): mouse-look from the camera, WASD/QE to move.
+    // Fly mode while the right mouse button is held.
     private readonly HashSet<Key> _flyKeys = new();
     private DateTime _lastFlyTick;
     private float _flySpeed = 1f;   // model radii per second
@@ -151,7 +144,7 @@ public class MeshViewport : OpenGlControlBase
     private GameLookStyle _style = GameLookStyle.Default;
     private LightRig _rig = LightRig.Studio;
 
-    /// <summary>Studio (neutral lighting) or the game's stylised look.</summary>
+    /// <summary>Studio lighting or the game's look.</summary>
     public RenderMode RenderMode
     {
         get => _renderMode;
@@ -162,7 +155,7 @@ public class MeshViewport : OpenGlControlBase
         }
     }
 
-    /// <summary>The game's stylised look, used in <see cref="RenderMode.GameLook"/> and (with full graphic black) <see cref="RenderMode.GraphicBlack"/>.</summary>
+    /// <summary>The game's look, used in the Game and Graphic black modes.</summary>
     public GameLookStyle Style
     {
         get => _style;
@@ -174,10 +167,7 @@ public class MeshViewport : OpenGlControlBase
         }
     }
 
-    /// <summary>
-    /// How far graphic black reaches in <see cref="RenderMode.GraphicBlack"/>, scaling its
-    /// threshold: 0 turns it off, 1 is full graphic black, 2 twice as far.
-    /// </summary>
+    /// <summary>Graphic black strength in <see cref="RenderMode.GraphicBlack"/>, from 0 (off) to 2.</summary>
     public float GraphicBlackIntensity
     {
         get => _graphicBlackIntensity;
@@ -188,10 +178,7 @@ public class MeshViewport : OpenGlControlBase
         }
     }
 
-    /// <summary>
-    /// How far the game's own graphic black reaches in <see cref="RenderMode.GameLook"/>, scaling
-    /// its threshold: 0 turns it off, 1 is the game's default, 2 twice as far.
-    /// </summary>
+    /// <summary>The game's own graphic black strength in <see cref="RenderMode.GameLook"/>, from 0 (off) to 2.</summary>
     public float EngineDefaultIntensity
     {
         get => _engineDefaultIntensity;
@@ -214,7 +201,7 @@ public class MeshViewport : OpenGlControlBase
         _ => StudioStyle,
     };
 
-    /// <summary>The lights the model is shown under; null restores the default studio rig.</summary>
+    /// <summary>Sets the light rig. Null uses the studio rig.</summary>
     public void SetLighting(LightRig? rig)
     {
         _rig = rig ?? LightRig.Studio;
@@ -225,9 +212,7 @@ public class MeshViewport : OpenGlControlBase
     public LightRig Lighting => _rig;
 
     /// <summary>
-    /// Prepares skinning for the loaded mesh: each vertex's four skeleton bone indices
-    /// (-1 = none, see <see cref="MeshSkinner.ResolveVertexBones"/>) and blend weights.
-    /// Frames then come from <see cref="UpdateSkinMatrices"/>. Loading a new mesh clears it.
+    /// Sets each vertex's four bone indices and weights for skinning. Loading a new mesh clears it.
     /// </summary>
     public void SetSkinning(IReadOnlyList<int>? vertexBones, IReadOnlyList<System.Numerics.Vector4>? weights)
     {
@@ -254,11 +239,7 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    /// <summary>
-    /// Poses the skinned mesh with per-bone skinning matrices (inverse bind × posed world,
-    /// see <see cref="MeshSkinner.SkinMatrices"/>); null returns it to its rest pose. The
-    /// blend runs in the vertex shader, so only the matrices cross to the GPU each frame.
-    /// </summary>
+    /// <summary>Poses the skinned mesh with per-bone skinning matrices. Null means rest pose.</summary>
     public void UpdateSkinMatrices(System.Numerics.Matrix4x4[]? skin)
     {
         _lastSkin = skin;
@@ -295,10 +276,7 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    /// <summary>
-    /// The skeleton to overlay: each bone's bind-pose world position and parent index (-1 =
-    /// root). Its joints follow the same skinning matrices as the mesh. Null removes it.
-    /// </summary>
+    /// <summary>Sets the skeleton overlay from bind-pose positions and parent indices. Null removes it.</summary>
     public void SetSkeleton(IReadOnlyList<Vector3>? bindPositions, IReadOnlyList<int>? parents)
     {
         _skeletonBind = bindPositions?.ToArray();
@@ -307,7 +285,7 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    /// <summary>Draws the skeleton through the model (lines between joints, dots at joints).</summary>
+    /// <summary>Draws the skeleton over the model.</summary>
     public bool ShowSkeleton
     {
         get => _showSkeleton;
@@ -318,7 +296,7 @@ public class MeshViewport : OpenGlControlBase
         }
     }
 
-    /// <summary>True while the rest pose is being deformed by skinning matrices on the GPU.</summary>
+    /// <summary>True while the GPU is skinning the mesh.</summary>
     private bool SkinActive => _gpuSkinning && _pendingSkin is not null && _boneData is not null && _boneTex != 0;
 
     private void ResetSkinning()
@@ -330,7 +308,7 @@ public class MeshViewport : OpenGlControlBase
         _skinDirty = true;
     }
 
-    // Fallback when the GPU path is unavailable: the same blend as the shader, on the CPU.
+    // CPU fallback, same blend as the shader.
     private void SkinOnCpu(System.Numerics.Matrix4x4[] skin)
     {
         if (_cpuBones is not { } bones || _cpuWeights is not { } weights || _restPositions is not { } rest || _restNormals is not { } restN)
@@ -363,10 +341,7 @@ public class MeshViewport : OpenGlControlBase
         UpdateDeformedVertices(positions, normals);
     }
 
-    /// <summary>
-    /// Replaces vertex positions/normals in place (animation playback). UVs and
-    /// tangents keep their loaded values; the whole buffer re-uploads next frame.
-    /// </summary>
+    /// <summary>Replaces vertex positions and normals in place.</summary>
     public void UpdateDeformedVertices(System.Numerics.Vector3[] positions, System.Numerics.Vector3[] normals)
     {
         var v = _pendingVertices;
@@ -382,10 +357,7 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    /// <summary>
-    /// Loads an assembled model with everything its materials provide: color, normal,
-    /// specular and ink textures and shading values. See <see cref="SetMesh"/>.
-    /// </summary>
+    /// <summary>Loads an assembled model with all its material textures and settings.</summary>
     public void SetModel(AssembledModel model, bool keepCamera = false)
     {
         SetMesh(model.Geometry, model.BatchTextures, model.BatchNormalMaps, keepCamera);
@@ -405,12 +377,8 @@ public class MeshViewport : OpenGlControlBase
     }
 
     /// <summary>
-    /// Adds baked lightmaps to the current mesh: <paramref name="uv2"/> holds one lightmap UV
-    /// per vertex and <paramref name="batchLightmaps"/> one atlas per batch (null where a batch
-    /// has none). A lightmapped batch is lit by <c>sample × scale × intensity</c> plus the
-    /// rig's lights that <see cref="LightSource.AffectsLightmapped"/>, without ambient.
-    /// Lightmaps apply under a scene's rig, not the camera-following studio rig. Null
-    /// arguments clear them; <see cref="SetMesh"/> clears them too.
+    /// Adds baked lightmaps to the current mesh, one UV per vertex and one atlas per batch.
+    /// Null clears them.
     /// </summary>
     public void SetLightmaps(IReadOnlyList<Vector2>? uv2, IReadOnlyList<DdsImage?>? batchLightmaps, float scale, float intensity)
     {
@@ -432,10 +400,8 @@ public class MeshViewport : OpenGlControlBase
     }
 
     /// <summary>
-    /// Loads a decoded mesh into the viewport. The per-batch lists hold one entry
-    /// per batch of the geometry (null where nothing matched). With
-    /// <paramref name="keepCamera"/> the view stays where the user left it (e.g. when
-    /// an outfit part is toggled); otherwise it frames the new mesh.
+    /// Loads a decoded mesh. With <paramref name="keepCamera"/> the view stays put,
+    /// otherwise it frames the new mesh.
     /// </summary>
     public void SetMesh(MeshGeometry geometry, IReadOnlyList<DdsImage?> batchTextures,
         IReadOnlyList<DdsImage?>? batchNormalMaps = null, bool keepCamera = false)
@@ -488,7 +454,7 @@ public class MeshViewport : OpenGlControlBase
         float radius = Math.Max(0.01f, (geometry.BoundsMax - geometry.BoundsMin).Length() / 2f);
         if (keepCamera)
         {
-            // Keep the same eye distance even though the bounds (and so the radius) changed.
+            // Keep the same eye distance even though the radius changed.
             _zoom = Math.Clamp(_zoom * _radius / radius, MinZoom, 20f);
             _radius = radius;
         }
@@ -504,19 +470,13 @@ public class MeshViewport : OpenGlControlBase
     private Vector3 _boundsMin, _boundsMax;
     private bool[]? _batchVisible;
 
-    /// <summary>
-    /// Closest the camera may come, as a fraction of the model's bounding radius (default 0.08).
-    /// Lower it for large models, such as whole scenes, that are explored from inside.
-    /// </summary>
+    /// <summary>Closest the camera can get, as a fraction of the model's radius. Lower it for whole scenes.</summary>
     public float MinZoom { get; set; } = 0.08f;
 
-    /// <summary>Near clip distance as a fraction of the bounding radius (default 0.01).</summary>
+    /// <summary>Near clip distance as a fraction of the model's radius.</summary>
     public float NearPlaneFactor { get; set; } = 0.01f;
 
-    /// <summary>
-    /// Shows or hides individual batches of the current mesh without re-uploading it (null
-    /// shows all). Entries past the list's end are shown. <see cref="SetMesh"/> resets it.
-    /// </summary>
+    /// <summary>Shows or hides batches of the current mesh without re-uploading it. Null shows all.</summary>
     public void SetBatchVisibility(IReadOnlyList<bool>? visible)
     {
         _batchVisible = visible?.ToArray();
@@ -531,17 +491,12 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    /// <summary>
-    /// Looks straight at the top of the model (a standing character's face) from the
-    /// front, close enough to inspect eyes and lashes. Zoom is relative to the whole
-    /// model, so the close-up is expressed as a small zoom factor.
-    /// </summary>
+    /// <summary>Close-up of a standing character's face, from the front.</summary>
     public void FocusFace() => FocusFace(1f);
 
     /// <summary>
-    /// Frames a face whose top of head is at <paramref name="headTop"/> on a body
-    /// <paramref name="height"/> tall (a posed character may stand away from its rest-pose
-    /// bounds); <paramref name="distance"/> as in <see cref="FocusFace(float)"/>.
+    /// Frames a face given the top of the head and the body's <paramref name="height"/>.
+    /// <paramref name="distance"/> works like in <see cref="FocusFace(float)"/>.
     /// </summary>
     public void FocusFaceAt(Vector3 headTop, float height, float distance)
     {
@@ -551,8 +506,7 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    /// <param name="distance">How far out to stand: 1 is an eyes-and-lashes close-up; larger values
-    /// back off toward head and shoulders, aiming a little lower.</param>
+    /// <param name="distance">1 is a tight close-up, larger values back off toward head and shoulders.</param>
     public void FocusFace(float distance)
     {
         float height = _boundsMax.Y - _boundsMin.Y;
@@ -564,23 +518,18 @@ public class MeshViewport : OpenGlControlBase
     }
 
     /// <summary>
-    /// True while the camera follows shots handed to <see cref="FrameShot"/>. Orbiting keeps
-    /// following from the angle dragged to; panning, zooming or flying hands the camera to
-    /// the user and raises <see cref="FollowStopped"/>.
+    /// True while the camera follows shots from <see cref="FrameShot"/>. Panning, zooming or
+    /// flying turns it off.
     /// </summary>
     public bool Following { get; set; }
 
-    /// <summary>Raised when the user takes the camera over from <see cref="Following"/>.</summary>
+    /// <summary>Raised when the user takes over the camera.</summary>
     public event Action? FollowStopped;
 
-    // While following, how far the user has orbited from the shot's own angle.
+    // How far the user has orbited away from the shot while following.
     private float _followYaw;
 
-    /// <summary>
-    /// Points the camera at a shot (see <see cref="SpeakerShot"/>): looks at its target from its
-    /// yaw (plus any orbit the user added), close enough that its region fills the view with a
-    /// little room around it. Ignored unless <see cref="Following"/>.
-    /// </summary>
+    /// <summary>Points the camera at a shot. Ignored unless <see cref="Following"/>.</summary>
     public void FrameShot(SpeakerShot shot)
     {
         if (!Following)
@@ -588,7 +537,7 @@ public class MeshViewport : OpenGlControlBase
         FieldOfView = DefaultFieldOfView;
         float aspect = Bounds.Height > 0 ? (float)(Bounds.Width / Bounds.Height) : 1f;
         float tan = MathF.Tan(FieldOfView * MathF.PI / 360f);
-        // The height always fits; a narrow view may crop the sides of a wide gesture a little.
+        // Height always fits. A narrow view may crop the sides a bit.
         float distance = 1.15f * Math.Max(shot.Height / 2 / tan, 0.75f * shot.Width / 2 / (tan * Math.Max(0.2f, aspect)));
         _center = shot.Target;
         _yaw = shot.Yaw + _followYaw;
@@ -599,10 +548,8 @@ public class MeshViewport : OpenGlControlBase
     private const float DefaultFieldOfView = 45f;
 
     /// <summary>
-    /// Looks from a camera placed in the model's space (see <see cref="CameraView"/>), with its
-    /// field of view. A view narrower or wider than the game's 16:9 turns so that
-    /// <paramref name="subject"/> sits as far across it as it does across the game's frame.
-    /// Ignored unless <see cref="Following"/>.
+    /// Looks through a game camera, turned so <paramref name="subject"/> sits where it would
+    /// in the game's 16:9 frame. Ignored unless <see cref="Following"/>.
     /// </summary>
     public void ViewFrom(CameraView view, Vector3 subject)
     {
@@ -644,7 +591,7 @@ public class MeshViewport : OpenGlControlBase
         FollowStopped?.Invoke();
     }
 
-    /// <summary>Removes the mesh; the viewport shows its background only.</summary>
+    /// <summary>Removes the mesh.</summary>
     public void Clear()
     {
         _restPositions = null;
@@ -665,10 +612,7 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    /// <summary>
-    /// For each batch, true when its triangles wind clockwise around their vertex normals
-    /// (meshes differ), judged by a majority of sampled triangles.
-    /// </summary>
+    /// <summary>For each batch, true when most sampled triangles wind clockwise against their normals.</summary>
     private static bool[] ClockwiseBatches(MeshGeometry geometry)
     {
         var result = new bool[geometry.Batches.Count];
@@ -696,7 +640,7 @@ public class MeshViewport : OpenGlControlBase
         return result;
     }
 
-    /// <summary>True when any pixel is meaningfully transparent (not just BC noise).</summary>
+    /// <summary>True when more than a few pixels are transparent.</summary>
     private static bool HasMeaningfulAlpha(DdsImage image)
     {
         int transparent = 0;
@@ -726,7 +670,7 @@ public class MeshViewport : OpenGlControlBase
             throw new InvalidOperationException($"shader compile failed: {vsError ?? fsError}");
         gl.AttachShader(program, vs);
         gl.AttachShader(program, fs);
-        // Fixed attribute slots, so the scene and hull programs share one vertex array.
+        // Fixed attribute slots so the scene and hull programs can share one vertex array.
         string[] attributes = { "aPos", "aNormal", "aUv", "aTangent", "aUv2", "aUv3", "aBones", "aWeights" };
         for (int i = 0; i < attributes.Length; i++)
             gl.BindAttribLocationString(program, i, attributes[i]);
@@ -738,8 +682,7 @@ public class MeshViewport : OpenGlControlBase
         return program;
     }
 
-    // Avalonia drops an exception thrown here without logging it and leaves the view
-    // blank, so it goes to the crash log first.
+    // Avalonia swallows exceptions here, so log them first.
     protected override void OnOpenGlInit(GlInterface gl)
     {
         try
@@ -772,7 +715,7 @@ public class MeshViewport : OpenGlControlBase
         }
         catch (InvalidOperationException)
         {
-            _post = null; // no post pass: draw straight to the window, without outlines
+            _post = null; // no post pass, so no outlines
         }
 
         try
@@ -854,7 +797,7 @@ public class MeshViewport : OpenGlControlBase
         _targetWidth = _targetHeight = 0;
     }
 
-    /// <summary>(Re)creates the offscreen targets at the given size; false when unsupported.</summary>
+    /// <summary>Creates the offscreen targets at the given size. False when unsupported.</summary>
     private unsafe bool EnsureTargets(GlInterface gl, int width, int height)
     {
         if (_post is null || _x is null || _targetsFailed || width <= 0 || height <= 0)
@@ -931,7 +874,7 @@ public class MeshViewport : OpenGlControlBase
         gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (offscreen)
         {
-            // The normal target is "empty" (alpha 0) where nothing is drawn.
+            // Normal target alpha is 0 where nothing is drawn.
             float* empty = stackalloc float[] { 0.5f, 0.5f, 1f, 0f };
             _x.ClearBufferfv(GL_COLOR, 1, empty);
         }
@@ -951,7 +894,7 @@ public class MeshViewport : OpenGlControlBase
             DrawSkeleton(gl, camera, (float)scaling);
     }
 
-    // Bones as lines to their parents and dots at the joints, over everything.
+    // Bones as lines and joints as dots, drawn on top.
     private unsafe void DrawSkeleton(GlInterface gl, CameraState camera, float scaling)
     {
         if (_lineProgram == 0 || _skeletonBind is not { } bind || _skeletonParents is not { } parents)
@@ -983,7 +926,7 @@ public class MeshViewport : OpenGlControlBase
         gl.Enable(GL_BLEND);
         x.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         gl.Enable(GL_PROGRAM_POINT_SIZE);
-        while (gl.GetError() != 0) { }   // the point-size switch is desktop-only
+        while (gl.GetError() != 0) { }   // point size switch is desktop GL only
         var mvp = camera.View * camera.Projection;
         gl.UniformMatrix4fv(_lineMvp, 1, false, &mvp);
         gl.BindBuffer(GL_ARRAY_BUFFER, _lineVbo);
@@ -1067,7 +1010,7 @@ public class MeshViewport : OpenGlControlBase
         if (_skinDirty && _pendingVertices is not null)
         {
             _skinDirty = false;
-            // Always sized to the mesh (zeros when unskinned) so the attribute never reads past the buffer.
+            // Always sized to the mesh so the attribute never reads past the buffer.
             var skinData = _pendingSkin ?? new float[_pendingVertices.Length / VertexFloats * SkinFloats];
             gl.BindBuffer(GL_ARRAY_BUFFER, _skinVbo);
             fixed (float* p = skinData)
@@ -1094,7 +1037,7 @@ public class MeshViewport : OpenGlControlBase
             gl.ActiveTexture(GL_TEXTURE0);
             if (gl.GetError() != 0)
             {
-                // No float textures here: skin on the CPU from now on.
+                // No float textures, so skin on the CPU from now on.
                 _gpuSkinning = false;
                 gl.DeleteTexture(_boneTex);
                 _boneTex = 0;
@@ -1126,7 +1069,7 @@ public class MeshViewport : OpenGlControlBase
         _batchClockwise = _pendingClockwise is { } cw && cw.Length == _batches.Length ? cw : new bool[_batches.Length];
         _draws = new BatchDraw[_batches.Length];
 
-        // Upload each distinct image once; batches sharing an image share a slot.
+        // Upload each image once and share it between batches.
         var slotByImage = new Dictionary<DdsImage, int>();
         int SlotFor(DdsImage? image, bool lightmap = false)
         {
@@ -1140,7 +1083,7 @@ public class MeshViewport : OpenGlControlBase
                     gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.Width, image.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, new IntPtr(p));
                 if (lightmap)
                 {
-                    // Atlases pack many charts: no mips (they would bleed across charts).
+                    // No mips on lightmap atlases, they would bleed across charts.
                     gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                     gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                     gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1173,15 +1116,11 @@ public class MeshViewport : OpenGlControlBase
             int tex = SlotFor(At(_pendingBatchTextures, b));
             var layout = specular is null ? SpecularMapLayout.None : shading.SpecularLayout == SpecularMapLayout.None
                 ? SpecularMapLayout.Intensity : shading.SpecularLayout;
-            // A highlight only where the material asks for one (an intensity or a map): many
-            // materials inherit a specular power their shader never uses (Tales from the
-            // Borderlands' character shader has no specular term), and meshes without material
-            // data (The Wolf Among Us, Game of Thrones) read as glossy with any default sheen.
+            // Only add a highlight when the material asks for one, or everything looks glossy.
             float intensity = shading.SpecularIntensity ?? (specular is not null ? 1f : 0f);
-            // Translucent: the texture has real alpha, the material is see-through glass, or
-            // its blend mode says so (the opacity is already baked into the texture's alpha).
+            // Translucent when the texture has alpha, the material is glass, or the blend mode says so.
             var blend = _pendingBatchBlendModes is { } modes && b < modes.Count ? modes[b] : null;
-            // Batches drawn as one layer (hologram agents) are depth-sorted by a depth pass instead.
+            // One-layer batches use a depth pass instead.
             bool glass = shading.Opacity < 0.999f && !shading.DrawAsOneLayer;
             bool blended = blend is MaterialBlendMode.Alpha or MaterialBlendMode.AlphaAlphaTest or MaterialBlendMode.AlphaAdd;
             _draws[b] = new BatchDraw
@@ -1190,7 +1129,7 @@ public class MeshViewport : OpenGlControlBase
                 HasAlpha = tex >= 0 && (_textureHasAlpha[tex] || glass || blended),
                 Glass = glass && tex >= 0,
                 NormalMap = SlotFor(normal),
-                // BC3 normal maps keep X in blue and Y in alpha; BC5 in red and green.
+                // BC3 normal maps store X/Y in blue/alpha, BC5 in red/green.
                 NormalKind = normal is null ? -1 : normal.Format switch
                 {
                     DdsPixelFormat.Bc5 => 1,
@@ -1220,16 +1159,16 @@ public class MeshViewport : OpenGlControlBase
         public int Texture, NormalMap, Specular, Ink, Lightmap, Emissive;
         public bool HasAlpha, InkInAlpha;
 
-        /// <summary>Translucent but showing only its nearest surface: its depth is drawn before its color.</summary>
+        /// <summary>Translucent but only shows its nearest surface.</summary>
         public bool OneLayer;
 
-        /// <summary>See-through (opacity below 1): drawn last, back to front, without depth writes.</summary>
+        /// <summary>See-through. Drawn last, back to front, without depth writes.</summary>
         public bool Glass;
         public int NormalKind, SpecularLayout, InkKind;
         public Vector3 Tint, SpecularColor, EmissiveColor, SelfLit;
         public float SpecularPower;
 
-        /// <summary>The material's own outline color (Handsome Jack's hologram is cyan); null draws the look's.</summary>
+        /// <summary>The material's own outline color, or null to use the look's.</summary>
         public Vector3? Outline;
     }
 
@@ -1262,11 +1201,11 @@ public class MeshViewport : OpenGlControlBase
         x.Uniform1i(p.InkTex, 3);
         x.Uniform1i(p.Lightmap, 4);
         x.Uniform1i(p.Emissive, EmissiveTextureUnit);
-        // Baked lighting belongs to the scene's own lights, not the studio rig.
+        // Lightmaps only go with the scene's own lights.
         _lightmapsOn = !_rig.FollowCamera;
         gl.Uniform1f(p.LightmapScale, _lightmapScale);
 
-        // Lights, in world space; camera-following rigs are given in view space.
+        // Lights in world space. Camera-following rigs come in view space.
         var rig = _rig;
         int count = Math.Min(MaxLights, rig.Lights.Count);
         float* pos = stackalloc float[MaxLights * 4];
@@ -1295,7 +1234,7 @@ public class MeshViewport : OpenGlControlBase
             col[i * 4] = c.X; col[i * 4 + 1] = c.Y; col[i * 4 + 2] = c.Z; col[i * 4 + 3] = l.AffectsLightmapped ? 1f : 0f;
             float outer = l.OuterConeDegrees > 0 ? l.OuterConeDegrees : 45f;
             float inner = Math.Min(l.InnerConeDegrees > 0 ? l.InnerConeDegrees : outer * 0.8f, outer - 0.01f);
-            // Cone angles are full angles: the cosine of half of each.
+            // Cone angles are full angles, so use half.
             cone[i * 4] = MathF.Cos(inner * MathF.PI / 360f);
             cone[i * 4 + 1] = MathF.Cos(outer * MathF.PI / 360f);
             cone[i * 4 + 2] = Luma(c) / maxLuma;
@@ -1309,8 +1248,7 @@ public class MeshViewport : OpenGlControlBase
         x.Uniform3f(p.AmbientSky, rig.AmbientSky.X, rig.AmbientSky.Y, rig.AmbientSky.Z);
         x.Uniform3f(p.AmbientGround, rig.AmbientGround.X, rig.AmbientGround.Y, rig.AmbientGround.Z);
 
-        // The look: Studio is the neutral style; ink and line art show in both, as they are
-        // part of the materials.
+        // The look. Ink and line art show in every mode since they're part of the materials.
         bool game = _renderMode != RenderMode.Studio;
         var s = ActiveStyle;
         gl.Uniform1f(p.Exposure, rig.Exposure * s.Exposure);
@@ -1325,13 +1263,11 @@ public class MeshViewport : OpenGlControlBase
         x.Uniform4fv(p.BandLevels, 1, levels);
         x.Uniform1i(p.BandCount, bandCount);
         x.Uniform3f(p.BandShape, s.BandSoftness, s.BandSmoothness, Math.Clamp(s.NormalMapInfluence, 0f, 1f));
-        // The toon model lights characters with one key; a scene's own lights all count.
+        // Toon lighting uses one key light for characters. Scene lights all count.
         x.Uniform2f(p.LightModel, Math.Max(0f, s.Wrap), s.ToonKeyLightOnly && rig.FollowCamera ? 1f : 0f);
         x.Uniform3f(p.ShadowTint, s.ShadowTint.X, s.ShadowTint.Y, s.ShadowTint.Z);
         x.Uniform4f(p.Rim, s.RimStrength, s.RimThreshold, s.SpecularThreshold, s.SpecularStrength);
-        // A scene's rig is tested for graphic black as the game does (all light, ambient
-        // included, faded in with distance); the studio rig, whose ambient and wrapped fills
-        // stand in for missing shadows, by its key light alone.
+        // Scene rigs test graphic black against all light like the game. The studio rig uses its key light only.
         bool studio = rig.FollowCamera;
         float intensity = _renderMode == RenderMode.GraphicBlack ? _graphicBlackIntensity : _engineDefaultIntensity;
         float graphicBlack = intensity > 0f ? s.InkStrength : 0f;
@@ -1355,9 +1291,7 @@ public class MeshViewport : OpenGlControlBase
         }
         else
         {
-            // Opaque batches first, then alpha cut-outs (hair, lashes, irises) so they blend over
-            // what is behind them, then glass last: back to front without writing depth, so
-            // eyes and lashes behind a lens always show through it.
+            // Opaque first, then alpha cut-outs, then glass back to front without depth writes.
             bool Shown(int b) => !(_batchVisible is { } shown && b < shown.Length && !shown[b]);
             void DrawBatch(int b)
             {
@@ -1368,8 +1302,7 @@ public class MeshViewport : OpenGlControlBase
             for (int b = 0; b < _batches.Length; b++)
                 if (Shown(b) && !_draws[b].HasAlpha)
                     DrawBatch(b);
-            // Translucent batches drawn as one layer (the engine's "Render 3D Alpha", e.g. a
-            // hologram) lay down their depth first, so only their nearest surface blends in.
+            // One-layer batches write depth first so only their nearest surface blends in.
             var layered = Enumerable.Range(0, _batches.Length).Where(b => Shown(b) && _draws[b].HasAlpha && _draws[b].OneLayer).ToList();
             if (layered.Count > 0)
             {
@@ -1401,7 +1334,7 @@ public class MeshViewport : OpenGlControlBase
         gl.BindVertexArray(0);
     }
 
-    /// <summary>The neutral look of <see cref="RenderMode.Studio"/>: softly wrapped light, smooth highlights, no ink shadows.</summary>
+    /// <summary>The neutral look used in <see cref="RenderMode.Studio"/>.</summary>
     private static readonly GameLookStyle StudioStyle = new()
     {
         Name = "Studio",
@@ -1410,7 +1343,7 @@ public class MeshViewport : OpenGlControlBase
         SpecularStrength = 1f,
     };
 
-    /// <summary>The inverted-hull outline: opaque batches again, back faces only, pushed out along the normals.</summary>
+    /// <summary>Draws the inverted hull outline.</summary>
     private unsafe void DrawHull(GlInterface gl, CameraState camera)
     {
         var h = _hull!;
@@ -1432,7 +1365,7 @@ public class MeshViewport : OpenGlControlBase
         var current = color;
         for (int b = 0; b < _batches.Length; b++)
         {
-            // Cut-out cards (hair, lashes) would outline their quads.
+            // Skip cut-outs, they would outline their quads.
             if (_batchVisible is { } shown && b < shown.Length && !shown[b] || _draws[b].HasAlpha)
                 continue;
             var line = _draws[b].Outline ?? color;
@@ -1441,7 +1374,7 @@ public class MeshViewport : OpenGlControlBase
                 x.Uniform3f(h.Color, line.X, line.Y, line.Z);
                 current = line;
             }
-            // Keep the far side of the shell whichever way the batch is wound.
+            // Keep the far side of the shell for either winding.
             x.CullFace(_batchClockwise[b] ? GL_BACK : GL_FRONT);
             gl.DrawElements(GL_TRIANGLES, _batches[b].PrimitiveCount * 3, GL_UNSIGNED_INT,
                 new IntPtr(_batches[b].StartIndex * sizeof(int)));
@@ -1502,10 +1435,10 @@ public class MeshViewport : OpenGlControlBase
 
     private bool _lightmapsOn;
 
-    // The look's outline color, for batches whose material sets none.
+    // The look's outline color, for materials without one.
     private Vector3 _styleLine;
 
-    // A batch's rest-pose centre, for sorting glass back to front.
+    // A batch's rest-pose center, for sorting glass back to front.
     private Vector3 BatchCenter(int b) => b < _batchCenters.Length ? _batchCenters[b] : _center;
 
     private unsafe void DrawPost(GlInterface gl, CameraState camera, int width, int height, float scaling)
@@ -1599,7 +1532,7 @@ public class MeshViewport : OpenGlControlBase
         }
     }
 
-    /// <summary>GL entry points <see cref="GlInterface"/> does not wrap, fetched by name.</summary>
+    /// <summary>GL functions that <see cref="GlInterface"/> doesn't wrap.</summary>
     private sealed unsafe class GlExtras
     {
         public readonly delegate* unmanaged[Stdcall]<int, int, void> Uniform1i;
@@ -1656,7 +1589,7 @@ public class MeshViewport : OpenGlControlBase
             ClearBufferfv = (delegate* unmanaged[Stdcall]<int, int, float*, void>)Optional("glClearBufferfv");
         }
 
-        /// <summary>True when offscreen targets with several color attachments can be used.</summary>
+        /// <summary>True when offscreen targets with multiple color attachments work.</summary>
         public bool HasFramebuffers =>
             GenFramebuffers != null && DeleteFramebuffers != null && FramebufferTexture2D != null &&
             CheckFramebufferStatus != null && DrawBuffers != null && ClearBufferfv != null;
@@ -1664,8 +1597,8 @@ public class MeshViewport : OpenGlControlBase
 
     // ---- Orbit interaction ----------------------------------------------
 
-    // The GL control itself is not reliably hit-testable in Avalonia (no background
-    // brush), so the view hosts it in a transparent panel and forwards input here.
+    // The GL control isn't reliably hit-testable in Avalonia, so views wrap it in a
+    // transparent panel that forwards input here.
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -1704,7 +1637,7 @@ public class MeshViewport : OpenGlControlBase
             return;
         }
 
-        // Left orbits (Shift+left pans), middle pans, right flies, as in a level editor.
+        // Left orbits, Shift+left or middle pans, right flies.
         var props = e.GetCurrentPoint(this).Properties;
         bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
         _rotating = props.IsLeftButtonPressed && !shift;
@@ -1731,7 +1664,7 @@ public class MeshViewport : OpenGlControlBase
 
         if (_flying)
         {
-            // Look around from where the camera stands: the eye stays, the pivot moves.
+            // Look around in place: the eye stays, the pivot moves.
             var eye = EyePosition();
             _yaw -= dx * 0.005f * OrbitSpeed;
             _pitch = Math.Clamp(_pitch + dy * 0.005f * OrbitSpeed * (InvertLook ? -1f : 1f), -1.5f, 1.5f);
@@ -1747,8 +1680,7 @@ public class MeshViewport : OpenGlControlBase
         }
         else
         {
-            // Pan: shift the orbit center along the camera's right/up axes,
-            // scaled so a full drag across the view moves about one view-height.
+            // Pan along the camera's right and up axes.
             float panScale = _radius * _zoom * 0.0016f;
             var forward = new Vector3(
                 -MathF.Cos(_pitch) * MathF.Sin(_yaw),
@@ -1776,16 +1708,14 @@ public class MeshViewport : OpenGlControlBase
         e.Handled = true;
         if (_flying)
         {
-            // While flying the wheel sets the speed.
+            // While flying, the wheel sets the speed.
             _flySpeed = Math.Clamp(_flySpeed * (e.Delta.Y > 0 ? 1.25f : 0.8f), 0.05f, 40f);
             return;
         }
 
         StopFollowing();
 
-        // Dolly by a steady step (a share of the distance, never less than a fixed
-        // minimum) so zooming never crawls to a halt; at the pivot, keep going by
-        // carrying the pivot forward.
+        // Dolly with a minimum step so zoom never stalls. Push the pivot forward when we reach it.
         float distance = _radius * _zoom;
         float step = Math.Max(distance * 0.18f, _radius * 0.05f) * DollySpeed;
         if (e.Delta.Y > 0)
@@ -1806,10 +1736,7 @@ public class MeshViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    /// <summary>
-    /// F frames the model; W/A/S/D move and Q/E lower/raise the camera while the viewport has
-    /// focus (click it first), holding the right button to look around as you go.
-    /// </summary>
+    /// <summary>F frames the model. WASD moves and Q/E lowers or raises the camera.</summary>
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
@@ -1848,8 +1775,7 @@ public class MeshViewport : OpenGlControlBase
 
     private void StopFlying() => _flying = false;
 
-    // Moves the camera for the fly keys held since the last frame; runs each frame and keeps
-    // frames coming while a key is down.
+    // Moves the camera for held fly keys. Keeps requesting frames while a key is down.
     private void AdvanceFlight()
     {
         var now = DateTime.UtcNow;

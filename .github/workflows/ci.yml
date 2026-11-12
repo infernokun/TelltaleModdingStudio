@@ -17,7 +17,7 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Build native engine (enables end-to-end integration tests) and Oodle loader
+      - name: Build native engine and Oodle loader
         run: |
           sudo apt-get update
           sudo apt-get install -y zlib1g-dev
@@ -47,7 +47,7 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      # A tag like v1.2.0 sets the version; manual runs keep the project's own.
+      # A tag like v1.2.0 sets the version.
       - name: Version
         shell: pwsh
         run: |
@@ -73,7 +73,7 @@ jobs:
           Compress-Archive -Path publish/TelltaleModdingStudio -DestinationPath $name
           "ZIP=$name" >> $env:GITHUB_ENV
 
-      # SHA-256 of the zip and of the exe inside it, in the usual "hash  name" form.
+      # SHA-256 of the zip and the exe inside it.
       - name: Checksums
         shell: pwsh
         run: |
@@ -82,8 +82,7 @@ jobs:
           [IO.File]::WriteAllText('SHA256SUMS-win-x64.txt', ($lines -join "`n") + "`n")
           Get-Content SHA256SUMS-win-x64.txt
 
-      # Signed record that these files were built by this workflow from this commit
-      # (check with: gh attestation verify <file> --repo <owner>/<repo>).
+      # Signed build record. Check it with: gh attestation verify <file> --repo <owner>/<repo>
       - uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
@@ -116,8 +115,7 @@ jobs:
         run: |
           if [ "$GITHUB_REF_TYPE" = tag ]; then echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"; else echo "VERSION=" >> "$GITHUB_ENV"; fi
 
-      # The native ttarchext (classic archives, patch building) and the Oodle loader,
-      # which lets the app use a game's own oo2core DLL on Linux.
+      # The Oodle loader lets the app use a game's own oo2core DLL on Linux.
       - name: Build native engine and Oodle loader
         run: |
           sudo apt-get update
@@ -163,8 +161,7 @@ jobs:
             ${{ env.TARBALL }}
             SHA256SUMS-linux-x64.txt
 
-  # On a tag, attach both builds and one SHA256SUMS.txt to that tag's release
-  # (created with generated notes if missing).
+  # On a tag, attach both builds and SHA256SUMS.txt to the tag's release.
   release:
     runs-on: ubuntu-latest
     needs: [publish-windows, publish-linux]

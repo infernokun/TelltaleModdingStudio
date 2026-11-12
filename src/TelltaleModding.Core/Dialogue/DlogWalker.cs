@@ -3,13 +3,13 @@ namespace TelltaleModding.Core.Dialogue;
 /// <summary>What <see cref="DlogWalker.Next"/> stopped at.</summary>
 public enum DlogStepKind
 {
-    /// <summary>A line is said (<see cref="DlogStep.LineId"/>).</summary>
+    /// <summary>A line is said.</summary>
     Line,
 
-    /// <summary>The walk needs a pick from <see cref="DlogStep.Options"/> (<see cref="DlogWalker.Choose"/>).</summary>
+    /// <summary>The walk needs a pick from <see cref="DlogStep.Options"/>.</summary>
     Decision,
 
-    /// <summary>The conversation is over (<see cref="DlogStep.End"/> says why).</summary>
+    /// <summary>The conversation is over.</summary>
     End,
 }
 
@@ -24,23 +24,23 @@ public enum DlogEndReason
     /// <summary>The conversation's chain ran out.</summary>
     Finished,
 
-    /// <summary>A jump continues in another <c>.dlog</c> (<see cref="DlogStep.OtherDialog"/>).</summary>
+    /// <summary>A jump continues in another <c>.dlog</c>.</summary>
     OtherDialog,
 
     /// <summary>A jump whose target is not in this dialog.</summary>
     UnresolvedJump,
 
-    /// <summary>Too many steps without saying anything; the graph loops on game state.</summary>
+    /// <summary>Too many steps without a line, likely a loop on game state.</summary>
     Loop,
 }
 
 /// <summary>What a decision is about.</summary>
 public enum DlogDecisionKind
 {
-    /// <summary>A choice menu: the player picks.</summary>
+    /// <summary>A choice menu, where the player picks.</summary>
     Choice,
 
-    /// <summary>A conditional: the game picks from its state; a walker lets the user pick.</summary>
+    /// <summary>A conditional. The game picks from its state, here the user does.</summary>
     Condition,
 
     /// <summary>A sequence plays one element per visit.</summary>
@@ -48,9 +48,9 @@ public enum DlogDecisionKind
 }
 
 /// <summary>One pickable option of a decision.</summary>
-/// <param name="Branch">The branch followed: a choice option, a case, a sequence element.</param>
-/// <param name="Case">For a choice whose branch opens with a conditional, the case taken inside it.</param>
-/// <param name="TextId">The option's text line id, when it has one.</param>
+/// <param name="Branch">The branch followed.</param>
+/// <param name="Case">The case taken when a choice's branch opens with a conditional.</param>
+/// <param name="TextId">The option's text line id, if any.</param>
 public sealed record DlogOption(DlogChild Branch, DlogChild? Case, uint? TextId)
 {
     /// <summary>True for a choice taken when the timer runs out.</summary>
@@ -66,10 +66,8 @@ public sealed record DlogStep(DlogStepKind Kind, DlogNode? Node, uint LineId, Dl
 }
 
 /// <summary>
-/// Walks a conversation the way the game plays it: lines in order, choice menus and
-/// conditionals as decisions, jumps followed, and branches returning to their owner
-/// (a choice option continues with the menu's post-choice branch, then after the menu).
-/// Game state is not evaluated: conditionals and sequences are offered as decisions.
+/// Walks a conversation the way the game plays it. Game state isn't evaluated, so
+/// conditionals and sequences are offered as decisions too.
 /// </summary>
 public sealed class DlogWalker
 {
@@ -90,7 +88,7 @@ public sealed class DlogWalker
     /// <summary>The options of the pending decision, if any.</summary>
     public IReadOnlyList<DlogOption> PendingOptions => _options;
 
-    /// <summary>Starts at a conversation's (or any branch's) first node.</summary>
+    /// <summary>Starts at a branch's first node.</summary>
     public void Start(DlogChild conversation)
     {
         Reset();
@@ -156,7 +154,7 @@ public sealed class DlogWalker
         }
     }
 
-    // Does one node; returns a step when the walk must stop there.
+    // Runs one node. Returns a step if the walk stops there.
     private DlogStep? Execute(DlogNode node)
     {
         switch (node.Kind)
@@ -214,7 +212,7 @@ public sealed class DlogWalker
 
             case DlogNodeKind.Parallel:
             {
-                // Elements play together; walk them one after another.
+                // Elements play together, but we walk them one by one.
                 _frames.Push(Frame.After(node));
                 for (int i = node.Children.Count - 1; i >= 1; i--)
                     _frames.Push(Frame.Enter(node.Children[i]));
@@ -273,7 +271,7 @@ public sealed class DlogWalker
         return new DlogStep(DlogStepKind.Decision, node, 0, kind, options, DlogEndReason.None, 0);
     }
 
-    /// <summary>A menu's options; a textless choice that opens with a conditional offers its cases.</summary>
+    /// <summary>A menu's options. A choice with no text that opens with a conditional offers its cases.</summary>
     public List<DlogOption> ChoiceOptions(DlogNode menu)
     {
         var options = new List<DlogOption>();
@@ -317,7 +315,7 @@ public sealed class DlogWalker
         _current = target;
     }
 
-    // A branch ran out: continue where its owner says.
+    // A branch ran out, so continue where its owner says.
     private bool Pop()
     {
         while (_frames.Count > 0)
@@ -326,7 +324,7 @@ public sealed class DlogWalker
             switch (frame.Kind)
             {
                 case FrameKind.ShowMenu:
-                    // Execute sees the frame on top and shows the menu instead of its pre-choice branch.
+                    // Leave the frame so Execute shows the menu instead of rerunning pre-choice.
                     _frames.Push(frame);
                     _current = frame.Node;
                     return true;

@@ -1,9 +1,6 @@
 namespace TelltaleModding.Core.Audio;
 
-/// <summary>
-/// Finds MPEG audio frames in a sound bank's sample data and joins them into a
-/// plain .mp3 stream, dropping the alignment padding the banks put between frames.
-/// </summary>
+/// <summary>Pulls MPEG frames out of bank data into a plain .mp3, skipping the padding between them.</summary>
 internal static class MpegFrames
 {
     private static readonly int[,] BitratesV1 =
@@ -24,11 +21,11 @@ internal static class MpegFrames
 
     internal readonly record struct FrameHeader(int Version, int Layer, int SampleRate, int Channels, int Length, int SamplesPerFrame)
     {
-        /// <summary>Bits that must stay constant across a stream: version, layer, rate.</summary>
+        /// <summary>Version, layer and rate, which stay the same across a stream.</summary>
         public int Signature => Version * 1000000 + Layer * 100000 + SampleRate;
     }
 
-    /// <summary>Parses the 4-byte frame header at <paramref name="p"/>; Version is 1, 2 or 25 (for 2.5).</summary>
+    /// <summary>Parses a frame header. Version is 1, 2 or 25 for 2.5.</summary>
     internal static bool TryParseHeader(ReadOnlySpan<byte> p, out FrameHeader header)
     {
         header = default;
@@ -55,10 +52,7 @@ internal static class MpegFrames
         return length > 4;
     }
 
-    /// <summary>
-    /// Copies every frame found in <paramref name="data"/> into a contiguous stream.
-    /// Bytes between frames that are not a frame start (padding) are skipped.
-    /// </summary>
+    /// <summary>Copies every frame in <paramref name="data"/> into one stream, skipping padding.</summary>
     internal static byte[] Extract(ReadOnlySpan<byte> data, out FrameHeader first, out int frameCount)
     {
         using var ms = new MemoryStream(data.Length);

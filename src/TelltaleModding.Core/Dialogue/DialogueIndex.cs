@@ -11,10 +11,7 @@ public sealed record DialogueEntry(DialogueLine Line, string Scene, string Episo
     public bool HasAudio => Audio is not null;
 }
 
-/// <summary>
-/// Every line of one language across a game's <c>.landb</c> files, matched to the
-/// <c>&lt;id&gt;.wav</c> voice files the game plays for them.
-/// </summary>
+/// <summary>Every line of one language across a game's <c>.landb</c> files, matched to their voice files.</summary>
 public sealed partial class DialogueIndex
 {
     public string Language { get; }
@@ -24,10 +21,10 @@ public sealed partial class DialogueIndex
 
     public IReadOnlyList<DialogueEntry> Lines { get; }
 
-    /// <summary>Speakers by line count, most talkative first.</summary>
+    /// <summary>Speakers by line count, most lines first.</summary>
     public IReadOnlyList<(string Speaker, int Lines)> Speakers { get; }
 
-    /// <summary><c>.landb</c> files that could not be read.</summary>
+    /// <summary>Number of <c>.landb</c> files that couldn't be read.</summary>
     public int UnreadableFiles { get; }
 
     private DialogueIndex(string language, IReadOnlyList<string> languages, IReadOnlyList<DialogueEntry> lines, int unreadable)
@@ -53,9 +50,8 @@ public sealed partial class DialogueIndex
             .ToList();
 
     /// <summary>
-    /// Reads every <c>.landb</c> of <paramref name="language"/> (in parallel) and links
-    /// each line to its voice file. Duplicate ids (lines reused by several scenes) are
-    /// kept once. <paramref name="progress"/> reports files read out of the total.
+    /// Reads every <c>.landb</c> of <paramref name="language"/> and links each line to its
+    /// voice file. Lines reused by several scenes are kept once.
     /// </summary>
     public static DialogueIndex Build(GameCatalog catalog, string language = "english",
         IProgress<(int Done, int Total)>? progress = null, CancellationToken cancellationToken = default)
@@ -104,7 +100,7 @@ public sealed partial class DialogueIndex
     {
         foreach (var symbol in line.LinkedSymbols)
         {
-            // The symbol may name the borrowed line's lip-sync clip rather than its voice.
+            // The symbol may point at the borrowed line's lip-sync clip, not its voice.
             var linked = catalog.FindBySymbol(symbol);
             if (linked is null)
                 continue;
@@ -119,10 +115,7 @@ public sealed partial class DialogueIndex
 
     private static bool IsLandb(string name) => name.EndsWith(".landb", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// A short episode label from an archive name: <c>WDC_pc_WalkingDead304_data.ttarch2</c>
-    /// → <c>WalkingDead304</c>, <c>Borderlands_pc_Boot_data.ttarch2</c> → <c>Boot</c>.
-    /// </summary>
+    /// <summary>A short episode label from an archive name, like <c>WalkingDead304</c>.</summary>
     public static string EpisodeOf(string archivePath)
     {
         var stem = Path.GetFileNameWithoutExtension(archivePath);

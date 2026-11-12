@@ -59,7 +59,7 @@
                     <StackPanel Spacing="6" HorizontalAlignment="Center">
                         <TextBlock Classes="h2" Text="No games yet" HorizontalAlignment="Center" />
                         <TextBlock Classes="muted" TextAlignment="Center" MaxWidth="520" TextWrapping="Wrap"
-                                   Text="Add a game's install folder (e.g. The Walking Dead: The Telltale Definitive Series or Tales from the Borderlands), or pick one found on this PC below." />
+                                   Text="Add a game's install folder, or pick one found on this PC below." />
                     </StackPanel>
                 </Border>
                 <ItemsControl ItemsSource="{Binding Games}">

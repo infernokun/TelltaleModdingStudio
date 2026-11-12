@@ -6,11 +6,8 @@ using TelltaleModding.Core.Archives;
 namespace TelltaleModding.Core.Catalog;
 
 /// <summary>
-/// The built index of one install, as stored on disk: archive priorities, the winning
-/// entry for every file name, and the characters. Saved as a small Brotli-compressed
-/// binary file per install (entry names front-coded) (<c>&lt;sha of archives folder&gt;.catalog</c>), tagged with a
-/// fingerprint of every archive's and description's name, size and modification time so
-/// any game update or mod change rebuilds it.
+/// The built index of one install as stored on disk: archive priorities, the winning entry
+/// per file name, and the characters. A fingerprint of the archives makes game updates and mods rebuild it.
 /// </summary>
 internal sealed class CatalogCache
 {
@@ -22,10 +19,10 @@ internal sealed class CatalogCache
     /// <summary>Archives with their resolved priorities.</summary>
     public required IReadOnlyList<CatalogArchive> Archives { get; init; }
 
-    /// <summary>Winning entry per file name, sorted by name (ordinal, case-insensitive).</summary>
+    /// <summary>Winning entry per file name, sorted by name.</summary>
     public required IReadOnlyList<ArchiveEntryRef> Entries { get; init; }
 
-    /// <summary>Characters (their parts and skeletons reference <see cref="Entries"/>).</summary>
+    /// <summary>Characters. Their parts and skeletons point into <see cref="Entries"/>.</summary>
     public required IReadOnlyList<CharacterEntry> Characters { get; init; }
 
     /// <summary>The cache file for an install inside <paramref name="cacheFolder"/>.</summary>
@@ -36,10 +33,7 @@ internal sealed class CatalogCache
         return Path.Combine(cacheFolder, hash + ".catalog");
     }
 
-    /// <summary>
-    /// Fingerprint of everything the index depends on: format version, game, language,
-    /// and each archive's and resource description's file name, size and last-write time.
-    /// </summary>
+    /// <summary>Fingerprint of everything the index depends on, including each archive's name, size and write time.</summary>
     public static string ComputeFingerprint(GameInstall install, string language)
     {
         var sb = new StringBuilder();
@@ -55,7 +49,7 @@ internal sealed class CatalogCache
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
     }
 
-    /// <summary>Writes the cache atomically (temp file + move).</summary>
+    /// <summary>Writes the cache through a temp file so a crash can't leave a half-written one.</summary>
     public void Save(string path, string fingerprint)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -113,7 +107,7 @@ internal sealed class CatalogCache
 
         w.Write(Entries.Count);
         var entryIndex = new Dictionary<ArchiveEntryRef, int>(Entries.Count);
-        // Names are sorted, so store each as (length shared with the previous name, rest).
+        // Names are sorted, so each is stored as the length shared with the previous name plus the rest.
         string previous = "";
         foreach (var e in Entries)
         {

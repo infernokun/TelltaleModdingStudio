@@ -4,11 +4,9 @@ using TelltaleModding.Core.Meshes;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// A fact that runs only when the given sample files are in <c>samples/</c>. The
-/// CompressedSkeletonPoseKeys2 tests use files from The Walking Dead: The Telltale
-/// Definitive Series, which are not kept in the repository: extract
-/// <c>sk62_idle_clementineHips.anm</c> (WDC_pc_WalkingDead301_anichore.ttarch2) and
-/// <c>sk62_clementine.skl</c> (WDC_pc_WalkingDead301_data.ttarch2) into <c>samples/</c> to run them.
+/// A fact that runs only when the given sample files are in <c>samples/</c>. To run these tests,
+/// extract <c>sk62_idle_clementineHips.anm</c> (WDC_pc_WalkingDead301_anichore.ttarch2) and
+/// <c>sk62_clementine.skl</c> (WDC_pc_WalkingDead301_data.ttarch2) from the Definitive Series.
 /// </summary>
 public sealed class SampleFactAttribute : FactAttribute
 {
@@ -60,8 +58,7 @@ public class Cspk2DecoderTests
     [SampleFact(Clip, Rig)]
     public void Translations_follow_the_bones_rest_offsets()
     {
-        // Translations are stored relative to the bone's rest length: a value of length ~1
-        // pointing along the skeleton's offset for a standing idle.
+        // Translations are stored relative to the rest length, so an idle gives about 1.
         var (clip, _) = Decode(Clip);
         Assert.True(SkeletonFile.TryLoad(File.ReadAllBytes(SampleData.Sample(Rig)), out var skl, out _));
         var rest = skl!.Bones.GroupBy(b => b.JointSymbol).ToDictionary(g => g.Key, g => g.First().LocalPosition);
@@ -85,8 +82,7 @@ public class Cspk2DecoderTests
     [SampleFact(Clip, Rig)]
     public void Idle_rotations_stay_near_the_rest_pose()
     {
-        // A standing idle: joints sit within tens of degrees of the rest pose. A misread
-        // stream gives near-random rotations instead.
+        // In an idle most joints stay close to the rest pose.
         var (clip, _) = Decode(Clip);
         Assert.True(SkeletonFile.TryLoad(File.ReadAllBytes(SampleData.Sample(Rig)), out var skl, out _));
         var rest = skl!.Bones.GroupBy(b => b.JointSymbol).ToDictionary(g => g.Key, g => g.First().LocalRotation);

@@ -6,18 +6,15 @@ using System.Text.RegularExpressions;
 namespace TelltaleModding.Core.Catalog;
 
 /// <summary>
-/// One Telltale resource set, as declared by a loose <c>_resdesc_50_*.lua</c> (or
-/// <c>_resourcedescriptions_500_*.lenc</c>) file next to the archives. The engine mounts
-/// every enabled set and resolves a file name to the copy in the highest-priority set;
-/// patch sets (priority 400+) and mods (700) therefore override episode sets (~100),
-/// which override season/project sets (~50 / -8888).
+/// One resource set, as declared by a description file next to the archives. The engine
+/// mounts every enabled set and takes each file from the highest-priority set that has it.
 /// </summary>
-/// <param name="Name">Set name, e.g. <c>WalkingDead401</c> or <c>PC_P01_WalkingDead401</c>.</param>
+/// <param name="Name">Set name.</param>
 /// <param name="Priority">Higher wins when two sets contain the same file name.</param>
 /// <param name="EnableMode"><c>bootable</c>, <c>constant</c> or <c>localization</c>.</param>
-/// <param name="LogicalName">The set's logical location, e.g. <c>&lt;WalkingDead401&gt;</c>.</param>
-/// <param name="LogicalDestination">Where the set mounts: <c>&lt;&gt;</c> (root) or another set's logical name.</param>
-/// <param name="Archives">Archive file names the set loads (no folder).</param>
+/// <param name="LogicalName">The set's logical location.</param>
+/// <param name="LogicalDestination">Where the set mounts: the root <c>&lt;&gt;</c> or another set's logical name.</param>
+/// <param name="Archives">Archive file names the set loads.</param>
 /// <param name="SourceFile">File name of the description this was read from.</param>
 public sealed record ResourceSetDescription(
     string Name, int Priority, string EnableMode, string LogicalName, string LogicalDestination,
@@ -34,9 +31,8 @@ public sealed record ResourceSetDescription(
     public bool IsLocalization => string.Equals(EnableMode, "localization", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Parses a decrypted description: plain Lua source (TTDS, TFTB, Michonne) or compiled
-    /// Lua 5.1/5.2 bytecode (Season Two, Wolf Among Us, Game of Thrones). Returns null for
-    /// files that don't register a set (version stamps, helper scripts).
+    /// Parses a decrypted description, either Lua source or compiled Lua 5.1/5.2 bytecode
+    /// depending on the game. Returns null for files that don't register a set.
     /// </summary>
     public static ResourceSetDescription? Parse(byte[] data, string sourceFile)
     {
@@ -74,10 +70,7 @@ public sealed record ResourceSetDescription(
             sourceFile);
     }
 
-    /// <summary>
-    /// True when <paramref name="fileName"/> looks like a resource description
-    /// (<c>_resdesc_*</c>, <c>_rescdesc_*</c>, <c>_resourcedescriptions_*</c>; .lua or .lenc).
-    /// </summary>
+    /// <summary>True when <paramref name="fileName"/> looks like a resource description.</summary>
     public static bool IsDescriptionFileName(string fileName)
     {
         var name = Path.GetFileName(fileName);
@@ -87,9 +80,8 @@ public sealed record ResourceSetDescription(
     }
 
     /// <summary>
-    /// Minimal reader for the main chunk of compiled Lua 5.1 ("LuaQ") and 5.2 ("LuaR")
-    /// bytecode: walks the constant table and the <c>LOADK</c>/<c>SETTABLE</c> instructions
-    /// to recover <c>set.key = constant</c> assignments. Telltale builds use 4-byte floats.
+    /// Minimal reader for compiled Lua 5.1 and 5.2 main chunks that recovers the
+    /// <c>set.key = constant</c> assignments. Telltale builds use 4-byte floats.
     /// </summary>
     private static class LuaBytecode
     {
@@ -173,8 +165,8 @@ public sealed record ResourceSetDescription(
 
                 object? K(int i) => i >= 0 && i < constants.Length ? constants[i] : null;
 
-                // Telltale's Lua 5.1 build renumbers the opcodes (SETTABLE is 11, not 9), so find
-                // SETTABLE as the instruction that stores into the "name" key, i.e. `set.name = …`.
+                // Telltale's Lua 5.1 build renumbers the opcodes, so find SETTABLE as the
+                // instruction that stores into the "name" key.
                 int standardSetTable = version == 0x51 ? 9 : 10;
                 int opSetTable = -1;
                 foreach (uint ins in code)
@@ -211,7 +203,7 @@ public sealed record ResourceSetDescription(
                     }
                     else
                     {
-                        // Any other instruction may overwrite register A; forget it.
+                        // Any other instruction may overwrite register A.
                         registers.Remove(a);
                     }
                 }

@@ -9,10 +9,7 @@ using TelltaleModding.Core.Scene;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// Every spoken line in the open game: browse by episode and speaker, search the
-/// text, listen, and export the voice files with their transcripts.
-/// </summary>
+/// <summary>Browse, search, play and export every spoken line in the open game.</summary>
 public sealed partial class DialogueViewModel : ViewModelBase
 {
     private const int MaxResults = 3000;
@@ -51,8 +48,7 @@ public sealed partial class DialogueViewModel : ViewModelBase
                 ExportWavCommand.NotifyCanExecuteChanged();
             }
         };
-        // The speaker's mouth follows the recording: on each tick and seek here, and on every
-        // display frame while it plays (see RenderSpeakerFrame).
+        // Keep the speaker's mouth in sync on ticks and seeks. RenderSpeakerFrame covers playback.
         Player.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(AudioPlayerViewModel.Position) && IsSpeakerVisible)
@@ -61,8 +57,8 @@ public sealed partial class DialogueViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Poses the speaker at the moment the recording is at; the view calls it once per display
-    /// frame while the line plays. Returns false when there is nothing to animate.
+    /// Poses the speaker at the current audio time. Called once per frame while a line plays.
+    /// Returns false when there is nothing to animate.
     /// </summary>
     public bool RenderSpeakerFrame()
     {
@@ -72,7 +68,7 @@ public sealed partial class DialogueViewModel : ViewModelBase
         return true;
     }
 
-    /// <summary>Each scene's conversations as trees, with a click-through mode.</summary>
+    /// <summary>Each scene's conversations.</summary>
     public ConversationViewModel Conversations { get; } = new();
 
     /// <summary>The soundtrack, played through the same player.</summary>
@@ -87,7 +83,7 @@ public sealed partial class DialogueViewModel : ViewModelBase
     public bool IsConversationsMode { get => Mode == DialogueMode.Conversations; set { if (value) Mode = DialogueMode.Conversations; } }
     public bool IsMusicMode { get => Mode == DialogueMode.Music; set { if (value) Mode = DialogueMode.Music; } }
 
-    /// <summary>The speaker panel shows for spoken lines, not music.</summary>
+    /// <summary>The speaker panel shows for lines, not music.</summary>
     public bool IsSpeakerVisible => ShowSpeaker && !IsMusicMode;
 
     /// <summary>The speaking character, lip-synced to the line.</summary>
@@ -96,7 +92,7 @@ public sealed partial class DialogueViewModel : ViewModelBase
     [ObservableProperty]
     private bool _showSpeaker = true;
 
-    /// <summary>Plays each line's body language from the game's chore on the speaker.</summary>
+    /// <summary>Play each line's body language from its chore.</summary>
     [ObservableProperty]
     private bool _playPerformance = true;
 
@@ -117,15 +113,15 @@ public sealed partial class DialogueViewModel : ViewModelBase
     /// <summary>Set by the shell so pickers can be shown.</summary>
     public IDialogService? Dialogs { get; set; }
 
-    /// <summary>How the speaker's viewport shades (shared by the workspaces; set by the shell).</summary>
+    /// <summary>How the speaker's viewport shades, shared by all workspaces.</summary>
     public ViewportLookViewModel Look { get; set; } = new();
 
-    /// <summary>Raised with a short status message for the status bar.</summary>
+    /// <summary>Raised with a message for the status bar.</summary>
     public event Action<string>? StatusMessage;
 
     public AudioPlayerViewModel Player { get; }
 
-    /// <summary>The open game's dialogue lines, once read (null while indexing).</summary>
+    /// <summary>The open game's dialogue lines. Null while indexing.</summary>
     public DialogueIndex? Index => _index;
 
     [ObservableProperty]
@@ -137,12 +133,12 @@ public sealed partial class DialogueViewModel : ViewModelBase
     [ObservableProperty]
     private string _indexStatus = "";
 
-    /// <summary>The subtitle language to pick when a game has it (from Settings).</summary>
+    /// <summary>The subtitle language to use when the game has it.</summary>
     public string PreferredLanguage { get; set; } = "english";
 
     /// <summary>
     /// Starts indexing <paramref name="catalog"/>'s dialogue in the background.
-    /// <paramref name="models"/> builds the speakers (the game's shared model assembler).
+    /// <paramref name="models"/> builds the speakers.
     /// </summary>
     public void Load(GameCatalog catalog, ModelAssembler? models = null)
     {
@@ -151,7 +147,7 @@ public sealed partial class DialogueViewModel : ViewModelBase
         Speaker.Load(catalog, models);
         Music.Load(catalog, _audio);
         HasSource = true;
-        // Clear the selection while the list is refilled so the picker shows the new one.
+        // Clear the selection first so the picker shows the new one.
         _suppressFilter = true;
         Query = "";
         SelectedSpeaker = null;
@@ -183,7 +179,7 @@ public sealed partial class DialogueViewModel : ViewModelBase
         Summary = "";
     }
 
-    /// <summary>Filters to one speaker's lines, matched loosely to a character's name.</summary>
+    /// <summary>Filters to the lines of the speaker closest to a character's name.</summary>
     public void ShowLinesOf(string characterName)
     {
         var words = characterName.Split(new[] { ' ', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
@@ -217,7 +213,7 @@ public sealed partial class DialogueViewModel : ViewModelBase
                 Conversations.Load(openCatalog, index);
             _suppressFilter = true;
             var previousSpeaker = SelectedSpeaker?.Name;
-            // Episodes with lines, conversations or music, in name order.
+            // Episodes with lines, conversations or music.
             var previousEpisode = SelectedEpisode;
             Episodes.Clear();
             Episodes.Add(AllEpisodes);
@@ -400,7 +396,7 @@ public sealed partial class DialogueViewModel : ViewModelBase
     [ObservableProperty]
     private DialogueLineViewModel? _nowPlaying;
 
-    // Picking a line plays it, like a playlist.
+    // Picking a line plays it.
     partial void OnSelectedLineChanged(DialogueLineViewModel? value)
     {
         if (value is not null && value != NowPlaying)
@@ -526,7 +522,7 @@ public sealed partial class DialogueViewModel : ViewModelBase
 
     private bool HasVisibleLines() => Lines.Any(l => l.HasAudio) && _audio is not null;
 
-    /// <summary>Exports every voiced line in the list plus a transcript (<c>transcript.tsv</c>).</summary>
+    /// <summary>Exports every voiced line in the list plus a transcript.</summary>
     [RelayCommand(CanExecute = nameof(HasVisibleLines))]
     private async Task ExportVisibleAsync()
     {
@@ -576,7 +572,7 @@ public sealed record SpeakerOption(string Name, int Lines)
 {
     public string Label => $"{Display} · {Lines:N0}";
 
-    /// <summary>The name in title case (<c>RHYS</c> → <c>Rhys</c>).</summary>
+    /// <summary>The name in title case.</summary>
     public string Display => DialogueLineViewModel.TitleCase(Name);
 }
 
@@ -602,7 +598,7 @@ public sealed partial class DialogueLineViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isCurrent;
 
-    /// <summary>A file name like <c>Rhys - 362321480 - Vasquez screwed me out of</c>.</summary>
+    /// <summary>A file name made from the speaker, line id and first few words.</summary>
     public string SuggestedFileName
     {
         get

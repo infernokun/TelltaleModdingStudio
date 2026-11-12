@@ -24,15 +24,14 @@ public sealed record UpdateCheckResult(UpdateStatus Status, ReleaseInfo? Release
 }
 
 /// <summary>
-/// Asks GitHub for the latest release of the app and compares it with the running version.
-/// Every failure (offline, rate limit, unexpected reply) comes back as a
-/// <see cref="UpdateStatus.Failed"/> result rather than an exception.
+/// Asks GitHub for the latest release and compares it with the running version.
+/// Failures come back as a <see cref="UpdateStatus.Failed"/> result, not an exception.
 /// </summary>
 public sealed class UpdateChecker
 {
     public const string LatestReleaseUrl = "https://api.github.com/repos/infernokun/TelltaleModdingStudio/releases/latest";
 
-    /// <summary>The releases page, for a reply that leaves out its own link.</summary>
+    /// <summary>The releases page, used when a release has no link of its own.</summary>
     public const string ReleasesPage = "https://github.com/infernokun/TelltaleModdingStudio/releases";
 
     private static readonly Lazy<HttpClient> SharedClient = new(() => new HttpClient());
@@ -40,8 +39,8 @@ public sealed class UpdateChecker
     private readonly HttpClient _http;
     private readonly TimeSpan _timeout;
 
-    /// <param name="http">The client to send requests with; tests pass one over a fake handler.</param>
-    /// <param name="currentVersion">The running version; defaults to the app's own.</param>
+    /// <param name="http">The client to send requests with.</param>
+    /// <param name="currentVersion">The running version. Defaults to the app's own.</param>
     /// <param name="timeout">How long to wait for GitHub before giving up.</param>
     public UpdateChecker(HttpClient? http = null, string? currentVersion = null, TimeSpan? timeout = null)
     {
@@ -51,7 +50,7 @@ public sealed class UpdateChecker
         _timeout = timeout ?? TimeSpan.FromSeconds(10);
     }
 
-    /// <summary>The running version as shown to the user, e.g. "1.2.0".</summary>
+    /// <summary>The running version as shown to the user.</summary>
     public string CurrentVersionText { get; }
 
     /// <summary>The running version, or null when it could not be read.</summary>
@@ -103,7 +102,7 @@ public sealed class UpdateChecker
 
     // ---- Versions -----------------------------------------------------------------
 
-    /// <summary>The app's informational version (what CI sets from the tag).</summary>
+    /// <summary>The app's informational version.</summary>
     private static string AppVersion()
     {
         var assembly = typeof(UpdateChecker).Assembly;
@@ -111,7 +110,7 @@ public sealed class UpdateChecker
                ?? assembly.GetName().Version?.ToString() ?? "";
     }
 
-    /// <summary>Drops build metadata ("1.2.0+abc123" becomes "1.2.0") and surrounding space.</summary>
+    /// <summary>Drops build metadata and surrounding space.</summary>
     public static string CleanVersion(string version)
     {
         var plus = version.IndexOf('+');
@@ -119,8 +118,8 @@ public sealed class UpdateChecker
     }
 
     /// <summary>
-    /// Reads a tag or version such as "v1.2.0", "1.3" or "1.3.0-beta.1" (the prerelease part
-    /// is ignored). Missing parts count as zero, so "1.2" equals "1.2.0". Null when it is not a version.
+    /// Reads a tag or version, ignoring any prerelease part. Missing parts count as zero.
+    /// Null when it is not a version.
     /// </summary>
     public static Version? TryParseVersion(string? text)
     {
@@ -144,16 +143,13 @@ public sealed class UpdateChecker
         return new Version(numbers[0], numbers[1], numbers[2], numbers[3]);
     }
 
-    /// <summary>The version as people write it: "1.2.0", with a fourth part only when it is set.</summary>
+    /// <summary>The version as three parts, or four when the last one is set.</summary>
     public static string FormatVersion(Version version) =>
         version.Revision > 0 ? version.ToString(4) : version.ToString(3);
 
     // ---- Release JSON ---------------------------------------------------------------
 
-    /// <summary>
-    /// Reads a GitHub "release" object; null when the JSON is unusable. A tag that is not a
-    /// version gives a release with a null <see cref="ReleaseInfo.Version"/>.
-    /// </summary>
+    /// <summary>Reads a GitHub release object. Null when the JSON is unusable.</summary>
     public static ReleaseInfo? ParseRelease(string json)
     {
         try
@@ -207,14 +203,11 @@ public sealed class UpdateChecker
     public static ReleaseAsset? PickAsset(IEnumerable<ReleaseAsset> assets, string? suffix) =>
         suffix is null ? null : assets.FirstOrDefault(a => a.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Where Download should go: this OS's file when the release has one, else the release page.</summary>
+    /// <summary>This OS's download, or the release page if there isn't one.</summary>
     public static string DownloadUrl(ReleaseInfo release, string? suffix) =>
         PickAsset(release.Assets, suffix)?.DownloadUrl ?? release.PageUrl;
 
-    /// <summary>
-    /// The start of the release notes as plain text: heading marks and bold markers removed,
-    /// blank runs collapsed, and cut at a word near <paramref name="maxLength"/>.
-    /// </summary>
+    /// <summary>The start of the release notes as plain text, cut near <paramref name="maxLength"/>.</summary>
     public static string SummarizeNotes(string notes, int maxLength = 600)
     {
         var text = notes.Replace("\r\n", "\n").Replace('\r', '\n');

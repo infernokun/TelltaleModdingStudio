@@ -16,10 +16,7 @@ using TelltaleModding.Core.Textures;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// Every file in the open game: search, filter by kind, preview, export, or mark a
-/// file for replacement in the mod project.
-/// </summary>
+/// <summary>Browse, preview and export every file in the open game.</summary>
 public sealed partial class AssetsViewModel : ViewModelBase
 {
     private const int MaxResults = 2000;
@@ -56,7 +53,7 @@ public sealed partial class AssetsViewModel : ViewModelBase
     /// <summary>Raised when the user wants to replace a file in their mod.</summary>
     public event Action<string>? SwapRequested;
 
-    /// <summary>Raised with a short status message for the status bar.</summary>
+    /// <summary>Raised with a message for the status bar.</summary>
     public event Action<string>? StatusMessage;
 
     [ObservableProperty]
@@ -103,7 +100,7 @@ public sealed partial class AssetsViewModel : ViewModelBase
 
     partial void OnSelectedCategoryChanged(CategoryOption value) => RestartSearchDebounce();
 
-    // Typing quickly collapses into one search.
+    // Debounce so fast typing runs one search.
     private async void RestartSearchDebounce()
     {
         _debounceCts?.Cancel();
@@ -197,7 +194,7 @@ public sealed partial class AssetsViewModel : ViewModelBase
     /// <summary>The selected chore's timeline, one entry per agent.</summary>
     public ObservableCollection<ChoreTrackViewModel> ChoreTracks { get; } = new();
 
-    /// <summary>The sounds in the selected file (several for a bank).</summary>
+    /// <summary>The sounds in the selected file.</summary>
     public ObservableCollection<AudioClip> PreviewClips { get; } = new();
 
     [ObservableProperty]
@@ -479,16 +476,11 @@ public sealed partial class AssetsViewModel : ViewModelBase
         return PngWriter.Encode(image!);
     }
 
-    /// <summary>
-    /// Bulk export converts to everyday formats: textures to PNG, sounds to MP3/Ogg
-    /// (bank sounds into a folder per bank), scripts to decompiled Lua, subtitle
-    /// databases to a tab-separated transcript, chores to a text timeline. Off: files
-    /// are written as stored.
-    /// </summary>
+    /// <summary>Bulk export converts files to common formats instead of writing them as stored.</summary>
     [ObservableProperty]
     private bool _convertOnExport = true;
 
-    // Writes one entry into folder, converted when possible; returns false if it fell back to the raw file.
+    // Writes one entry converted when possible. Returns false if it wrote the raw file.
     private static bool ExportConverted(GameCatalog catalog, GameAudio audio, ChoreNames choreNames, ArchiveEntryRef entry, string folder)
     {
         var name = Path.GetFileName(entry.Name);
@@ -565,7 +557,7 @@ public sealed partial class AssetsViewModel : ViewModelBase
         var catalog = _catalog;
         var audio = _audio!;
         bool convert = ConvertOnExport;
-        // Shared across the export so each subtitle database is read once.
+        // Shared so each subtitle database is only read once.
         var choreNames = new ChoreNames(catalog);
         var progress = new Progress<int>(n => StatusMessage?.Invoke($"Exporting… {n:N0}/{entries.Count:N0}"));
         int failed = await Task.Run(() =>
@@ -613,7 +605,7 @@ public sealed partial class AssetsViewModel : ViewModelBase
         }
     }
 
-    // Bank sound names can carry an event GUID ("door_open {af4ed549-…}").
+    // Strips the event GUID some bank sound names have.
     private static string SafeFileName(string name)
     {
         name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\{[0-9a-fA-F-]+\}", "").Trim();

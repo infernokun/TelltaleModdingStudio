@@ -3,10 +3,7 @@ using System.Text;
 
 namespace TelltaleModding.Core.Audio;
 
-/// <summary>
-/// Reads FMOD sound banks: FSB5 (used by later games, alone or inside .bank files)
-/// and FSB4 (used by earlier games). Each subsound becomes an <see cref="AudioClip"/>.
-/// </summary>
+/// <summary>Reads FMOD FSB4 and FSB5 sound banks, one <see cref="AudioClip"/> per subsound.</summary>
 internal static class FsbReader
 {
     private const int Fsb5Pcm8 = 1, Fsb5Pcm16 = 2, Fsb5PcmFloat = 5, Fsb5ImaAdpcm = 7,
@@ -23,7 +20,7 @@ internal static class FsbReader
     public static bool IsFsb5(ReadOnlySpan<byte> d) => d.Length >= 0x3C && d[..4].SequenceEqual("FSB5"u8);
     public static bool IsFsb4(ReadOnlySpan<byte> d) => d.Length >= 0x30 && d[..4].SequenceEqual("FSB4"u8);
 
-    /// <summary>Finds an FSB5 image embedded in an FMOD Studio .bank (RIFF) file. Returns -1 if none.</summary>
+    /// <summary>Finds the FSB5 data inside an FMOD Studio .bank file, or -1.</summary>
     public static int FindEmbeddedFsb5(byte[] data)
     {
         var span = data.AsSpan();
@@ -56,7 +53,7 @@ internal static class FsbReader
         int headerSize = version == 0 ? 0x40 : 0x3C;
         if (version is < 0 or > 1 || count <= 0 || shSize < count * 8 || ntSize < 0 || dataSize < 0) return false;
         h = new Fsb5Header(version, count, shSize, ntSize, dataSize, codec, headerSize);
-        // Allow a truncated data section (some banks pad), but the tables must fit.
+        // The data section may be cut short, but the tables must fit.
         return (long)headerSize + shSize + ntSize <= d.Length;
     }
 
@@ -224,7 +221,7 @@ internal static class FsbReader
         }
     }
 
-    /// <summary>A clip whose native form is a decoded WAV (decoded once, on first use).</summary>
+    /// <summary>A clip whose native form is a WAV, decoded once on first use.</summary>
     private static AudioClip PcmClip(string name, AudioCodec codec, int channels, int rate, long frames, Func<short[]> decode)
     {
         var pcm = new Lazy<short[]>(decode);
@@ -257,7 +254,7 @@ internal static class FsbReader
         return true;
     }
 
-    /// <summary>FSB5 Vorbis streams store each packet as a u16 length followed by the packet bytes.</summary>
+    /// <summary>Splits an FSB5 Vorbis stream, where each packet is a u16 length plus its bytes.</summary>
     internal static List<ReadOnlyMemory<byte>> SplitFsbVorbisPackets(ReadOnlyMemory<byte> stream)
     {
         var list = new List<ReadOnlyMemory<byte>>();

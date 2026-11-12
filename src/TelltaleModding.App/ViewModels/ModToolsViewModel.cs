@@ -8,10 +8,7 @@ using TelltaleModding.Core.Projects;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// The mod project: which files to replace and with what, saved as a <c>.ttmod</c>,
-/// and the build of a minimal patch archive the game loads over its originals.
-/// </summary>
+/// <summary>The mod project: file swaps saved as a <c>.ttmod</c>, and building the patch archive.</summary>
 public sealed partial class ModToolsViewModel : ViewModelBase
 {
     private readonly string? _enginePath;
@@ -40,7 +37,7 @@ public sealed partial class ModToolsViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(BuildPatchCommand))]
     private GameEntry? _selectedGame;
 
-    /// <summary>One of the game's real archives; patches are built in its format version.</summary>
+    /// <summary>One of the game's archives. Patches use its format version.</summary>
     [ObservableProperty]
     private string? _referenceArchivePath;
 
@@ -50,7 +47,7 @@ public sealed partial class ModToolsViewModel : ViewModelBase
             _project.GameNum = value.GameNum;
     }
 
-    /// <summary>Targets the game the user opened in the library (unless the project chose another).</summary>
+    /// <summary>Targets the open game, unless the project already uses another.</summary>
     public void UseGame(GameEntry game, string? referenceArchive)
     {
         if (Swaps.Count > 0 && SelectedGame is not null && SelectedGame != game)
@@ -98,7 +95,7 @@ public sealed partial class ModToolsViewModel : ViewModelBase
         AddSwap(targetAssetName, replacement);
     }
 
-    /// <summary>Adds a swap row (also used by tests).</summary>
+    /// <summary>Adds a swap row.</summary>
     public void AddSwap(string targetAssetName, string replacementPath)
     {
         var existing = Swaps.FirstOrDefault(s => s.TargetAssetName.Equals(targetAssetName, StringComparison.OrdinalIgnoreCase));
@@ -172,7 +169,7 @@ public sealed partial class ModToolsViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Applies a loaded project to the UI state (exposed for tests).</summary>
+    /// <summary>Shows a loaded project.</summary>
     public void LoadProjectFrom(ModProject project)
     {
         _project = project;
@@ -188,7 +185,7 @@ public sealed partial class ModToolsViewModel : ViewModelBase
         BuildPatchCommand.NotifyCanExecuteChanged();
     }
 
-    // Ticking a swap on or off changes whether there is anything to build.
+    // Toggling a swap changes whether there's anything to build.
     private SwapViewModel Track(SwapViewModel swap)
     {
         swap.PropertyChanged += (_, e) =>
@@ -250,7 +247,7 @@ public sealed partial class ModToolsViewModel : ViewModelBase
         }
         catch (OperationCanceledException)
         {
-            AppendLog("Cancelled.");
+            AppendLog("Canceled.");
         }
         catch (Exception ex) when (ex is TtarchException or IOException or InvalidOperationException)
         {

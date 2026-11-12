@@ -5,8 +5,7 @@ using TelltaleModding.Core.Scene;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// How a performance blends the body clips a chore plays at once: by priority first, and by
-/// weight within a priority. Samples: Sasha's skeleton, mesh, hands-on-hips idle and walk.
+/// How a performance blends body clips that play at once: by priority, then by weight.
 /// </summary>
 public class ChorePerformanceBlendTests
 {
@@ -30,7 +29,7 @@ public class ChorePerformanceBlendTests
         return (skeleton!, mesh!.GetGeometry());
     }
 
-    // Bones both clips turn, with each clip's own rotation for them at the given clip times.
+    // Bones both clips turn, with each clip's rotation for them.
     private static List<(SkeletonBone Bone, Quaternion Idle, Quaternion Walk)> Shared(SkeletonFile skeleton, MeshGeometry geometry, float idleTime, float walkTime)
     {
         var idle = new AnimationPlayer(geometry, skeleton);
@@ -72,7 +71,7 @@ public class ChorePerformanceBlendTests
         var performance = new ChorePerformance(geometry, skeleton,
             [(Spec(Walk, 0, 5, 0.5f), Clip(Walk)), (Spec(Idle, 0, 5, 0.5f), Clip(Idle))]);
 
-        // As the engine's mixer does: half of each, and the pair counts half over the rest pose.
+        // Half of each, and the pair counts half over the rest pose.
         foreach (var (bone, idle, walk) in Shared(skeleton, geometry, 1, 1))
         {
             var expected = Quaternion.Slerp(bone.LocalRotation, Quaternion.Slerp(walk, idle, 0.5f), 0.5f);
@@ -84,8 +83,7 @@ public class ChorePerformanceBlendTests
     [SampleFact("sk56_clementine.skl", "clementine_headGesture_lookDown_add.anm", "clementine200_headGesture_lookUp_add.chore")]
     public void A_head_gesture_limited_to_the_head_groups_leaves_the_brows_alone()
     {
-        // Clementine's look-down holds her brows in a frown, but the chore keeps head gestures
-        // to the head groups (the face group at -1), so in game only the head moves.
+        // The look-down frowns, but the chore limits it to the head so the brows stay put.
         Assert.True(SkeletonFile.TryLoad(File.ReadAllBytes(SampleData.Sample("sk56_clementine.skl")), out var skeleton, out var error), error);
         Assert.True(ChoreFile.TryRead(File.ReadAllBytes(SampleData.Sample("clementine200_headGesture_lookUp_add.chore")), out var chore, out error), error);
         const string Gesture = "clementine_headGesture_lookDown_add.anm";

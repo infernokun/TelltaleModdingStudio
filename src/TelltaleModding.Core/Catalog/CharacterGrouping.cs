@@ -6,16 +6,9 @@ namespace TelltaleModding.Core.Catalog;
 /// <summary>
 /// Turns a game's file index into <see cref="CharacterEntry"/> records.
 /// <para>
-/// Primary source: character agent props. Every family-prefixed <c>.prop</c> (e.g.
-/// <c>sk62_clementine400.prop</c>, <c>sk54_rhys_hacking.prop</c>) that names a
-/// "Skeleton File" and meshes defines one character: its parts are its "D3D Mesh List"
-/// (plus "D3D Mesh"), and its default outfit is its top-level "Mesh X - Visible" values.
-/// </para>
-/// <para>
-/// Fallback: a family-prefixed skeleton that no such prop uses becomes a character whose
-/// parts are the meshes named <c>&lt;skeleton&gt;</c> or <c>&lt;skeleton&gt;_*</c>, with
-/// defaults from <see cref="HeuristicDefaults"/>. Unprefixed skeletons (<c>obj_</c>,
-/// <c>adv_</c>, <c>ui_</c>, <c>fx_</c>: props, foliage, UI) are never characters.
+/// Characters come from family-prefixed agent props that name a skeleton and meshes.
+/// A prefixed skeleton no prop uses becomes a character made of the meshes named after it.
+/// Unprefixed skeletons are never characters.
 /// </para>
 /// </summary>
 public static class CharacterGrouping
@@ -31,10 +24,7 @@ public static class CharacterGrouping
         "open", "hood", "hooded", "backpack", "bag", "hat", "nohat", "hatless", "sleeves", "rolled", "dirt", "grime",
     };
 
-    /// <summary>
-    /// The <c>.prop</c> files worth reading to find characters: family-prefixed props
-    /// that aren't material props (<c>*_m.prop</c>) and are small.
-    /// </summary>
+    /// <summary>The <c>.prop</c> files worth reading to find characters.</summary>
     public static IEnumerable<ArchiveEntryRef> SelectCharacterPropCandidates(IEnumerable<ArchiveEntryRef> entries) =>
         entries.Where(e =>
             e.Name.EndsWith(".prop", StringComparison.OrdinalIgnoreCase) &&
@@ -42,12 +32,10 @@ public static class CharacterGrouping
             CharacterNaming.FamilyPrefix(e.Name) is not null &&
             !Path.GetFileNameWithoutExtension(e.Name).EndsWith("_m", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>
-    /// Builds the character list.
-    /// </summary>
-    /// <param name="entries">Every file the game uses (one winner per name).</param>
+    /// <summary>Builds the character list.</summary>
+    /// <param name="entries">Every file the game uses, one winner per name.</param>
     /// <param name="props">Parsed character-prop candidates, keyed by prop file name.</param>
-    /// <returns>Characters sorted by DisplayName, then Variant (null first), then Id.</returns>
+    /// <returns>Characters sorted by name, then variant, then id.</returns>
     public static IReadOnlyList<CharacterEntry> Build(
         IReadOnlyList<ArchiveEntryRef> entries, IReadOnlyDictionary<string, CharacterProp> props)
     {
@@ -87,8 +75,8 @@ public static class CharacterGrouping
                     parts.Add((mesh, prop.IsMeshVisible(mesh.Name) ?? true));
             if (prop.MeshSymbol is { } single && Resolve(single, ".d3dmesh") is { } singleMesh && seen.Add(singleMesh.Name))
             {
-                // A legacy single mesh next to a mesh list is usually the old combined body;
-                // only show it by default when it is the character's only geometry.
+                // A single mesh next to a mesh list is usually the old combined body, so only
+                // turn it on when it's the only geometry.
                 bool? on = prop.IsMeshVisible(singleMesh.Name) ?? (parts.Count == 0 ? true : false);
                 parts.Add((singleMesh, on));
             }
@@ -98,7 +86,7 @@ public static class CharacterGrouping
             usedSkeletons.Add(skeleton.Name);
         }
 
-        // Skeletons nobody's prop uses: group meshes by name.
+        // Skeletons no prop uses: group meshes by name.
         var meshesByStem = meshes.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList();
         var propIds = new HashSet<string>(drafts.Select(d => d.Id), StringComparer.OrdinalIgnoreCase);
         foreach (var skeleton in skeletons.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
@@ -126,8 +114,7 @@ public static class CharacterGrouping
             var partNames = rawParts
                 .Select(p => CharacterNaming.PartName(Path.GetFileNameWithoutExtension(p.Mesh.Name), id, skeletonStem))
                 .ToList();
-            // Meshes borrowed from a sibling agent ("clementine105_headHands" on Clementine 100)
-            // read better without the sibling's name, unless that would clash with another part.
+            // Drop a sibling agent's name from borrowed meshes, unless that clashes with another part.
             var personWord = CharacterNaming.SplitWords(CharacterNaming.StripFamily(id)).FirstOrDefault() ?? id;
             for (int i = 0; i < partNames.Count; i++)
             {
@@ -151,8 +138,7 @@ public static class CharacterGrouping
             characters.Add(new CharacterEntry(id, displayName, variant, skeleton, parts) { DefaultsFromGameData = useProp });
         }
 
-        // Same name and variant in two skeleton families (TFTB's sk54_/sk55_ hyperionSuit):
-        // tell them apart by family.
+        // Same name and variant in two skeleton families: tell them apart by family.
         foreach (var clash in characters
                      .GroupBy(c => (c.DisplayName.ToLowerInvariant(), c.Variant?.ToLowerInvariant()))
                      .Where(g => g.Count() > 1)
@@ -176,9 +162,8 @@ public static class CharacterGrouping
     }
 
     /// <summary>
-    /// Some game data turns every head and hairstyle off and lets a script pick them at spawn
-    /// (Game of Thrones' sk61_bannermanForrester), leaving eyes and mouth floating over the
-    /// neck. Characters whose defaults come from game data get the plainest head and hairstyle.
+    /// Turns on the plainest head and hairstyle when the game data leaves them all off for a
+    /// script to pick, which would leave the eyes and mouth floating.
     /// </summary>
     public static CharacterEntry PickScriptedHead(CharacterEntry character)
     {
@@ -191,10 +176,8 @@ public static class CharacterGrouping
     }
 
     /// <summary>
-    /// When face parts are on but no head or hair (and no whole-body part that may carry a
-    /// head), turns on the plainest head and hairstyle. A head built into the body mesh with
-    /// its hair on (sk62_ladyKingsLandingLow, whose headCap is a scalp piece) is left alone.
-    /// Returns whether it did.
+    /// Turns on the plainest head and hairstyle when face parts are on but no head, hair or
+    /// whole-body part is. Returns whether it did.
     /// </summary>
     internal static bool PickHeadIfScripted(IReadOnlyList<(string PartName, string Slot)> parts, bool[] on)
     {
@@ -215,11 +198,9 @@ public static class CharacterGrouping
     }
 
     /// <summary>
-    /// Picks a default outfit when the game data doesn't say: per body slot (Head, Hair,
-    /// Upper/Lower body, Hands, Feet) the plainest part: fewest damage/alternate words
-    /// (bloody, wet, no…, bandage, hat…), then the shortest name; the plainest Face part of each
-    /// kind (eyes, teeth…);
-    /// no Accessories; Other parts only when nothing else is on (a whole-body mesh).
+    /// Picks a default outfit when the game data doesn't say: the plainest part per body slot,
+    /// the plainest face part of each kind, no accessories, and "Other" only when nothing else is on.
+    /// Plainest means fewest damage or alternate words, then the shortest name.
     /// </summary>
     public static bool[] HeuristicDefaults(IReadOnlyList<(string PartName, string Slot)> parts)
     {
@@ -236,7 +217,7 @@ public static class CharacterGrouping
                 case CharacterSlots.Other:
                     break;
                 case CharacterSlots.Face:
-                    // Faces are often split (eyes, teeth, tongue): the plainest of each kind.
+                    // Faces are often split into eyes, teeth and so on: take one of each kind.
                     foreach (var kind in group.GroupBy(i => (CharacterNaming.SplitWords(parts[i].PartName).FirstOrDefault() ?? "").ToLowerInvariant()))
                         on[kind.MinBy(Score)] = true;
                     break;
@@ -248,7 +229,7 @@ public static class CharacterGrouping
 
         if (!on.Any(x => x))
         {
-            // Nothing in a body slot: show the plainest "Other" part (typically the whole mesh).
+            // Nothing in a body slot, so show the plainest "Other" part, usually the whole mesh.
             var others = Enumerable.Range(0, parts.Count).Where(i => parts[i].Slot != CharacterSlots.Accessory).ToList();
             if (others.Count == 0) others = Enumerable.Range(0, parts.Count).ToList();
             if (others.Count > 0) on[others.MinBy(Score)] = true;
@@ -257,11 +238,8 @@ public static class CharacterGrouping
     }
 
     /// <summary>
-    /// Variants that wear their base character's body but leave one of the base's default
-    /// slots empty borrow the base's default part for it. Tales from the Borderlands'
-    /// <c>sk54_rhys_hacking</c> lists Rhys's body without the temple-port piece that fills a
-    /// hole in it (the scene attaches one); shown alone the viewer looks through the hole.
-    /// Slots the variant fills itself (another hairstyle, no hat) are left alone.
+    /// Variants that wear their base character's body but leave one of its default slots empty
+    /// borrow the base's part for that slot, so the body doesn't show a hole the scene would fill.
     /// </summary>
     public static IReadOnlyList<CharacterEntry> InheritBaseParts(IReadOnlyList<CharacterEntry> characters)
     {
@@ -291,13 +269,9 @@ public static class CharacterGrouping
     }
 
     /// <summary>
-    /// Generic agents (the Definitive Series' <c>zombieAverage</c> family) mark a whole pool of
-    /// alternates visible (five heads, four hairstyles, a dozen arms) and a script picks
-    /// one of each when the agent spawns; worn together they overlap into a tangle. When
-    /// some body slot has three or more parts on for the same side, keep the plainest part
-    /// per slot and side (see <see cref="HeuristicDefaults"/> for "plainest"). Ordinary
-    /// characters, whose split parts (left/right arms, body plus jacket) are fewer, are left
-    /// as the game data says.
+    /// Generic agents mark a whole pool of alternates visible and a script picks one at spawn.
+    /// When a body slot has three or more parts on for the same side, keep only the plainest
+    /// per slot and side.
     /// </summary>
     public static CharacterEntry ThinRandomPools(CharacterEntry character)
     {
@@ -323,7 +297,7 @@ public static class CharacterGrouping
         return character with { Parts = parts };
     }
 
-    /// <summary>"Right", "Left" or "" from a part name's words (armRightFull, legL, handLeftA).</summary>
+    /// <summary>"Right", "Left" or "" from a part name's words.</summary>
     private static string Side(string partName)
     {
         foreach (var word in CharacterNaming.SplitWords(partName).Skip(1))
@@ -343,7 +317,7 @@ public static class CharacterGrouping
     /// <summary>Damage words of generic pools, on top of <see cref="Penalised"/>.</summary>
     private static readonly string[] PoolPenalised = { "stump", "fracture", "chop", "eaten", "jaw", "unique", "missing" };
 
-    /// <summary>Orders "2" before "10" and "200" before "203"; nulls first.</summary>
+    /// <summary>Compares numbers in strings by value, with nulls first.</summary>
     private sealed class NaturalComparer : IComparer<string?>
     {
         public static readonly NaturalComparer Instance = new();

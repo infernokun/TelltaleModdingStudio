@@ -9,11 +9,7 @@ using TelltaleModding.Core.Dialogue;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// The game's soundtrack as albums: the loose music tracks of each episode
-/// (<c>mus_*.ogg</c> / <c>mus_*.wav</c>) and each music bank (<c>101 Music.bank</c>).
-/// Plays through the shared player of the Dialogue workspace.
-/// </summary>
+/// <summary>The game's soundtrack, grouped into albums by episode and music bank.</summary>
 public sealed partial class MusicViewModel : ViewModelBase
 {
     private readonly AudioPlayerViewModel _player;
@@ -66,7 +62,7 @@ public sealed partial class MusicViewModel : ViewModelBase
     /// <summary>The episodes that have music.</summary>
     public IEnumerable<string> AlbumEpisodes => _allAlbums.Select(a => a.Episode);
 
-    /// <summary>Lists only the albums of <paramref name="episode"/> (all when null).</summary>
+    /// <summary>Lists only the albums of <paramref name="episode"/>, or all when null.</summary>
     public void SetEpisode(string? episode)
     {
         if (string.Equals(_episode, episode, StringComparison.OrdinalIgnoreCase))
@@ -129,7 +125,7 @@ public sealed partial class MusicViewModel : ViewModelBase
             return;
         }
 
-        // Banks hold many sounds; list them once (the bank is read in full).
+        // Banks are read in full, so only do it once.
         if (album.Clips is null && _audio is { } audio)
         {
             IsLoadingAlbum = true;
@@ -172,7 +168,7 @@ public sealed partial class MusicViewModel : ViewModelBase
         await _player.LoadAsync(() => track.Clip ?? audio.LoadClip(track.Entry!), autoPlay: true);
     }
 
-    /// <summary>Moves to the previous/next track and plays it.</summary>
+    /// <summary>Plays the previous or next track.</summary>
     public void Step(int direction)
     {
         if (Tracks.Count == 0)
@@ -186,7 +182,7 @@ public sealed partial class MusicViewModel : ViewModelBase
     /// <summary>A file name for the playing track.</summary>
     public string SuggestedFileName => NowPlaying is null ? "track" : SafeName(NowPlaying.Title);
 
-    // "mus_101m_chesapeake.ogg" → "101m chesapeake"; bank names lose their GUIDs.
+    // Readable track title without the mus_ prefix or GUIDs.
     private static string Title(string name)
     {
         var stem = Regex.Replace(Path.GetFileNameWithoutExtension(name), @"\s*\{[0-9a-fA-F-]+\}", "");
@@ -215,7 +211,7 @@ public sealed class MusicAlbumViewModel
 
     public string Name { get; }
 
-    /// <summary>The episode label of the archive the music ships in.</summary>
+    /// <summary>The episode the music belongs to.</summary>
     public string Episode { get; }
 
     public IReadOnlyList<ArchiveEntryRef> Entries { get; }

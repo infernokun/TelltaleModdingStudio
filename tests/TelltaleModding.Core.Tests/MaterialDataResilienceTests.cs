@@ -4,15 +4,14 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// Property types the material reader used to stop at (losing every later property), and its
-/// stepping over of types it has no layout for.
+/// Material property types that are tricky to read, and skipping types with no known layout.
 /// </summary>
 public class MaterialDataResilienceTests
 {
     private static readonly ulong DiffuseTexture = TelltaleCrc64.HashSymbol("diffuse.d3dtx");
     private static readonly ulong AlphaKey = MaterialShading.AlphaKey;
 
-    /// <summary>Writes a version-2 PropertySet: flags, one block of parents and type groups.</summary>
+    /// <summary>Writes a version-2 PropertySet.</summary>
     private static byte[] PropertySet(params (string Type, Action<BinaryWriter>[] Values)[] groups)
     {
         using var body = new MemoryStream();
@@ -64,7 +63,7 @@ public class MaterialDataResilienceTests
     public void Type_7caceebcd26d075c_is_int32_and_no_longer_hides_the_rest_of_the_set()
     {
         Assert.Equal(0x7caceebcd26d075cUL, TelltaleCrc64.HashSymbol("int32"));
-        // Definitive Series UI materials (ui_dialog_settingsMenu…) lead with an int32 group.
+        // Some Definitive Series UI materials start with an int32 group.
         var data = PropertySet(
             ("int32", new[] { Value("Material - Some Int", w => w.Write(3)) }),
             Floats(), Texture(), Blend());
@@ -81,7 +80,7 @@ public class MaterialDataResilienceTests
     [SkippableFact]
     public void Enlighten_precompute_params_are_two_floats()
     {
-        // Most Definitive Series materials end with this type after their compiled data.
+        // Most Definitive Series materials end with this type.
         var data = PropertySet(
             Texture(),
             ("T3MaterialEnlightenPrecomputeParams", new[] { Value("Enlighten", w => { w.Write(1f); w.Write(0f); }) }),
@@ -148,7 +147,7 @@ public class MaterialDataResilienceTests
 
         var m = MaterialData.TryParse(data)!;
 
-        // The second unknown type's header is never found, only stepped over with the first.
+        // The second one gets skipped along with the first.
         Assert.Equal(new[] { 0x1111111111111111UL }, m.SkippedTypes);
         Assert.Null(m.StoppedAtType);
         AssertLaterPropertiesRead(m);
@@ -157,9 +156,9 @@ public class MaterialDataResilienceTests
     [SkippableFact]
     public void A_misread_set_still_returns_what_came_before_and_is_not_complete()
     {
-        // The float group claims more values than it holds: nothing after it can be placed.
+        // The float group claims more values than it holds.
         var data = PropertySet(Texture(), ("float", new[] { Value("Material - Alpha", w => w.Write(0.5f)) }));
-        data[^16] = 9; // the float group's count, now overrunning the block
+        data[^16] = 9; // the float group's count
 
         var m = MaterialData.TryParse(data)!;
 

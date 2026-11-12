@@ -2,13 +2,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace TelltaleModding.App.Services;
 
-/// <summary>
-/// The user's choices from the Settings page, saved with <see cref="AppSettings"/>. Each
-/// workspace reads these as its defaults and follows changes while open.
-/// </summary>
+/// <summary>The user's choices from the Settings page, saved with <see cref="AppSettings"/>.</summary>
 public sealed partial class UserPreferences : ObservableObject
 {
-    /// <summary>The preferences in use (set by the shell when it loads settings).</summary>
+    /// <summary>The preferences in use.</summary>
     public static UserPreferences Current { get; set; } = new();
 
     // ---- General ------------------------------------------------------------
@@ -27,28 +24,22 @@ public sealed partial class UserPreferences : ObservableObject
     /// <summary>Vertical field of view in degrees.</summary>
     [ObservableProperty] private double _fieldOfView = 45;
 
-    /// <summary>Orbit (left-drag) speed multiplier.</summary>
+    /// <summary>Orbit speed multiplier.</summary>
     [ObservableProperty] private double _orbitSpeed = 1;
 
     /// <summary>Scroll dolly speed multiplier.</summary>
     [ObservableProperty] private double _dollySpeed = 1;
 
-    /// <summary>
-    /// How far graphic black reaches in the Graphic black look: 0 = off, 1 = full graphic
-    /// black, 2 = twice as far. The Game look keeps each game's own.
-    /// </summary>
+    /// <summary>Graphic black strength in the Graphic black look, from 0 (off) to 2.</summary>
     [ObservableProperty] private double _graphicBlackIntensity = 1;
 
-    /// <summary>
-    /// How far the game's own graphic black reaches in the Game look (games that use it, such
-    /// as the Definitive Series): 0 = off, 1 = the game's default, 2 = twice as far.
-    /// </summary>
+    /// <summary>The game's own graphic black strength in the Game look, from 0 (off) to 2.</summary>
     [ObservableProperty] private double _engineDefaultIntensity = 1;
 
-    /// <summary>Fly speed (WASD), in model sizes per second.</summary>
+    /// <summary>WASD fly speed.</summary>
     [ObservableProperty] private double _flySpeed = 1;
 
-    /// <summary>Moving the mouse up looks down when flying and orbits the other way.</summary>
+    /// <summary>Invert vertical mouse look.</summary>
     [ObservableProperty] private bool _invertLook;
 
     /// <summary>Viewport background: Dark, Black, Grey or Light.</summary>
@@ -84,7 +75,7 @@ public sealed partial class UserPreferences : ObservableObject
 
     // ---- Scripts --------------------------------------------------------------------
 
-    /// <summary>Show compiled scripts as decompiled Lua (otherwise the instruction listing).</summary>
+    /// <summary>Show compiled scripts as decompiled Lua.</summary>
     [ObservableProperty] private bool _scriptsDecompiled = true;
 
     /// <summary>Code font size in points.</summary>
@@ -95,10 +86,10 @@ public sealed partial class UserPreferences : ObservableObject
 
     // ---- Scenes ---------------------------------------------------------------------
 
-    /// <summary>Largest texture side in scenes (0 = full size).</summary>
+    /// <summary>Largest texture size in scenes. 0 means full size.</summary>
     [ObservableProperty] private int _sceneTextureSize = 1024;
 
-    /// <summary>Light scenes with their own lights (otherwise the studio rig).</summary>
+    /// <summary>Light scenes with their own lights.</summary>
     [ObservableProperty] private bool _sceneLighting = true;
 
     /// <summary>Use baked lightmaps where a scene has them.</summary>
@@ -106,7 +97,7 @@ public sealed partial class UserPreferences : ObservableObject
 
     // ---- Export ---------------------------------------------------------------------
 
-    /// <summary>Folder save and export pickers start in (empty = the system's choice).</summary>
+    /// <summary>Folder the save and export pickers start in.</summary>
     [ObservableProperty] private string _exportFolder = "";
 
     /// <summary>Frames per second when baking animation into glTF.</summary>
@@ -115,10 +106,10 @@ public sealed partial class UserPreferences : ObservableObject
     /// <summary>Include normal maps in glTF exports.</summary>
     [ObservableProperty] private bool _gltfNormalMaps = true;
 
-    /// <summary>Bulk export converts to everyday formats (PNG, MP3/Ogg, Lua, transcripts).</summary>
+    /// <summary>Bulk export converts files to common formats.</summary>
     [ObservableProperty] private bool _convertOnExport = true;
 
-    /// <summary>The viewport background color for <see cref="Background"/> (linear-ish RGB, 0-1).</summary>
+    /// <summary>The viewport background color for <see cref="Background"/>.</summary>
     public System.Numerics.Vector3 BackgroundColor => Background switch
     {
         "Black" => new(0.0f, 0.0f, 0.0f),

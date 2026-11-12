@@ -22,7 +22,7 @@ internal static class Program
         }
     }
 
-    // Avalonia configuration, don't remove; also used by visual designer.
+    // Avalonia configuration. Don't remove, the visual designer uses it too.
     public static AppBuilder BuildAvaloniaApp() => AppBuilder
         .Configure<App>()
         .UsePlatformDetect()

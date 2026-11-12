@@ -20,16 +20,15 @@
         <StreamGeometry x:Key="CaptionClose">M0.7,0 L5,4.3 L9.3,0 L10,0.7 L5.7,5 L10,9.3 L9.3,10 L5,5.7 L0.7,10 L0,9.3 L4.3,5 L0,0.7 Z</StreamGeometry>
     </Window.Resources>
 
-    <!-- A maximized window with no system title bar reaches past the screen edge; this keeps the content on screen. -->
+    <!-- Without a system title bar, a maximized window goes past the screen edge. This margin fixes that. -->
     <Grid RowDefinitions="Auto,*,Auto" Margin="{Binding $parent[Window].OffScreenMargin}">
 
-        <!-- Header: brand · workspaces · open game · window buttons. It is also the title bar:
-             drag it to move the window, double-click it to maximize. -->
+        <!-- Header, which also works as the title bar -->
         <Border Grid.Row="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
                 BorderThickness="0,0,0,1" Padding="16,10" PointerPressed="OnTitleBarPressed">
-            <!-- Left, middle and right: the outer columns share the spare width, so the tabs stay centered on the window. -->
+            <!-- Equal outer columns keep the tabs centered -->
             <Grid ColumnDefinitions="*,Auto,*">
-                <!-- In a narrow window the name is shortened rather than running under the tabs. -->
+                <!-- App name, trimmed in narrow windows -->
                 <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,0,12,0">
                     <Image Source="/Assets/app.png" Width="28" Height="28" />
                     <TextBlock Grid.Column="1" Text="Telltale Modding Studio" FontWeight="SemiBold" FontSize="15"
@@ -61,7 +60,7 @@
                                   ToolTip.Tip="Settings" AutomationProperties.Name="Settings">
                         <PathIcon Data="{StaticResource IconSettings}" />
                     </ToggleButton>
-                    <!-- Shown when the window really draws its own title bar (not on every Linux desktop). -->
+                    <!-- Only when the window draws its own title bar, which some Linux desktops don't allow -->
                     <StackPanel Orientation="Horizontal" Margin="10,-10,-16,-10"
                                 IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}">
                         <Button Classes="caption" Click="OnMinimize" AutomationProperties.Name="Minimize">
@@ -78,7 +77,7 @@
             </Grid>
         </Border>
 
-        <!-- Workspaces stay alive while hidden so viewports keep their state. -->
+        <!-- Workspaces stay alive while hidden so viewports keep their state -->
         <Panel Grid.Row="1">
             <views:HomeView IsVisible="{Binding IsHome}" />
             <Panel IsVisible="{Binding IsCharacters}">
@@ -107,9 +106,9 @@
         <!-- Status bar -->
         <Border Grid.Row="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
                 BorderThickness="0,1,0,0" Padding="16,6">
-            <!-- The two outer columns share the spare width equally, so the middle stays centered. -->
+            <!-- Equal outer columns keep the middle centered -->
             <Grid ColumnDefinitions="*,Auto,*">
-                <!-- Left: the version, and what the last update check found. -->
+                <!-- Version and update check result -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
                             HorizontalAlignment="Left">
                     <TextBlock Text="{Binding Updates.VersionLabel}" Classes="faint" FontSize="12" />
@@ -119,12 +118,12 @@
                                ToolTip.Tip="{Binding Updates.CheckStatusDetail}" />
                 </StackPanel>
 
-                <!-- Middle: the open game, or what is loading; click it to switch games. -->
+                <!-- Open game or loading status -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center"
                             HorizontalAlignment="Center" Margin="16,0">
                     <ProgressBar Width="140" VerticalAlignment="Center"
                                  IsVisible="{Binding IsBusy}" Value="{Binding ProgressValue}">
-                        <!-- Animated only while shown: a hidden indeterminate bar keeps redrawing the window. -->
+                        <!-- Only animate while shown, a hidden indeterminate bar keeps redrawing the window -->
                         <ProgressBar.IsIndeterminate>
                             <MultiBinding Converter="{x:Static BoolConverters.And}">
                                 <Binding Path="IsBusy" />

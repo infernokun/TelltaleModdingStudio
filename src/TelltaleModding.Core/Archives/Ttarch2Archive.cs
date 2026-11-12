@@ -7,31 +7,21 @@ using Microsoft.Win32.SafeHandles;
 namespace TelltaleModding.Core.Archives;
 
 /// <summary>
-/// In-process random access to a .ttarch2 archive, a port of the reading path of
-/// ttarchext's <c>ttarch_extract</c>, <c>ttarch_fseek</c> and <c>ttarch_fread</c>.
+/// Reads .ttarch2 archives in-process. Ported from ttarchext's <c>ttarch_extract</c>,
+/// <c>ttarch_fseek</c> and <c>ttarch_fread</c>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A .ttarch2 is an outer container wrapped around an inner "ATT" file table. The
-/// container is one of: <c>ZCTT</c> (data split into fixed-size chunks, each
-/// compressed on its own), <c>ECTT</c> (the same, with every chunk also
-/// Blowfish-encrypted using the per-game key), <c>NCTT</c> (stored as-is), or no
-/// container at all (the file starts straight at the table). A lowercase first
-/// letter (<c>zCTT</c>/<c>eCTT</c>) adds a u32 compression type: 0 zlib, 1 Oodle.
+/// The outer container is <c>ZCTT</c> (compressed chunks), <c>ECTT</c> (compressed and
+/// Blowfish-encrypted chunks), <c>NCTT</c> (stored as-is), or missing. A lowercase first
+/// letter adds a u32 compression type: 0 zlib, 1 Oodle.
 /// </para>
 /// <para>
-/// Inside, the uncompressed stream starts with <c>3ATT</c> or <c>4ATT</c>, the names
-/// block size and the file count, then one 28-byte record per file (name hash u64,
-/// offset u64, size u32, unknown u32, name block u16, name offset u16), then the
-/// names (null-terminated, addressed in 64 KB blocks), then the file data. File
-/// offsets are relative to the end of the names block.
+/// The inner stream starts with <c>3ATT</c> or <c>4ATT</c>, the names size and the file count,
+/// then a 28-byte record per file (name hash u64, offset u64, size u32, unknown u32,
+/// name block u16, name offset u16), then the names in 64 KB blocks, then the data.
+/// File offsets start at the end of the names.
 /// </para>
-/// <para>
-/// <see cref="Open"/> reads only the header and the chunks the table spans;
-/// <see cref="Read"/> decompresses only the chunks one file spans, keeping a few
-/// recently used chunks so neighbouring small files share the work.
-/// </para>
-/// <para>Classic .ttarch archives are not handled here.</para>
 /// </remarks>
 public sealed class Ttarch2Archive : IArchiveSource
 {
@@ -45,19 +35,17 @@ public sealed class Ttarch2Archive : IArchiveSource
     private readonly SafeFileHandle _file;
     private readonly long _fileLength;
 
-    // Chunked containers: file offset of each chunk, plus one past the last.
-    // Null for NCTT and bare tables, whose stream starts at _dataStart.
+    // File offset of each chunk plus one past the last. Null for NCTT and bare tables.
     private readonly long[]? _chunkStarts;
     private readonly long _dataStart;
     private readonly int _chunkSize;
-    private readonly TtarchBlowfish? _cipher;       // chunk encryption (ECTT only)
-    private readonly TtarchBlowfish? _gameCipher;   // the game's key, for Lua and legacy meta files
+    private readonly TtarchBlowfish? _cipher;       // ECTT chunk encryption
+    private readonly TtarchBlowfish? _gameCipher;   // for Lua and old meta files
     private readonly OodleDecompressor? _oodle;
 
     private readonly Dictionary<ArchiveEntryRef, long> _offsets;
 
-    // End of the last file in the stream, known once the table is read; Oodle
-    // needs it to size a short final chunk.
+    // End of the last file in the stream. Oodle needs it to size a short final chunk.
     private readonly long? _streamEnd;
     private readonly ChunkCache _cache = new(CacheCapacity);
 
@@ -74,7 +62,7 @@ public sealed class Ttarch2Archive : IArchiveSource
         _gameCipher = Ttarch2GameKeys.TryGetCipher(gameNum);
         _fileLength = RandomAccess.GetLength(file);
 
-        // --- outer container ---
+        // Outer container
         Span<byte> head = stackalloc byte[16];
         ReadExactly(0, head[..4]);
         bool hasCompressionType = head[0] is >= (byte)'a' and <= (byte)'z';
@@ -84,7 +72,7 @@ public sealed class Ttarch2Archive : IArchiveSource
         if (hasCompressionType)
         {
             ReadExactly(pos, head[..4]);
-            oodle = BinaryPrimitives.ReadUInt32LittleEndian(head) == 1;   // anything else: zlib, as ttarchext
+            oodle = BinaryPrimitives.ReadUInt32LittleEndian(head) == 1;   // anything else is zlib, like ttarchext
             pos += 4;
         }
 
@@ -122,7 +110,7 @@ public sealed class Ttarch2Archive : IArchiveSource
                     $"'{Path.GetFileName(path)}' is not a .ttarch2 archive (header '{Printable(head[..4])}').");
         }
 
-        // --- inner file table ---
+        // Inner file table
         try
         {
             (Entries, _offsets, _streamEnd) = ReadTable();
@@ -134,20 +122,10 @@ public sealed class Ttarch2Archive : IArchiveSource
         }
     }
 
-    /// <summary>
-    /// Opens a .ttarch2 archive and reads its table of contents.
-    /// </summary>
+    /// <summary>Opens a .ttarch2 archive and reads its table of contents.</summary>
     /// <param name="path">The archive file.</param>
-    /// <param name="gameNum">
-    /// ttarchext game index (see <c>Data/games.json</c>), used to pick the Blowfish
-    /// key. Encrypted (ECTT) archives cannot be opened without it; in other
-    /// archives it is only used to decrypt Lua scripts.
-    /// </param>
-    /// <param name="oodleSearchDir">
-    /// Where to look for the game's <c>oo2core_*_win64.dll</c>, normally the install
-    /// root; its parent and subfolders are searched too, as is the archive's own
-    /// folder and its parent. Only Oodle-compressed archives need it.
-    /// </param>
+    /// <param name="gameNum">ttarchext game index, which picks the Blowfish key. Encrypted archives need it.</param>
+    /// <param name="oodleSearchDir">Where to look for the game's Oodle DLL, usually the install folder.</param>
     /// <exception cref="InvalidDataException">The file is not a readable .ttarch2.</exception>
     /// <exception cref="ArgumentOutOfRangeException">The archive is encrypted and the game has no key.</exception>
     /// <exception cref="FileNotFoundException">The archive, or the Oodle DLL it needs, is missing.</exception>
@@ -166,10 +144,7 @@ public sealed class Ttarch2Archive : IArchiveSource
         }
     }
 
-    /// <summary>
-    /// True when the file starts with one of the .ttarch2 tags (ZCTT, ECTT, NCTT,
-    /// 3ATT, 4ATT, in either case of the first letter). Reads four bytes; never throws.
-    /// </summary>
+    /// <summary>True when the file starts with a .ttarch2 tag. Never throws.</summary>
     public static bool LooksLikeTtarch2(string path)
     {
         try
@@ -188,12 +163,9 @@ public sealed class Ttarch2Archive : IArchiveSource
     }
 
     /// <summary>
-    /// Reads one file, returning the same bytes ttarchext extracts: encrypted Lua
-    /// scripts (<c>.lua</c>/<c>.lenc</c>) come back decrypted and legacy
-    /// block-encrypted meta streams deciphered; all other files are returned as
-    /// stored. A <c>\x1bLEo</c> Lua script is 4 bytes shorter than
-    /// <see cref="ArchiveEntryRef.Size"/> because its tag is dropped. Safe to call
-    /// from several threads at once.
+    /// Reads one file, returning the same bytes ttarchext extracts, so Lua scripts and old meta
+    /// files come back decrypted. A <c>\x1bLEo</c> script is 4 bytes shorter than
+    /// <see cref="ArchiveEntryRef.Size"/>. Thread-safe.
     /// </summary>
     /// <exception cref="ArgumentException">The entry is not from this archive.</exception>
     public byte[] Read(ArchiveEntryRef entry)
@@ -212,7 +184,7 @@ public sealed class Ttarch2Archive : IArchiveSource
     /// <summary>Closes the archive file.</summary>
     public void Dispose() => _file.Dispose();
 
-    /// <summary>Parses the ATT table at the start of the (uncompressed) stream.</summary>
+    /// <summary>Parses the ATT table at the start of the uncompressed stream.</summary>
     private (IReadOnlyList<ArchiveEntryRef>, Dictionary<ArchiveEntryRef, long>, long? StreamEnd) ReadTable()
     {
         var head = new byte[16];
@@ -267,10 +239,8 @@ public sealed class Ttarch2Archive : IArchiveSource
     }
 
     /// <summary>
-    /// Fills <paramref name="dest"/> from the uncompressed stream starting at
-    /// <paramref name="offset"/>. Chunk <c>i</c> holds stream bytes
-    /// <c>[i * chunkSize, (i + 1) * chunkSize)</c>, as in ttarchext's
-    /// <c>ttarch_fseek</c>; a short chunk is simply followed by the next one.
+    /// Fills <paramref name="dest"/> from the uncompressed stream at <paramref name="offset"/>.
+    /// Chunk <c>i</c> starts at <c>i * chunkSize</c>, as in ttarchext's <c>ttarch_fseek</c>.
     /// </summary>
     private void ReadStream(long offset, Span<byte> dest)
     {
@@ -287,7 +257,7 @@ public sealed class Ttarch2Archive : IArchiveSource
         long index = offset / _chunkSize;
         int skip = (int)(offset % _chunkSize);
 
-        // Big reads: decompress every chunk the range covers up front, in parallel.
+        // Big reads decompress all their chunks up front, in parallel.
         long last = Math.Min((offset + dest.Length - 1) / _chunkSize, chunkCount - 1);
         Chunk[]? prefetched = null;
         if (last - index + 1 >= ParallelChunkThreshold)
@@ -347,7 +317,7 @@ public sealed class Ttarch2Archive : IArchiveSource
         ReadExactly(start, raw);
         _cipher?.Decrypt(raw);
 
-        // A chunk exactly one chunk long was stored uncompressed (ttarchext's rule).
+        // A chunk exactly the full chunk size is stored uncompressed, same rule as ttarchext.
         Chunk chunk;
         if (size == _chunkSize)
         {
@@ -376,9 +346,8 @@ public sealed class Ttarch2Archive : IArchiveSource
     }
 
     /// <summary>
-    /// Oodle-decompresses one chunk. Oodle must be told the exact decoded size:
-    /// ttarchext always passes the chunk size, which a short final chunk rejects,
-    /// so that chunk is retried with the size implied by the file table.
+    /// Oodle-decompresses one chunk. Oodle needs the exact decoded size, so a short final chunk
+    /// is retried with the size from the file table.
     /// </summary>
     private int DecodeOodle(int index, byte[] input, byte[] output)
     {
@@ -392,10 +361,7 @@ public sealed class Ttarch2Archive : IArchiveSource
         return length;
     }
 
-    /// <summary>
-    /// zlib-decompresses one chunk. Like ttarchext this accepts zlib-wrapped data
-    /// and falls back to raw deflate when the zlib header is absent or wrong.
-    /// </summary>
+    /// <summary>zlib-decompresses one chunk, falling back to raw deflate like ttarchext.</summary>
     private static int Inflate(byte[] input, byte[] output)
     {
         bool zlibHeader = input.Length >= 2 && (input[0] & 0x0F) == 8 && (input[0] << 8 | input[1]) % 31 == 0;
@@ -407,7 +373,7 @@ public sealed class Ttarch2Archive : IArchiveSource
             }
             catch (InvalidDataException)
             {
-                // Fall through: some data merely looks like a zlib header.
+                // Some data only looks like it has a zlib header.
             }
         }
         return Drain(new DeflateStream(new MemoryStream(input), CompressionMode.Decompress), output);
@@ -431,8 +397,7 @@ public sealed class Ttarch2Archive : IArchiveSource
         ReadExactly(pos, table);
         long dataStart = pos + table.Length;
 
-        // ttarchext ignores the absolute value of the first offset and places chunk
-        // 0 right after the table; later chunks follow by the offset deltas.
+        // ttarchext ignores the first offset's value and puts chunk 0 right after the table.
         var starts = new long[count + 1];
         long first = (long)BinaryPrimitives.ReadUInt64LittleEndian(table);
         for (int i = 0; i <= count; i++)
@@ -440,7 +405,7 @@ public sealed class Ttarch2Archive : IArchiveSource
         return starts;
     }
 
-    // Generous ceiling on the uncompressed stream size, to reject garbage tables early.
+    // Upper limit on the stream size, to reject garbage tables early.
     private long StreamLengthUpperBound() =>
         _chunkStarts is null ? _fileLength : (long)(_chunkStarts.Length - 1) * _chunkSize;
 
@@ -467,10 +432,10 @@ public sealed class Ttarch2Archive : IArchiveSource
         return sb.ToString();
     }
 
-    /// <summary>One decompressed chunk; only the first <see cref="Length"/> bytes of <see cref="Data"/> are valid.</summary>
+    /// <summary>One decompressed chunk. Only the first <see cref="Length"/> bytes of <see cref="Data"/> are valid.</summary>
     private readonly record struct Chunk(byte[] Data, int Length);
 
-    /// <summary>A tiny thread-safe LRU of decompressed chunks, keyed by chunk index.</summary>
+    /// <summary>Small thread-safe LRU cache of decompressed chunks.</summary>
     private sealed class ChunkCache
     {
         private readonly int _capacity;

@@ -4,30 +4,20 @@ using TelltaleModding.Core.Meta;
 
 namespace TelltaleModding.Core.Scene;
 
-/// <summary>
-/// The local transforms a single-frame clip sets, for the bones it drives (sampled at the
-/// clip's first frame).
-/// </summary>
+/// <summary>The local transforms a single-frame clip sets for the bones it drives.</summary>
 public sealed class FacePose
 {
     public static readonly FacePose Empty = new(new Dictionary<ulong, (Vector3, Quaternion)>());
 
     public FacePose(IReadOnlyDictionary<ulong, (Vector3 Pos, Quaternion Rot)> bones) => Bones = bones;
 
-    /// <summary>Joint symbol → local transform.</summary>
+    /// <summary>Local transform by joint symbol.</summary>
     public IReadOnlyDictionary<ulong, (Vector3 Pos, Quaternion Rot)> Bones { get; }
 }
 
 /// <summary>
-/// Poses a character's face in layers over a body clip, and skins the model with it:
-/// <list type="number">
-/// <item>base: the body clip at the given time (<see cref="Body"/>), or the rest pose;</item>
-/// <item>expression: a mood's expression pose, blended in by <see cref="ExpressionStrength"/>;</item>
-/// <item>mouth: mouth shape poses weighted by sliders and/or a voice line's phoneme keys
-/// (weights summing past 1 are normalised; what is left over stays on the closed mouth);</item>
-/// <item>gesture: a head/face gesture clip, applied additively when it is an <c>_add</c> clip;</item>
-/// <item>manual: per-bone rotation (degrees about the bone's local axes) and translation offsets.</item>
-/// </list>
+/// Poses a character's face in layers over a body clip and skins the model with it. Layers,
+/// in order: body, expression, mouth, gesture, manual bone offsets.
 /// </summary>
 public sealed class FaceRig
 {
@@ -56,7 +46,7 @@ public sealed class FaceRig
 
     public SkeletonFile Skeleton => _skeleton;
 
-    /// <summary>The body clip underneath the face; null poses the rest of the body at rest.</summary>
+    /// <summary>The body clip underneath the face, or null for the rest pose.</summary>
     public AnimationPlayer? Body { get; set; }
 
     // ---- Clips -----------------------------------------------------------
@@ -89,10 +79,7 @@ public sealed class FaceRig
     /// <summary>How strongly the expression shows, 0-1.</summary>
     public float ExpressionStrength { get; set; } = 1f;
 
-    /// <summary>
-    /// Sets the mouth shape poses, by shape name (<c>AA</c>, <c>MM</c>…); <c>default</c> is the
-    /// closed mouth. Weights of shapes that remain are kept.
-    /// </summary>
+    /// <summary>Sets the mouth shape poses by shape name; <c>default</c> is the closed mouth.</summary>
     public void SetMouthShapes(IReadOnlyDictionary<string, FacePose> poses)
     {
         _mouth = new Dictionary<string, FacePose>(poses, StringComparer.OrdinalIgnoreCase);
@@ -161,8 +148,8 @@ public sealed class FaceRig
     // ---- Manual offsets ----------------------------------------------------
 
     /// <summary>
-    /// Offsets one bone: <paramref name="degrees"/> rotates it about its own axes (X pitch,
-    /// Y yaw, Z roll), <paramref name="translation"/> moves it in its parent's space.
+    /// Offsets one bone: <paramref name="degrees"/> rotates it about its own axes, and
+    /// <paramref name="translation"/> moves it in its parent's space.
     /// </summary>
     public void SetBoneOffset(ulong joint, Vector3 degrees, Vector3 translation = default)
     {
@@ -197,7 +184,7 @@ public sealed class FaceRig
         (_expression is null || ExpressionStrength <= 0) && _weights.Count == 0 && _line.Count == 0 &&
         (_gesture is null || GestureWeight <= 0) && _offsets.Count == 0;
 
-    /// <summary>Clears the expression, mouth weights, line, gesture and offsets (mouth poses stay loaded).</summary>
+    /// <summary>Clears every layer. Mouth poses stay loaded.</summary>
     public void ResetToNeutral()
     {
         _expression = null;
@@ -208,10 +195,7 @@ public sealed class FaceRig
         _offsets.Clear();
     }
 
-    /// <summary>
-    /// The mouth shape weights in effect at <paramref name="lineTime"/>: the sliders plus the
-    /// line's keys, normalised when they sum past 1.
-    /// </summary>
+    /// <summary>The mouth shape weights at <paramref name="lineTime"/>: sliders plus line keys, normalized past 1.</summary>
     public IReadOnlyDictionary<string, float> MouthWeightsAt(float lineTime)
     {
         var weights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
@@ -247,7 +231,7 @@ public sealed class FaceRig
         float total = Math.Min(1f, weights.Values.Sum());
         var shapes = weights.Where(kv => kv.Value > 0).Select(kv => (_mouth[kv.Key], kv.Value)).ToList();
         _mouth.TryGetValue(FaceClipSet.ClosedShape, out var closed);
-        // While a line plays the mouth rests closed between keys; sliders ease it in with their weight.
+        // During a line the mouth rests closed between keys.
         float closedWeight = _line.Count > 0 ? 1f : total;
         var strength = _expression is null ? 0f : Math.Clamp(ExpressionStrength, 0f, 1f);
         return new Mix(_expression, strength, closed, closedWeight, shapes, 1f - total,
@@ -272,8 +256,7 @@ public sealed class FaceRig
         if (mix.Strength > 0 && mix.Expression!.Bones.TryGetValue(joint, out var face))
             local = Blend(local, face, mix.Strength);
 
-        // Mouth: ease toward the closed mouth, then a weighted average of the active shapes
-        // with the remainder left on what is underneath.
+        // Mouth: ease toward closed, then average the active shapes by weight.
         if (mix.ClosedWeight > 0 && mix.Closed is not null && mix.Closed.Bones.TryGetValue(joint, out var closed))
             local = Blend(local, closed, mix.ClosedWeight);
         float applied = mix.Leftover;
@@ -290,7 +273,7 @@ public sealed class FaceRig
             var g = gesture.SampleLocal(bone, mix.GestureTime);
             if (mix.GestureAdditive)
             {
-                // Additive clips come out layered on the rest pose; carry that difference over.
+                // Additive clips come out on the rest pose, so apply the difference.
                 var deltaRot = Quaternion.Normalize(Quaternion.Conjugate(bone.LocalRotation) * g.Rot);
                 var deltaPos = g.Pos - bone.LocalPosition;
                 local = (local.Pos + deltaPos * mix.GestureWeight,
@@ -317,10 +300,7 @@ public sealed class FaceRig
     /// <summary>A bone's local transform with every face layer applied.</summary>
     public (Vector3 Pos, Quaternion Rot) SampleLocal(SkeletonBone bone, float bodyTime) => Compose(bone, bodyTime, CurrentMix());
 
-    /// <summary>
-    /// World transforms of every bone: the body's own pose, with the bones the face layers touch
-    /// (and everything below them) recomposed.
-    /// </summary>
+    /// <summary>World transforms of every bone, with the face layers applied over the body pose.</summary>
     public Matrix4x4[] Pose(float bodyTime)
     {
         var world = Body?.Pose(bodyTime) ?? _skeleton.BindPoseWorld();

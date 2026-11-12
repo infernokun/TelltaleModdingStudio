@@ -4,10 +4,8 @@ using System.Collections.Concurrent;
 namespace TelltaleModding.Core.Audio;
 
 /// <summary>
-/// The Vorbis setup headers a game's audio runtime was built with, keyed by the CRC32
-/// that FMOD sound banks store in place of the header itself. They are harvested from
-/// the audio DLLs that ship in the game folder: the files are only read, never loaded,
-/// so 32-bit and 64-bit builds both work.
+/// Vorbis setup headers read out of a game's FMOD DLLs, keyed by the CRC32 that sound
+/// banks store instead of the header. The DLLs are only read, never loaded.
 /// </summary>
 public sealed class VorbisSetupLibrary
 {
@@ -29,7 +27,7 @@ public sealed class VorbisSetupLibrary
     /// <summary>Number of distinct setup headers available.</summary>
     public int Count => _setups.Count;
 
-    /// <summary>The folder the headers were harvested from, if any.</summary>
+    /// <summary>The folder the headers came from, if any.</summary>
     public string? Source { get; }
 
     /// <summary>True when a setup header with this CRC32 is known.</summary>
@@ -37,10 +35,7 @@ public sealed class VorbisSetupLibrary
 
     internal bool TryGet(uint crc, out byte[] setup) => _setups.TryGetValue(crc, out setup!);
 
-    /// <summary>
-    /// Scans every *.dll directly inside <paramref name="gameRootFolder"/> for embedded
-    /// setup headers. Results are cached per folder; a missing folder gives an empty library.
-    /// </summary>
+    /// <summary>Scans the DLLs in <paramref name="gameRootFolder"/> for setup headers. Cached per folder.</summary>
     public static VorbisSetupLibrary FromFolder(string gameRootFolder)
     {
         if (string.IsNullOrWhiteSpace(gameRootFolder) || !Directory.Exists(gameRootFolder))
@@ -93,11 +88,9 @@ public sealed class VorbisSetupLibrary
     }
 
     /// <summary>
-    /// Adds every setup header found in a DLL image. The runtime keeps a table of
-    /// records <c>{ptr data, u32 size, u32 crc, ptr base, u32 patchOffset, u32 patchLength}</c>:
-    /// plain records point straight at a header; patched records copy <c>size</c> bytes
-    /// of the base header and overwrite <c>patchLength</c> bytes at <c>patchOffset</c>
-    /// with the bytes at <c>data</c>. Every record carries its own CRC, which is checked.
+    /// Adds every setup header found in a DLL image. FMOD keeps a table of
+    /// <c>{ptr data, u32 size, u32 crc, ptr base, u32 patchOffset, u32 patchLength}</c> records.
+    /// A record with a base is a copy of that header with the data bytes patched in.
     /// </summary>
     internal static void Harvest(byte[] image, Dictionary<uint, byte[]> setups)
     {
@@ -110,8 +103,7 @@ public sealed class VorbisSetupLibrary
 
         if (setups.Count == before)
         {
-            // No table found: take each embedded header at face value, using the
-            // header's own structure to find where it ends.
+            // No table, so take each header as-is and parse it to find its end.
             foreach (int hit in hits)
             {
                 int end = Math.Min(image.Length, hit + 0x20000);
@@ -133,7 +125,7 @@ public sealed class VorbisSetupLibrary
         int ptrSize = pe.Is64 ? 8 : 4;
         int recSize = ptrSize * 2 + 16;
 
-        // Locate the table through references to the first embedded header.
+        // Find the table through a pointer to the first header.
         if (pe.FileToVa(hits[0]) is not ulong firstVa) return;
 
         int tableRef = -1;

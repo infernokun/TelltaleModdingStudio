@@ -6,9 +6,7 @@ namespace TelltaleModding.App.Tests;
 
 public class ShaderSourceTests
 {
-    // GLSL keywords reserved for future use (GLSL 3.30 and ESSL 3.00). Windows drivers let
-    // most of them through as names, but Mesa on Linux rejects the shader, and the 3D view
-    // stays blank. "packed" did exactly that.
+    // Reserved GLSL words. Windows drivers allow most as names, but Mesa on Linux rejects the shader.
     private static readonly HashSet<string> Reserved = new(StringComparer.Ordinal)
     {
         "common", "partition", "active", "asm", "class", "union", "enum", "typedef", "template", "this",
@@ -41,18 +39,17 @@ public class ShaderSourceTests
     public void Gloss_maps_and_rim_lights_keep_dull_surfaces_matte()
     {
         var scene = Shaders().Single(s => (string)s[0] == "SceneFragment")[1] as string ?? "";
-        // Gloss in a specular map's alpha sets the highlight's sharpness and strength.
+        // Gloss in a specular map's alpha sets the highlight.
         Assert.Contains("uSpecLayout == 3", scene);
         Assert.Contains("1.0 - sm.a", scene);
-        // A rim light is not wrapped round the side it faces.
+        // Rim lights don't wrap.
         Assert.Contains("uLightCone[i].w > 0.5 ? 0.0 : wrap", scene);
     }
 
     [Fact]
     public void Outlines_are_drawn_in_each_surface_s_own_color()
     {
-        // The scene pass writes every surface's outline color (the material's, or the look's)
-        // to a third target, the hull fills it too, and the edge pass draws lines in it.
+        // Each surface writes its outline color to a third target that the edge pass uses.
         Assert.Contains("layout(location = 2) out vec4 outLine;", Source("SceneFragment"));
         Assert.Contains("outLine = vec4(uLineColor, alpha);", Source("SceneFragment"));
         Assert.Contains("layout(location = 2) out vec4 outLine;", Source("HullFragment"));

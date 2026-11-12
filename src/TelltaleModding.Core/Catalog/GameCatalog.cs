@@ -7,19 +7,13 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Catalog;
 
 /// <summary>
-/// Everything a game install offers: every file it uses (after archive overrides), its
-/// characters with their parts and default outfits, and their animations. Built once
-/// from the archives' tables of contents plus the characters' <c>.prop</c> files, then
-/// cached on disk (see <see cref="CatalogCache"/>) so reopening is near-instant.
+/// Everything a game install offers: every file it uses after archive overrides, its
+/// characters with their parts and default outfits, and their animations. Cached on disk
+/// by <see cref="CatalogCache"/>.
 /// </summary>
 /// <remarks>
-/// <para><b>Override priority</b> (see <see cref="ArchivePriorities"/>): each archive takes the
-/// priority of the resource set that lists it in the loose <c>_resdesc_</c> files; the copy
-/// of a file in the highest-priority archive wins, ties going to the archive name that sorts
-/// last. Other languages' archives are skipped.</para>
-/// <para><b>Archive access</b> goes through the caller's opener, so the fast native reader
-/// and the ttarchext fallback are interchangeable. Sources are opened lazily, cached for the
-/// catalog's lifetime and disposed with it.</para>
+/// Which copy of a file wins is decided by <see cref="ArchivePriorities"/>. Archives are opened
+/// through the caller's opener on first use and disposed with the catalog.
 /// </remarks>
 public sealed class GameCatalog : IDisposable
 {
@@ -38,22 +32,16 @@ public sealed class GameCatalog : IDisposable
     /// <summary>The install this catalog describes.</summary>
     public GameInstall Install { get; }
 
-    /// <summary>Characters, sorted by DisplayName then Variant.</summary>
+    /// <summary>Characters, sorted by name then variant.</summary>
     public IReadOnlyList<CharacterEntry> Characters { get; private set; } = Array.Empty<CharacterEntry>();
 
-    /// <summary>
-    /// Every file the game uses (one entry per file name, the copy <see cref="Find"/>
-    /// returns), sorted by Name (ordinal, case-insensitive).
-    /// </summary>
+    /// <summary>Every file the game uses, one entry per file name, sorted by name.</summary>
     public IReadOnlyList<ArchiveEntryRef> Entries { get; private set; } = Array.Empty<ArchiveEntryRef>();
 
-    /// <summary>Every archive of the install with its resolved priority (disabled ones included).</summary>
+    /// <summary>Every archive of the install with its resolved priority, disabled ones included.</summary>
     public IReadOnlyList<CatalogArchive> Archives { get; private set; } = Array.Empty<CatalogArchive>();
 
-    /// <summary>
-    /// Archives whose table of contents could not be read during this build (their files are
-    /// missing from the index; the index is then not cached). Empty when loaded from cache.
-    /// </summary>
+    /// <summary>Archives whose table of contents couldn't be read during this build. Empty when loaded from cache.</summary>
     public IReadOnlyList<string> UnreadableArchives { get; private set; } = Array.Empty<string>();
 
     /// <summary>True when this catalog was loaded from the on-disk cache rather than built.</summary>
@@ -69,18 +57,16 @@ public sealed class GameCatalog : IDisposable
         _animationCopies = new(BuildAnimationCopies, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
-    /// <summary>
-    /// Opens (from cache) or builds the catalog for <paramref name="install"/>.
-    /// </summary>
+    /// <summary>Loads the catalog for <paramref name="install"/> from cache, or builds it.</summary>
     /// <param name="install">The game install.</param>
-    /// <param name="openArchive">Opens an archive by full path (e.g. <see cref="TtarchextArchiveSource.CreateOpener"/>).</param>
+    /// <param name="openArchive">Opens an archive by full path.</param>
     /// <param name="progress">Optional progress sink.</param>
     /// <param name="cancellationToken">Cancels the build.</param>
     public static Task<GameCatalog> OpenAsync(GameInstall install, Func<string, IArchiveSource> openArchive,
         IProgress<CatalogProgress>? progress = null, CancellationToken cancellationToken = default) =>
         OpenAsync(install, openArchive, new CatalogOptions(), progress, cancellationToken);
 
-    /// <summary>Opens or builds the catalog with explicit <paramref name="options"/> (cache folder, engine, parallelism).</summary>
+    /// <summary>Loads or builds the catalog with the given <paramref name="options"/>.</summary>
     public static async Task<GameCatalog> OpenAsync(GameInstall install, Func<string, IArchiveSource> openArchive,
         CatalogOptions options, IProgress<CatalogProgress>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -108,8 +94,7 @@ public sealed class GameCatalog : IDisposable
             if (data is null)
             {
                 data = await catalog.BuildAsync(options, progress, cancellationToken).ConfigureAwait(false);
-                // An index missing archives (e.g. one was locked by the game) is not cached,
-                // so the next open retries instead of persisting the gap.
+                // Don't cache an index with missing archives, so the next open tries again.
                 if (options.UseCache && catalog.UnreadableArchives.Count == 0)
                 {
                     progress?.Report(new CatalogProgress("Saving index", 0, 1));
@@ -132,10 +117,7 @@ public sealed class GameCatalog : IDisposable
         }
     }
 
-    /// <summary>
-    /// Looks up a file by name (case-insensitive), returning the copy the game uses after
-    /// archive overrides. A name with folders also matches by its file-name part.
-    /// </summary>
+    /// <summary>Looks up the copy of a file the game uses. A name with folders also matches by its file name.</summary>
     public ArchiveEntryRef? Find(string fileName)
     {
         if (string.IsNullOrEmpty(fileName)) return null;
@@ -145,27 +127,21 @@ public sealed class GameCatalog : IDisposable
     }
 
     /// <summary>
-    /// Looks up a file by the engine's CRC64 symbol (<see cref="TelltaleCrc64.HashSymbol"/>) of
-    /// its name with or without extension; TTDS materials hash texture names with
-    /// <c>.d3dtx</c>, older games without. When several files share a stem, the
-    /// extension-less symbol resolves to a texture first, then a mesh, then anything.
+    /// Looks up a file by the symbol of its name, with or without extension, since newer games
+    /// hash texture names with the extension and older ones without.
     /// </summary>
     public ArchiveEntryRef? FindBySymbol(ulong symbol) => _bySymbol.GetValueOrDefault(symbol);
 
     /// <summary>
-    /// Animation clips for a character: clips whose name mentions the character
-    /// (<c>sk62_clementine400_jog</c>, <c>sk62_action_clementine400AjCloseDoor</c>,
-    /// <c>clementine400_phoneme_*</c>) first, then the other clips of the same skeleton
-    /// family (<c>sk62_*</c>). Each group is sorted by display name. Grouping is by name
-    /// only; bones are not checked.
+    /// Animation clips for a character: clips named for the character first, then the rest of
+    /// the skeleton family. Matching is by name only.
     /// </summary>
     public IReadOnlyList<AnimationEntry> AnimationsFor(CharacterEntry character)
     {
         ArgumentNullException.ThrowIfNull(character);
         var skeletonStem = character.Skeleton is null ? null : Path.GetFileNameWithoutExtension(character.Skeleton.Name);
         var family = CharacterNaming.FamilyPrefix(skeletonStem ?? character.Id) ?? CharacterNaming.FamilyPrefix(character.Id);
-        // Exact tokens (the agent and skeleton names) rank above the person's name, which
-        // also covers their other variants' clips ("rhys…" for Rhys Future).
+        // The agent and skeleton names rank above the person's name, which also matches other variants' clips.
         var exact = new[] { CharacterNaming.StripFamily(character.Id), skeletonStem is null ? null : CharacterNaming.StripFamily(skeletonStem) }
             .Where(t => !string.IsNullOrEmpty(t))
             .Select(t => t!)
@@ -185,9 +161,7 @@ public sealed class GameCatalog : IDisposable
             var group = _animationFamilies.GetOrAdd(family, f => new AnimationFamily(_animationsByFamily.GetValueOrDefault(f) ?? new List<ArchiveEntryRef>(), f.Length));
             foreach (var (entry, display) in group.Sorted)
             {
-                // Clips are named performer-first ("action_fionaKissSashaHand" is Fiona's),
-                // so the character performs a clip only when their name starts a segment;
-                // a name further in is someone else's clip from a scene with them.
+                // Clip names put the performer first, so a name further in is someone else's clip.
                 if (exact.Any(t => PerformsClip(display, t)))
                     strong.Add(new AnimationEntry(entry, display, true));
                 else if (personTokens.Any(t => PerformsClip(display, t)))
@@ -199,7 +173,7 @@ public sealed class GameCatalog : IDisposable
             }
         }
 
-        // Unprefixed clips that start with the character's name (lip-sync phonemes etc.).
+        // Unprefixed clips that start with the character's name, like lip-sync phonemes.
         foreach (var entry in _unprefixedAnimations)
         {
             var stem = Path.GetFileNameWithoutExtension(entry.Name);
@@ -221,11 +195,7 @@ public sealed class GameCatalog : IDisposable
             stem.Length > token.Length && stem.StartsWith(token, StringComparison.OrdinalIgnoreCase) && stem[token.Length] == '_';
     }
 
-    /// <summary>
-    /// True when <paramref name="token"/> starts one of the clip name's '_' segments as a
-    /// whole word, the performer position in Telltale clip names
-    /// (<c>action_clementine400AjCloseDoor</c>, <c>sasha103_sk55_action_…</c>, <c>idle_sashaHandsHips</c>).
-    /// </summary>
+    /// <summary>True when <paramref name="token"/> starts one of the clip name's '_' segments as a whole word.</summary>
     public static bool PerformsClip(string clipName, string token)
     {
         foreach (var segment in clipName.Split('_', StringSplitOptions.RemoveEmptyEntries))
@@ -238,11 +208,7 @@ public sealed class GameCatalog : IDisposable
         return false;
     }
 
-    /// <summary>
-    /// True when <paramref name="token"/> occurs in <paramref name="text"/> as a whole word
-    /// (case-insensitive): preceded by start, '_' or a camel-case/digit boundary, and not
-    /// followed by a lower-case letter (or a digit, when the token ends in one).
-    /// </summary>
+    /// <summary>True when <paramref name="token"/> occurs in <paramref name="text"/> as a whole word.</summary>
     public static bool ContainsNameToken(string text, string token)
     {
         if (token.Length == 0) return false;
@@ -260,11 +226,7 @@ public sealed class GameCatalog : IDisposable
         return false;
     }
 
-    /// <summary>
-    /// Reads a file's bytes from its archive, opening the archive on first use through the
-    /// opener given to <see cref="OpenAsync(GameInstall, Func{string, IArchiveSource}, IProgress{CatalogProgress}?, CancellationToken)"/>.
-    /// Thread-safe.
-    /// </summary>
+    /// <summary>Reads a file's bytes from its archive, opening the archive on first use. Thread-safe.</summary>
     public byte[] Read(ArchiveEntryRef entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -280,13 +242,9 @@ public sealed class GameCatalog : IDisposable
     }
 
     /// <summary>
-    /// An animation's bytes for playback: the copy <see cref="Read"/> returns, unless that copy
-    /// holds a single pose (<see cref="AnimationFile.HasMotion"/>) while a copy it overrides
-    /// moves; then the highest-priority copy that moves. The Wolf Among Us needs this: its
-    /// episode 2-5 and patch archives re-export many episode 1 clips with keyframes thinned so
-    /// far that subtle ones (bigby_headGesture_nodYes, idles' weight shifts) keep only their first
-    /// frame, and those copies override the episode 1 originals. Reads every archive's table the
-    /// first time a held pose is asked for. Thread-safe.
+    /// An animation's bytes for playback. If the winning copy holds a single pose but a copy it
+    /// overrides moves, returns the highest-priority copy that moves. The Wolf Among Us needs
+    /// this because later archives override some episode 1 clips with versions that lost their motion.
     /// </summary>
     public byte[] ReadAnimation(ArchiveEntryRef entry)
     {
@@ -399,7 +357,7 @@ public sealed class GameCatalog : IDisposable
                 $"None of the {enabled.Count} archives in '{Install.ArchivesFolder}' could be opened: {failures.Values.First().Message}",
                 failures.Values.First());
 
-        // 3. Resolve overrides: insert in precedence order, later copies replace earlier ones.
+        // 3. Resolve overrides. Later copies replace earlier ones.
         var winners = new Dictionary<string, ArchiveEntryRef>(StringComparer.OrdinalIgnoreCase);
         foreach (var archive in ArchivePriorities.InPrecedenceOrder(archives))
             if (tables.TryGetValue(archive.Path, out var entries))
@@ -462,7 +420,7 @@ public sealed class GameCatalog : IDisposable
     {
         Archives = data.Archives;
         Entries = data.Entries;
-        // Applied on load rather than when the index is built, so cached indexes get it too.
+        // Done on load instead of at build time so cached indexes get it too.
         Characters = CharacterGrouping.InheritBaseParts(data.Characters.Select(CharacterGrouping.ThinRandomPools).Select(CharacterGrouping.PickScriptedHead).ToArray());
 
         var byName = new Dictionary<string, ArchiveEntryRef>(data.Entries.Count, StringComparer.OrdinalIgnoreCase);

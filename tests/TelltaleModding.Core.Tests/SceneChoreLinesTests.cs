@@ -49,7 +49,7 @@ public class SceneChoreLinesTests
         Assert.Equal(7.99f, own.Start, 0.01f);
         Assert.Equal(11.11f, own.End, 0.01f);
 
-        // Another line voiced with AJ's recording is placed where the chore plays that recording.
+        // A line that reuses AJ's recording lands where the chore plays it.
         var borrowed = lines.Find(Entry(400000001, "396764597.wav"));
         Assert.Equal(own.Resource, borrowed!.Resource);
 
@@ -68,7 +68,7 @@ public class SceneChoreLinesTests
 
         lines.AddExchange(new[] { 396764012u }, exchange);
         Assert.Same(exchange, lines.Find(Entry(396764012))!.Chore);
-        // Lines the exchange's chore does not voice still come from any chore.
+        // Lines the exchange's chore doesn't voice still come from other chores.
         lines.AddExchange(new[] { 396764596u }, ChoreWithoutLines());
         Assert.Equal("AJ", lines.Find(Entry(396764596))!.Agent);
     }
@@ -103,7 +103,7 @@ public class SceneChoreLinesTests
     [InstalledGameFact(WolfAmongUs)]
     public async Task Finds_a_line_voiced_with_an_earlier_lines_recording()
     {
-        // "Is it funny?" plays the recording of an earlier take, which the chore places.
+        // "Is it funny?" plays an earlier take's recording.
         var found = await FindAsync(WolfAmongUs, 357138734);
         Assert.NotNull(found);
         Assert.Equal("fabletownAndersen_cop_cs_TestingYou_10.chore", found!.Chore.Name);
@@ -124,7 +124,7 @@ public class SceneChoreLinesTests
     [InstalledGameFact(Borderlands)]
     public async Task Finds_a_line_in_a_chore_named_unlike_its_scene_through_the_dialog()
     {
-        // Marcus opens the episode in ui_openingIntro.chore, named after nothing in the scene.
+        // Marcus opens the episode in ui_openingIntro.chore.
         var found = await FindAsync(Borderlands, 361570435);
         Assert.NotNull(found);
         Assert.Equal("ui_openingIntro.chore", found!.Chore.Name);

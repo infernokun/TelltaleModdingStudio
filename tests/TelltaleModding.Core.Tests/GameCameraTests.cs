@@ -4,9 +4,8 @@ using TelltaleModding.Core.Scene;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// The camera the game shows a line from, read from a cutscene chore and its scene.
-/// Samples: <c>env_lodgeExteriorAndMainRoom_cs_hideCouch_1.chore</c> and
-/// <c>adv_lodgeExteriorAndMainRoom.scene</c> (The Walking Dead Definitive Series).
+/// The camera the game shows a line from. Samples (Definitive Series):
+/// <c>env_lodgeExteriorAndMainRoom_cs_hideCouch_1.chore</c> and <c>adv_lodgeExteriorAndMainRoom.scene</c>.
 /// </summary>
 public class GameCameraTests
 {
@@ -35,7 +34,7 @@ public class GameCameraTests
             var view = camera!.At(framed[0]);
             Assert.Equal(1f, view.Forward.Length(), 1e-3f);
             Assert.InRange(view.FieldOfView, 10, 90);
-            // Looking toward the face: it is in front of the camera, not behind it.
+            // The face is in front of the camera.
             Assert.True(Vector3.Dot(Face - view.Eye, view.Forward) > 0);
         }
     }

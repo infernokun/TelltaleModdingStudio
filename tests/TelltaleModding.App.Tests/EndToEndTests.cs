@@ -9,9 +9,7 @@ using Xunit;
 namespace TelltaleModding.App.Tests;
 
 /// <summary>
-/// Drives the real shell against installed games (skipped when the install is
-/// missing): open the game, pick a character, check the outfit and textures, and
-/// play a clip. Screenshots go to <see cref="UiTests.ShotsFolder"/>.
+/// Runs the real app against installed games. Screenshots go to <see cref="UiTests.ShotsFolder"/>.
 /// </summary>
 public class EndToEndTests : IDisposable
 {
@@ -20,7 +18,7 @@ public class EndToEndTests : IDisposable
 
     private readonly List<(MainWindow Window, ShellViewModel Shell)> _opened = new();
 
-    // Each test opens whole games; close them when it ends so a full run stays within memory.
+    // Close the games after each test to keep memory down.
     public void Dispose()
     {
         foreach (var (window, shell) in _opened)
@@ -89,12 +87,12 @@ public class EndToEndTests : IDisposable
         Assert.Equal(new[] { "bodyLowerB", "bodyUpperB", "eyesMouth", "hairCap", "hands", "head" }, worn);
         Assert.Contains(shell.Characters.Details, d => d.Contains("sk62_clementine400_head.d3dtx"));
         Assert.Contains(shell.Characters.Details, d => d.Contains("sk62_clementine400_eyes.d3dtx"));
-        // The cornea layer only has a normal map; it must stay hidden so the iris shows.
+        // The cornea layer stays hidden so the iris shows.
         Assert.Contains(shell.Characters.Details, d => d.Contains("hidden (texture-less overlay"));
         Assert.DoesNotContain(shell.Characters.Details, d => d.Contains("· sk_wd4SharedParts_cornea_nm.d3dtx"));
         Assert.True(shell.Characters.Animations.Count > 1000, $"{shell.Characters.Animations.Count} clips");
 
-        // Play a jog and step it: the posed frame must differ from the rest pose.
+        // Play a jog and seek into it.
         shell.Characters.AnimationFilter = "clementine400_jog";
         var jog = shell.Characters.Animations.First(a => a.FileName == "sk62_clementine400_jog.anm");
         System.Numerics.Matrix4x4[]? frame = null;
@@ -105,18 +103,18 @@ public class EndToEndTests : IDisposable
         shell.Characters.CurrentTime = shell.Characters.Duration / 2;
         Dispatcher.UIThread.RunJobs();
         Assert.NotNull(frame);
-        // Mid-jog the skinning matrices move bones away from the rest pose.
+        // Mid-jog the bones are out of the rest pose.
         Assert.Contains(frame!, m => !m.IsIdentity);
         Shot(window, "e2e-wdc-clementine-jog");
 
-        // Toggling a part rebuilds the model and keeps the clip playing.
+        // Swapping a part keeps the clip playing.
         shell.Characters.Outfit.SelectMany(s => s.Parts).First(p => p.MeshName.EndsWith("hairCap.d3dmesh")).IsOn = false;
         shell.Characters.Outfit.SelectMany(s => s.Parts).First(p => p.MeshName.EndsWith("hairSidePony.d3dmesh")).IsOn = true;
         PumpUntil(() => shell.Characters.Details.Any(d => d.Contains("hairSidePony")) && !shell.Characters.IsLoading,
             30, "the outfit change");
         Assert.True(shell.Characters.HasClip);
 
-        // Alvin's materials list engine placeholders (color_000) before his real textures.
+        // Alvin gets his real textures, not the placeholders listed first.
         shell.Characters.CharacterFilter = "alvin";
         shell.Characters.SelectedCharacter = shell.Characters.Characters.First(c => c.Entry.Id == "sk54_alvin");
         PumpUntil(() => shell.Characters.Title == "Alvin" && shell.Characters.HasModel && !shell.Characters.IsLoading,
@@ -125,8 +123,7 @@ public class EndToEndTests : IDisposable
         Assert.Contains(shell.Characters.Details, d => d.Contains("· sk54_alvin_head.d3dtx"));
         Assert.DoesNotContain(shell.Characters.Details, d => d.Contains("· color_000.d3dtx"));
 
-        // Clementine 305 (Season 3): damage masks are listed before her real head, and a
-        // black "eyes glass" cornea layer covers her eyes.
+        // Clementine 305 gets her real head and no black eye glass layer.
         shell.Characters.CharacterFilter = "clementine 305";
         shell.Characters.SelectedCharacter = shell.Characters.Characters.First(c => c.Entry.Id == "sk62_clementine305");
         PumpUntil(() => shell.Characters.Subtitle.Contains("clementine305") && shell.Characters.HasModel
@@ -136,7 +133,7 @@ public class EndToEndTests : IDisposable
         Assert.DoesNotContain(shell.Characters.Details, d => d.Contains("DamageMask") || d.Contains("damageMask"));
         Assert.DoesNotContain(shell.Characters.Details, d => d.Contains("· sk_wd3SharedParts_eyesGlass.d3dtx"));
 
-        // Assets: search the whole game and preview a texture.
+        // Assets: search and preview a texture.
         shell.CurrentWorkspace = Workspace.Assets;
         shell.Assets.Query = "clementine400_head.d3dtx";
         PumpUntil(() => shell.Assets.Results.Count > 0 &&
@@ -172,7 +169,7 @@ public class EndToEndTests : IDisposable
         window.Show();
         RunUntilDone(shell.AddAndOpenAsync(TalesFromTheBorderlands), 180, "the game to open");
 
-        // Dialogue: every line indexed, Rhys's lines filtered, one decoded and playing.
+        // Dialogue: filter to Rhys's lines and play one.
         shell.CurrentWorkspace = Workspace.Dialogue;
         PumpUntil(() => !shell.Dialogue.IsIndexing && shell.Dialogue.Lines.Count > 0, 120, "the dialogue index");
         Assert.True(shell.Dialogue.Speakers.Count > 50, $"{shell.Dialogue.Speakers.Count} speakers");
@@ -186,15 +183,15 @@ public class EndToEndTests : IDisposable
         Assert.Null(shell.Dialogue.Player.Error);
         Assert.True(shell.Dialogue.Player.Duration > 0.3);
         Assert.True(shell.Dialogue.Player.IsPlaying);
-        // The speaker appears beside the list, lip-synced in the line's mood.
+        // The speaker shows up with lip-sync.
         PumpUntil(() => shell.Dialogue.Speaker.HasModel && !shell.Dialogue.Speaker.IsLoading, 90, "the speaker's model");
         Assert.StartsWith("Rhys", shell.Dialogue.Speaker.Caption);
         Assert.DoesNotContain("no lip-sync", shell.Dialogue.Speaker.Caption);
-        // UI timers don't tick headless: seek instead, which poses the mouth the same way.
+        // UI timers don't tick headless, so seek instead.
         shell.Dialogue.Player.Position = 1.0;
         Shot(window, "e2e-tftb-dialogue");
 
-        // One episode narrows lines, conversations and music together.
+        // Picking an episode filters lines, conversations and music.
         int allScenes = shell.Dialogue.Conversations.Scenes.Count;
         int allAlbums = shell.Dialogue.Music.Albums.Count;
         shell.Dialogue.SelectedSpeaker = null;
@@ -214,11 +211,11 @@ public class EndToEndTests : IDisposable
         Assert.Equal(allAlbums, shell.Dialogue.Music.Albums.Count);
         shell.Dialogue.Mode = DialogueMode.Lines;
 
-        // Leaving Dialogue pauses the line; coming back, Play resumes it.
+        // Leaving Dialogue pauses the line.
         shell.Dialogue.PlayLineCommand.Execute(shell.Dialogue.SelectedLine);
         PumpUntil(() => shell.Dialogue.Player.IsPlaying, 30, "the line to play again");
 
-        // Characters → "hear their lines" lands on the speaker.
+        // "Hear their lines" on Characters opens that speaker.
         shell.CurrentWorkspace = Workspace.Characters;
         Assert.False(shell.Dialogue.Player.IsPlaying);
         shell.Characters.SelectedCharacter = shell.Characters.Characters.First(c => c.Entry.Id == "sk54_rhys");
@@ -227,7 +224,7 @@ public class EndToEndTests : IDisposable
         Assert.True(shell.IsDialogue);
         Assert.Equal("RHYS", shell.Dialogue.SelectedSpeaker?.Name);
 
-        // Scripts: a compiled script reads back as Lua.
+        // Scripts: a compiled script decompiles to Lua.
         shell.CurrentWorkspace = Workspace.Scripts;
         PumpUntil(() => shell.Scripts.Scripts.Count > 100, 30, "the script list");
         shell.Scripts.Selected = shell.Scripts.Scripts.First(r => r.Name == "AchievementManager.lua");

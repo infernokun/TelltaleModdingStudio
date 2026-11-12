@@ -2,10 +2,10 @@ using NAudio.Wave;
 
 namespace TelltaleModding.App.Services;
 
-/// <summary>Plays decoded 16-bit PCM, one clip at a time; callers poll <see cref="Position"/> and <see cref="IsPlaying"/>.</summary>
+/// <summary>Plays decoded 16-bit PCM, one clip at a time.</summary>
 public interface IAudioOutput : IDisposable
 {
-    /// <summary>Starts <paramref name="pcm"/> (interleaved) from <paramref name="startAt"/>, replacing any clip playing.</summary>
+    /// <summary>Plays <paramref name="pcm"/> from <paramref name="startAt"/>, replacing any clip already playing.</summary>
     void Play(short[] pcm, int channels, int sampleRate, TimeSpan startAt);
 
     void Pause();
@@ -41,9 +41,8 @@ public sealed class WaveOutAudioOutput : IAudioOutput
         }
     }
 
-    // Where in the clip the device started counting from: the stream's read position runs
-    // up to a buffer ahead of what is heard and moves a buffer at a time, so the position
-    // is the device's own count of samples played, from here.
+    // Where the device started counting from. The stream position runs a buffer ahead of
+    // what you hear, so Position uses the device's own played count instead.
     private TimeSpan _origin;
 
     public TimeSpan Position
@@ -99,7 +98,7 @@ public sealed class WaveOutAudioOutput : IAudioOutput
     public void Dispose() => Stop();
 }
 
-/// <summary>Output that plays nothing (no sound device, or tests); time still advances.</summary>
+/// <summary>Output that plays nothing but still keeps time.</summary>
 public sealed class SilentAudioOutput : IAudioOutput
 {
     private DateTime _startedAt;
@@ -149,19 +148,19 @@ public sealed class SilentAudioOutput : IAudioOutput
     private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
 }
 
-/// <summary>The app's one audio output, shared so starting a clip anywhere stops the last one.</summary>
+/// <summary>The app's one shared audio output.</summary>
 public static class AudioOutputs
 {
     private static IAudioOutput? _shared;
 
-    /// <summary>The shared output: the sound card, or a silent stand-in when none is available.</summary>
+    /// <summary>The sound card, or a silent output when there is none.</summary>
     public static IAudioOutput Shared
     {
         get => _shared ??= Create();
         set => _shared = value;
     }
 
-    // Wave-out on Windows, PulseAudio (or PipeWire) on Linux.
+    // Wave-out on Windows, PulseAudio on Linux.
     private static IAudioOutput Create()
     {
         if (OperatingSystem.IsWindows())

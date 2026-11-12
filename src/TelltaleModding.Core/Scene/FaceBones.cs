@@ -12,10 +12,7 @@ public enum FaceBoneGroup { JawMouth, Lips, Brows, Eyes, Cheeks, Other }
 /// <param name="Name">The recovered bone name, or <c>bone_&lt;hex&gt;</c>.</param>
 public sealed record FaceBone(ulong Joint, int Index, string Name, string Label, FaceBoneGroup Group);
 
-/// <summary>
-/// Finds a skeleton's face bones: those the character's facial clips drive, plus bones whose
-/// recovered names place them on the face (jaw, brows, eyes, lids, cheeks, lips…).
-/// </summary>
+/// <summary>Finds a skeleton's face bones: those the facial clips drive, plus bones whose names place them on the face.</summary>
 public static class FaceBones
 {
     /// <summary>The face bones of <paramref name="skeleton"/>, ordered by group then label.</summary>
@@ -61,8 +58,8 @@ public static class FaceBones
             .ThenBy(b => b.Label, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    // Unnamed rigs: sort bones into face regions by where they sit relative to the head
-    // (models are Y-up, facing +Z, with the character's left on +X).
+    // Unnamed rigs: sort bones into face regions by position relative to the head.
+    // Models are Y-up, facing +Z, with the character's left on +X.
     private static IEnumerable<FaceBone> PlaceByPosition(SkeletonFile skeleton, List<int> indices)
     {
         if (indices.Count == 0)
@@ -84,8 +81,7 @@ public static class FaceBones
             return false;
         }
 
-        // Face bones sit on the centre line or in mirrored pairs; hair, ears and the like
-        // usually don't, so they stay out of the face's extents.
+        // Face bones sit on the center line or in mirrored pairs; other head bones usually don't.
         const float tolerance = 0.004f;
         bool Symmetric(int i) => MathF.Abs(at[i].X) < tolerance ||
             indices.Any(o => o != i && Vector3.Distance(at[o], at[i] * new Vector3(-1, 1, 1)) < tolerance);
@@ -130,7 +126,7 @@ public static class FaceBones
             ? g.Select(b => b with { Label = b.Label.TrimEnd(' ', '·') })
             : g.OrderBy(b => b.Index).Select((b, n) => b with { Label = $"{g.Key.TrimEnd(' ', '·')} {n + 1}" }));
 
-    /// <summary>The face group of a recovered bone name, or null for bones off the face (head, neck…).</summary>
+    /// <summary>The face group of a recovered bone name, or null for bones off the face.</summary>
     public static FaceBoneGroup? GroupOf(string boneName)
     {
         var n = boneName.EndsWith("_L", StringComparison.Ordinal) || boneName.EndsWith("_R", StringComparison.Ordinal)
@@ -150,7 +146,7 @@ public static class FaceBones
         return null;
     }
 
-    /// <summary>A group's heading ("Jaw & mouth").</summary>
+    /// <summary>A group's heading.</summary>
     public static string GroupLabel(FaceBoneGroup group) => group switch
     {
         FaceBoneGroup.JawMouth => "Jaw & mouth",
@@ -161,7 +157,7 @@ public static class FaceBones
         _ => "Other",
     };
 
-    /// <summary>"browOuter_L" → "Brow outer (left)".</summary>
+    /// <summary>A readable label for a bone name, such as "Brow outer (left)".</summary>
     public static string Label(string boneName)
     {
         string side = "";

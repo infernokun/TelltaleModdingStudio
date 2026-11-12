@@ -6,10 +6,10 @@ namespace TelltaleModding.Core.Archives;
 /// <summary>Container-format tag found at the start of an archive.</summary>
 public enum ArchiveMagic
 {
-    /// <summary>Not a recognised archive header.</summary>
+    /// <summary>Not a known archive header.</summary>
     Unknown,
 
-    /// <summary>Classic .ttarch, header begins with a small version integer (1-9).</summary>
+    /// <summary>Classic .ttarch, whose header starts with a small version number.</summary>
     Classic,
 
     /// <summary>"ZCTT": zlib-compressed .ttarch2 container.</summary>
@@ -28,21 +28,12 @@ public enum ArchiveMagic
     Att4,
 }
 
-/// <summary>
-/// What we learned by sniffing an archive's header.
-/// </summary>
+/// <summary>What an archive's header says about it.</summary>
 /// <param name="Magic">The detected container tag.</param>
 /// <param name="Kind">Archive family the tag belongs to.</param>
-/// <param name="Version">
-/// The version number to hand ttarchext (<c>-V</c>). For classic archives this is
-/// the integer read straight from the header; for .ttarch2 containers it is 7,
-/// matching ttarchext's own behaviour.
-/// </param>
-/// <param name="OodleCompressed">
-/// True when the container used the lowercase (<c>zCTT</c>/<c>eCTT</c>) variant that
-/// signals Oodle compression; the game's own oo2core DLL is required to decode it.
-/// </param>
-/// <param name="Description">Short human-readable summary for the UI.</param>
+/// <param name="Version">Version to pass ttarchext with <c>-V</c>: the header value for classic archives, 7 for .ttarch2.</param>
+/// <param name="OodleCompressed">True for the lowercase tag variant, which means Oodle compression and needs the game's oo2core DLL.</param>
+/// <param name="Description">Short summary for the UI.</param>
 public sealed record ArchiveInfo(
     ArchiveMagic Magic,
     ArchiveKind Kind,
@@ -51,9 +42,8 @@ public sealed record ArchiveInfo(
     string Description);
 
 /// <summary>
-/// Detects a Telltale archive's container format from its first bytes, so callers
-/// never have to hard-code a version. Mirrors the header logic in ttarchext's
-/// <c>ttarch_extract</c>.
+/// Detects an archive's container format from its first bytes, following the header logic
+/// in ttarchext's <c>ttarch_extract</c>.
 /// </summary>
 public static class ArchiveInspector
 {
@@ -73,9 +63,8 @@ public static class ArchiveInspector
             return new ArchiveInfo(ArchiveMagic.Unknown, ArchiveKind.Ttarch, 0, false,
                 "File too short to identify.");
 
-        // The .ttarch2 containers spell an ASCII tag in the first four bytes. The
-        // first character may be lowercased to signal Oodle compression, so we
-        // normalise it before matching (exactly what ttarchext does).
+        // .ttarch2 starts with an ASCII tag. A lowercase first letter means Oodle compression,
+        // so uppercase it before matching, like ttarchext does.
         bool oodle = head[0] >= 'a' && head[0] <= 'z';
         var tag = new string(new[]
         {
@@ -99,7 +88,7 @@ public static class ArchiveInspector
                 return Ttarch2(ArchiveMagic.Att4, oodle, "ATT container v4 (4ATT)");
         }
 
-        // Classic .ttarch: the first four bytes are a little-endian version integer.
+        // Classic .ttarch starts with a little-endian version number.
         int version = head[0] | head[1] << 8 | head[2] << 16 | head[3] << 24;
         if (version is >= 1 and <= 9)
             return new ArchiveInfo(ArchiveMagic.Classic, ArchiveKind.Ttarch, version, false,

@@ -19,10 +19,10 @@ public class SkeletonFileTests
 
         var root = skeleton.Bones[0];
         Assert.Equal(-1, root.ParentIndex);
-        // Root's mirror is itself and it sits ~0.88 units up, a sanity check from real data.
+        // Sanity check from real data: the root sits about 0.88 units up.
         Assert.InRange(root.LocalPosition.Y, 0.8f, 1.0f);
 
-        // Every non-root bone's parent index is valid and precedes it.
+        // Each bone's parent comes before it.
         for (int i = 1; i < skeleton.Bones.Count; i++)
             Assert.InRange(skeleton.Bones[i].ParentIndex, 0, i - 1);
     }
@@ -34,8 +34,7 @@ public class SkeletonFileTests
         Assert.Contains("Skeleton", error);
     }
 
-    // MSV5 skeletons (The Wolf Among Us, Game of Thrones) store their entries without
-    // the mirror bone fields; reading them with those fields misaligns every bone.
+    // MSV5 skeletons have no mirror bone fields in their entries.
     [SkippableTheory]
     [InlineData("sk54_bigby.skl", 116)]
     [InlineData("sk61_asher.skl", 136)]
@@ -48,8 +47,7 @@ public class SkeletonFileTests
         for (int i = 1; i < skeleton.Bones.Count; i++)
             Assert.InRange(skeleton.Bones[i].ParentIndex, 0, i - 1);
 
-        // Unit rotations, and a standing human-sized rest pose (feet at the floor, head
-        // 1.5-2 m up) with every bone close to its parent.
+        // Unit rotations and a standing, human-sized rest pose.
         Assert.All(skeleton.Bones, b => Assert.InRange(b.LocalRotation.Length(), 0.99f, 1.01f));
         var world = skeleton.BindPoseWorld();
         Assert.InRange(world.Max(m => m.Translation.Y), 1.5f, 2.0f);
@@ -74,13 +72,13 @@ public class AnimationFileTests
         Assert.Contains(anim.Channels, c => c.TypeName == "CompressedSkeletonPoseKeys");
         Assert.Contains(anim.Channels, c => c.TypeName == "KeyframedValue<Transform>");
 
-        // The pose payload embeds the rig's bones: nearly all of Rhys's joints appear.
+        // Nearly all of Rhys's joints show up in the pose data.
         Assert.True(SkeletonFile.TryLoad(File.ReadAllBytes(SampleData.Sample("sk54_rhys.skl")), out var rhys, out _));
         var found = anim.FindBoneSymbols(rhys!.JointSymbols);
         Assert.True(found.Count > rhys.Bones.Count * 0.9,
             $"expected >90% of {rhys.Bones.Count} joints, found {found.Count}");
 
-        // And a non-matching skeleton scores far lower.
+        // Another character's skeleton scores lower.
         Assert.True(SkeletonFile.TryLoad(File.ReadAllBytes(SampleData.Sample("sk54_felix.skl")), out var felix, out _));
         Assert.True(anim.FindBoneSymbols(felix!.JointSymbols).Count < found.Count);
     }
@@ -95,11 +93,11 @@ public class AnimationFileTests
         Assert.True(anim!.BodiesFullyParsed);
         Assert.Equal(8, anim.TransformTracks.Count);
 
-        // Track symbols mirror the container trailer's channel targets.
+        // Each track matches a channel target.
         foreach (var track in anim.TransformTracks)
             Assert.Contains(anim.Channels, c => c.TargetSymbol == track.BoneSymbol);
 
-        // Keys are time-ordered within the animation and quaternions are unit length.
+        // Keys are in time order with unit rotations.
         foreach (var track in anim.TransformTracks)
         {
             for (int i = 1; i < track.Keys.Count; i++)
@@ -111,7 +109,7 @@ public class AnimationFileTests
             }
         }
 
-        // Sampling interpolates: mid-time between two keys is between their values.
+        // Sampling gives a unit rotation.
         var dense = anim.TransformTracks.First(t => t.Keys.Count > 10);
         var (rotation, _) = dense.Sample(dense.Keys[3].Time);
         Assert.InRange(rotation.Length(), 0.99f, 1.01f);
@@ -143,8 +141,7 @@ public class CspkDecoderTests
         return skl!;
     }
 
-    /// <summary>World pose the way the engine builds it: every named slot sets its bone's local
-    /// rotation and (bone-length space) translation; other bones keep their rest transform.</summary>
+    /// <summary>World pose built like the engine does: clip bones are posed, the rest stay at rest.</summary>
     private static Matrix4x4[] EnginePose(SkeletonFile skeleton, CspkClip clip, float time)
     {
         var slot = new Dictionary<ulong, int>();
@@ -161,11 +158,10 @@ public class CspkDecoderTests
     private static float Degrees(Quaternion a, Quaternion b) =>
         2f * MathF.Acos(Math.Min(Math.Abs(Quaternion.Dot(a, b)), 1f)) * 180f / MathF.PI;
 
-    /// <summary>Angle of the pelvis→chest line from vertical, in degrees.</summary>
+    /// <summary>Angle of the pelvis to chest line from vertical, in degrees.</summary>
     private static float TorsoTilt(SkeletonFile skeleton, Matrix4x4[] world)
     {
-        // The chest: the highest rest-pose bone on the body's centre line within 45 cm of the
-        // pelvis (spine, not arms or head).
+        // The chest is the highest center-line bone near the pelvis.
         var bind = skeleton.BindPoseWorld();
         const int pelvis = 1;
         int chest = Enumerable.Range(2, bind.Length - 2)
@@ -191,8 +187,7 @@ public class CspkDecoderTests
     [SkippableFact]
     public void Slot_table_starts_at_0x80_and_names_skeleton_bones()
     {
-        // The 16 bytes before the table are unused; read from 0x80, every named slot is a bone
-        // of the character's skeleton (the last three are zero padding to a group of four).
+        // Every named slot is a bone of the character's skeleton.
         var anim = LoadAnim("sk55_idle_sashaHandsHips.anm");
         Assert.All(anim.PoseKeysPayload![0x70..0x80], b => Assert.Equal(0, b));
         var clip = Decode("sk55_idle_sashaHandsHips.anm");
@@ -207,9 +202,7 @@ public class CspkDecoderTests
     [SkippableFact]
     public void Stored_translations_map_onto_the_skeletons_rest_offsets()
     {
-        // An idle barely moves bone offsets: through the bone length and retarget rotation, the
-        // decoded translations land on the skeleton's own rest offsets (a few spine and
-        // clavicle bones shift by a centimetre or two).
+        // An idle barely moves bones, so most decoded offsets match the rest pose.
         var clip = Decode("sk55_idle_sashaHandsHips.anm");
         var skeleton = LoadSkeleton("sk55_sasha.skl");
         int near = 0, total = 0;
@@ -241,13 +234,12 @@ public class CspkDecoderTests
     [SkippableFact]
     public void Hands_on_hips_pose_puts_hands_below_the_head()
     {
-        // A named pose with a distinctive silhouette: hands-on-hips must put the finger bones
-        // well below the head after world composition, with the torso upright.
+        // Hands on hips puts the fingers well below the head with the torso upright.
         var clip = Decode("sk55_idle_sashaHandsHips.anm");
         var skl = LoadSkeleton("sk55_sasha.skl");
         var world = EnginePose(skl, clip, 0f);
 
-        // In the T-pose rest, finger bones sit far out on the X axis; find them from the bind pose.
+        // Finger bones sit far out on X in the rest pose.
         var bind = skl.BindPoseWorld();
         var fingers = Enumerable.Range(0, bind.Length)
             .Where(i => Math.Abs(bind[i].Translation.X) > 0.45f).ToList();
@@ -264,10 +256,7 @@ public class CspkDecoderTests
     [SkippableFact]
     public void Mixed_clip_chains_deltas_into_its_absolute_keys()
     {
-        // rhysWakeUpDragged: 194 samples, 86 of them absolute keys and 108 delta samples. The
-        // samples come out in time order, and the body moves smoothly from sample to sample:
-        // a misread delta chain would drift every bone and jump back at the next absolute key.
-        // (Single bones can turn fast: the eyelids blink by ~37° in one frame.)
+        // Samples are in time order and the body moves smoothly; a bad delta chain would drift and jump.
         var clip = Decode("sk54_action_rhysWakeUpDragged.anm");
         Assert.Equal(194, clip.SampleCount);
         for (int s = 1; s < clip.SampleCount; s++)
@@ -305,7 +294,7 @@ public class CspkDecoderTests
     [SkippableFact]
     public void Dying_sasha_lies_on_the_ground()
     {
-        // Sasha 103 held by Fiona while dying: on the ground, not standing.
+        // Sasha held by Fiona while dying is on the ground.
         var clip = Decode("sk55_sasha103_sk55_idle_fionaHoldsSashaDying.anm");
         var skeleton = LoadSkeleton("sk55_sasha.skl");
         foreach (float time in new[] { 0f, 1f, 2f })
@@ -319,13 +308,13 @@ public class CspkDecoderTests
     [SkippableFact]
     public void Squat_to_run_rises_and_bends_the_knees()
     {
-        // banditSquat_toRun: every sample is an absolute key (V == S == 48).
+        // Every sample in this clip is an absolute key.
         var clip = Decode("skB4_banditSquat_toRun.anm");
         var skeleton = LoadSkeleton("skB4_banditMarauder.skl");
         Assert.Equal(48, clip.SampleCount);
         Assert.Equal(65, clip.BoneSymbols.Count(skeleton.JointSymbols.Contains));
 
-        // Ankles: low bones out to the side whose parent (the knee) is well above them.
+        // Ankles are low side bones with the knee well above them.
         var bind = skeleton.BindPoseWorld();
         var ankles = Enumerable.Range(1, bind.Length - 1)
             .Where(i => bind[i].Translation.Y is > 0.04f and < 0.2f && Math.Abs(bind[i].Translation.X) > 0.04f
@@ -354,8 +343,7 @@ public class CspkDecoderTests
     [SkippableFact]
     public void Additive_clip_starts_from_identity_and_stays_small()
     {
-        // The channel's additive flag marks it; its samples start as deltas from identity and
-        // zero (six of them before the clip's only absolute key) and stay small offsets.
+        // An additive clip's samples stay small offsets from identity.
         var clip = Decode("sk55_sashaHandsHips_bobLeft_add.anm");
         Assert.True(clip.IsAdditive);
         Assert.Equal(19, clip.SampleCount);
@@ -368,7 +356,7 @@ public class CspkDecoderTests
     [SkippableFact]
     public void Probe_reads_the_whole_slot_table()
     {
-        // The phoneme's last slot names a face bone; the quick probe must see it.
+        // The quick probe sees the last slot too.
         var path = SampleData.Sample("fiona_phoneme_default_happyC.anm");
         var lastSlot = Decode("fiona_phoneme_default_happyC.anm").BoneSymbols[^1];
         Assert.Equal(0x07befe89af190afeUL, lastSlot);

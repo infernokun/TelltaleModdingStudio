@@ -10,17 +10,14 @@ using TelltaleModding.Core.Scene;
 namespace TelltaleModding.App.ViewModels;
 
 /// <summary>
-/// The speaker of the dialogue line being played, shown in 3D and lip-synced to the
-/// recording: the line's phoneme keys drive the character's mouth poses (in the mood
-/// its direction tags name), over the character's idle. With <see cref="PlayPerformance"/>
-/// on, the body language the game's chore plays with the line (turns, poses, gestures,
-/// blinks) plays too.
+/// The speaker of the playing line, shown in 3D and lip-synced to the recording. With
+/// <see cref="PlayPerformance"/> on, the line's body language from its chore plays too.
 /// </summary>
 public sealed partial class SpeakerViewModel : ViewModelBase
 {
     private readonly Dictionary<string, Task<SpeakerModel?>> _models = new(StringComparer.OrdinalIgnoreCase);
 
-    // Where each scene's lines play; a scene's dialog and chores are read once, in the background.
+    // Where each scene's lines play, read once in the background.
     private readonly Dictionary<string, Task<SceneChoreLines>> _choreLines = new(StringComparer.OrdinalIgnoreCase);
     private const int MaxIndexedScenes = 6;
     private SceneCharacters? _sceneCharacters;
@@ -34,31 +31,28 @@ public sealed partial class SpeakerViewModel : ViewModelBase
     private string? _shownCharacter;
     private int _generation;
 
-    /// <summary>Raised with a model to show; true when the camera should frame it afresh.</summary>
+    /// <summary>Raised with a model to show. True when the camera should reframe it.</summary>
     public event Action<AssembledModel, bool>? ModelReady;
 
     public event Action? ModelCleared;
 
-    /// <summary>Raised with the posed vertices of each frame.</summary>
+    /// <summary>Raised with the skinning matrices of each frame.</summary>
     public event Action<Matrix4x4[]?>? PoseReady;
 
-    /// <summary>Raised for a newly shown speaker with the posed top of the head and the body's height, to frame the face.</summary>
+    /// <summary>Raised for a new speaker with the top of the head and body height, to frame the face.</summary>
     public event Action<Vector3, float>? FaceFramingReady;
 
-    /// <summary>Raised with each rendered frame, while <see cref="FollowCamera"/> is on, with what the camera should hold.</summary>
+    /// <summary>Raised each frame with the follow camera's shot while <see cref="FollowCamera"/> is on.</summary>
     public event Action<SpeakerShot>? ShotReady;
 
-    /// <summary>The camera follows the speaker through the line (see <see cref="SpeakerCamera"/>).</summary>
+    /// <summary>The camera follows the speaker through the line.</summary>
     [ObservableProperty]
     private bool _followCamera = true;
 
-    /// <summary>
-    /// Raised with each rendered frame, while <see cref="FollowCamera"/> and <see cref="UseGameCamera"/>
-    /// are on and the line has one, with the camera the game shows it from.
-    /// </summary>
+    /// <summary>Raised each frame with the game's own camera, when the line has one and it's turned on.</summary>
     public event Action<CameraView>? GameViewReady;
 
-    /// <summary>Shows a line from the game's own camera when its chore has one that frames the speaker (see <see cref="GameCamera"/>).</summary>
+    /// <summary>Use the game's own camera when the line's chore has one.</summary>
     [ObservableProperty]
     private bool _useGameCamera = true;
 
@@ -74,7 +68,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
     [ObservableProperty]
     private string _caption = "";
 
-    /// <summary>Plays the line's performance from the game's chore, when one is found.</summary>
+    /// <summary>Play the line's performance from its chore, when there is one.</summary>
     public bool PlayPerformance { get; set; } = true;
 
     public void Load(GameCatalog catalog, ModelAssembler? models = null)
@@ -107,8 +101,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         if (_catalog is null || _assembler is null)
             return;
         int generation = ++_generation;
-        // The chore that plays the line, and the scene it is staged in, name the speaker's
-        // exact model (Clementine 402 in the barn, not whichever Clementine fits the name).
+        // The line's chore and scene tell us the exact model to use.
         var lines = await ChoreLinesFor(line.Scene);
         if (generation != _generation)
             return;
@@ -119,8 +112,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         var candidates = FindCharacters(line.Line.Speaker, line.Episode);
         if (staged is not null && candidates.Count > 0 && candidates.All(c => c.Id != staged.Id))
         {
-            // The chore voices the line from someone else (Javier talking over a zombie he
-            // looks at): show the speaker the scene places by name, without that performance.
+            // The chore gives the line to someone else, so skip its performance.
             choreLine = null;
             staged = await Task.Run(() => StagedCharacter(lines, null, line.Line.Speaker));
             if (generation != _generation)
@@ -145,7 +137,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         SpeakerModel? model;
         try
         {
-            // A model whose textures the game lacks comes out blank; a later candidate may have them.
+            // Skip untextured models if a later candidate has textures.
             model = null;
             foreach (var candidate in candidates.Take(MaxModelTries))
             {
@@ -215,7 +207,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         }
     }
 
-    /// <summary>The point the follow camera looks at <paramref name="seconds"/> into the line (the face), or null.</summary>
+    /// <summary>Where the follow camera looks at <paramref name="seconds"/> into the line, or null.</summary>
     public Vector3? FollowTarget(double seconds) => _camera?.At((float)seconds).Target;
 
     /// <summary>Poses the speaker at <paramref name="seconds"/> into the line.</summary>
@@ -226,7 +218,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         PoseReady?.Invoke(player.SkinMatrices((float)seconds));
         if (!FollowCamera)
             return;
-        // The game's shot while it shows the speaker's face; the follow camera while it cuts away.
+        // Use the game's shot while it shows the speaker's face, else the follow camera.
         if (_camera is not { } camera)
             return;
         var shot = camera.At((float)seconds);
@@ -236,8 +228,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
             ShotReady?.Invoke(shot);
     }
 
-    // Where the head is in the first posed frame: the top of the posed body, centred on
-    // the vertices in its top eighth (the head, whatever the arms are doing).
+    // Head position in the first posed frame, from the top eighth of the body.
     private static (Vector3 Top, float Height)? PosedHead(LipSyncPlayer player)
     {
         int count = player.Geometry.Positions.Length;
@@ -255,8 +246,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
 
     private const int MaxModelTries = 3;
 
-    // The character the scene places under the line's speaker: the chore's own scene first,
-    // then the scenes the line's other chores are staged in.
+    // The character the scene uses for the line's speaker.
     private CharacterEntry? StagedCharacter(SceneChoreLines lines, ChoreLine? choreLine, string speaker)
     {
         if (_sceneCharacters is not { } scenes)
@@ -274,13 +264,8 @@ public sealed partial class SpeakerViewModel : ViewModelBase
 
     private static bool IsTextured(AssembledModel model) => model.BatchTextures.Any(t => t is not null);
 
-    // The speaker's characters, best first, for when no scene names the model: names compared
-    // without spaces or case ("LADYFORRESTER"), preferring one with mouth poses, then the
-    // variant made for the line's episode ("AI 102" for a line from Borderlands102), then one
-    // from the line's season (by its variant or the episode its skeleton ships in), then the
-    // plain variant, then the fullest outfit. Subtitles often use a short name ("JACK" for Handsome
-    // Jack), so when nothing matches in full, a character whose name ends with the
-    // speaker's stands in.
+    // Characters matching the speaker's name, best match first. Falls back to names
+    // ending with the speaker's, since subtitles often use short names.
     private IReadOnlyList<CharacterEntry> FindCharacters(string speaker, string episode)
     {
         if (_catalog is null || speaker.Length == 0)
@@ -305,13 +290,10 @@ public sealed partial class SpeakerViewModel : ViewModelBase
             .ToList();
     }
 
-    // The character's mouth pose prefix: its own ("rhys"), or one named for it ("handsomeJack"
-    // for a "Handsome Jack AI 102" variant).
+    // The character's best mouth pose prefix.
     private string? PhonemePrefixFor(CharacterEntry character) => PhonemePrefixesFor(character).FirstOrDefault();
 
-    // Every prefix that could hold the character's mouth poses, best first: its own, then those
-    // named for it, the ones made for its season first ("clementine400" for Clementine 402),
-    // then ones without a season, then the rest.
+    // Every prefix that could hold the character's mouth poses, best first.
     private IEnumerable<string> PhonemePrefixesFor(CharacterEntry character)
     {
         var stem = IdStem(character.Id);
@@ -327,7 +309,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
             yield return prefix;
     }
 
-    // The season digit of an episode number: '4' for WalkingDead404 or a "402" variant.
+    // The season digit of an episode number.
     private static char? Season(string? text) =>
         text is not null && EpisodeNumber().Match(text) is { Success: true } m ? m.Value[0] : null;
 
@@ -336,20 +318,18 @@ public sealed partial class SpeakerViewModel : ViewModelBase
 
     private static string Normalize(string name) => new string(name.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
 
-    // "sk54_rhys" → "rhys"
+    // Drops the "skNN_" prefix from a character id.
     private static string IdStem(string id)
     {
         int underscore = id.IndexOf('_');
         return underscore > 0 && id.StartsWith("sk", StringComparison.OrdinalIgnoreCase) ? id[(underscore + 1)..] : id;
     }
 
-    // Prefix and BaseMood name the set of mouth poses that fits the model's face rig (BaseMood
-    // null for the neutral set).
+    // Prefix and BaseMood pick the mouth pose set. BaseMood is null for the neutral set.
     private sealed record SpeakerModel(AssembledModel Model, string? Prefix, (AnimationFile Clip, string Name)? Idle,
         AnimationFile? Face = null, string? BaseMood = null);
 
-    // What a character's .prop names: its idle, its resting face and the prefix of its
-    // phoneme table's mouth poses ("clementine" for clementine_phoneme_AA.anm).
+    // What a character's .prop names: idle, resting face and mouth pose prefix.
     private sealed record PropReferenceSet(string? Idle, AnimationFile? Face, string? PhonemePrefix);
 
     private SpeakerModel? BuildModel(CharacterEntry character)
@@ -360,11 +340,9 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         if (!model.CanAnimate)
             return new SpeakerModel(model, null, null);
 
-        // The character's .prop names its idle, resting face and phoneme table; the guesses
-        // below are for characters whose .prop leaves them out.
+        // Use what the .prop names, and guess the rest.
         var named = PropReferencesFor(character);
-        // The phoneme table's prefix first, then the ones named for the character, of those
-        // whose clips move this model's face.
+        // Pick the first prefix whose clips move this model's face.
         var joints = model.Skeleton!.JointSymbols.ToHashSet();
         var prefixes = named.PhonemePrefix is { } own ? PhonemePrefixesFor(character).Prepend(own) : PhonemePrefixesFor(character);
         var set = PhonemePoses.ChooseSet(prefixes.Distinct(StringComparer.OrdinalIgnoreCase), _phonemeSets, clip => BonesDriven(clip, joints))
@@ -378,9 +356,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         if (idle is not null)
             return new SpeakerModel(model, prefix, idle, named.Face, baseMood);
 
-        // A standing idle keeps the body out of its bind pose. Many idles sit, kneel or
-        // crouch, which would drop the head below the face-framed camera: keep the first
-        // (preferring "stand" in the name) whose top stays near the rest pose's height.
+        // Find a standing idle. Sitting or crouching ones would drop the head out of frame.
         var candidates = catalog.AnimationsFor(character)
             .Where(a => a.NamedForCharacter && a.File.Name.Contains("idle", StringComparison.OrdinalIgnoreCase) &&
                         !a.File.Name.Contains("_add", StringComparison.OrdinalIgnoreCase))
@@ -406,8 +382,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         return new SpeakerModel(model, prefix, idle, named.Face, baseMood);
     }
 
-    // For characters with no mouth poses of their own (Mariana, Lonnie), as the game does: the
-    // generic sets ("wd400GM") first, then any set, of those whose first set fits the face rig.
+    // Shared mouth pose sets for characters without their own, generic ones first.
     private IEnumerable<string> SharedPrefixes(IReadOnlySet<ulong> joints) =>
         _phonemeSets
             .Where(s => BonesDriven(PhonemePoses.ProbeClip(s.Key, s.Value[0]), joints) > 0)
@@ -416,7 +391,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
             .ThenBy(p => p.Length)
             .ThenBy(p => p, StringComparer.OrdinalIgnoreCase);
 
-    // How many of the skeleton's bones a pose clip drives (0 when the clip is missing).
+    // How many of the skeleton's bones a pose clip drives.
     private int BonesDriven(string clipName, IReadOnlySet<ulong> joints) =>
         Clip(clipName) is { } clip ? clip.FindBoneSymbols(joints).Count : 0;
 
@@ -430,11 +405,11 @@ public sealed partial class SpeakerViewModel : ViewModelBase
             return (AnimationFile.TryLoad(bytes, out var loaded, out _) && loaded!.IsSkeletal ? loaded : null, bytes.Length);
         }).Clip;
 
-    // A chore a line's chore plays (a cutscene's pieces), by its symbol.
+    // A nested chore, by its symbol.
     private ChoreFile? PlayedChore(ulong symbol) =>
         _catalog?.FindBySymbol(symbol) is { } entry && ChoreFile.TryRead(_catalog.Read(entry), out var chore, out _) ? chore : null;
 
-    // A clip a camera plays (handheld drift), by its symbol.
+    // A camera clip, by its symbol.
     private AnimationFile? CameraClip(ulong symbol) =>
         _catalog?.FindBySymbol(symbol) is { } entry && AnimationFile.TryLoad(_catalog.Read(entry), out var clip, out _) ? clip : null;
 
@@ -459,8 +434,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
                     .Select(PhonemeClipPrefix).FirstOrDefault(p => p is not null);
             return new PropReferenceSet(idle, face, prefix);
 
-            // An animation, or the one a chore plays throughout: its longest-playing animation
-            // that is not layered on top (an idle chore adds breaths and glances over its stand).
+            // An animation, or a chore's longest non-additive animation.
             string? MainAnimation(string? name)
             {
                 if (name is null || name.EndsWith(".anm", StringComparison.OrdinalIgnoreCase))
@@ -483,14 +457,14 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         }
     }
 
-    // "clementine_phoneme_AA.anm" -> "clementine"
+    // The part of a phoneme clip name before "_phoneme_".
     private static string? PhonemeClipPrefix(string clip)
     {
         int at = clip.IndexOf("_phoneme_", StringComparison.OrdinalIgnoreCase);
         return at > 0 ? clip[..at] : null;
     }
 
-    // The first direction tag the character has mouth poses for ("smugA") that fit its face rig.
+    // The first direction tag the character has working mouth poses for.
     private string? FindMood(SpeakerModel speaker, IReadOnlyList<string> directions)
     {
         var joints = speaker.Model.Skeleton!.JointSymbols.ToHashSet();
@@ -513,7 +487,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
                     poses[phoneme] = clip!;
             }
         }
-        // The mood the line's directions name, otherwise the resting face the character's .prop names.
+        // The line's mood, or else the character's resting face.
         AnimationFile? expression = speaker.Face;
         if (speaker.Prefix is { } p && mood is not null && catalog.Find($"{p}_phonemes_{mood}.anm") is { } face &&
             AnimationFile.TryLoad(catalog.Read(face), out var faceClip, out _))
@@ -534,7 +508,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         return task;
     }
 
-    // The speaker's clips in the line's chore, loaded and placed on its timeline.
+    // The speaker's clips from the line's chore, placed on its timeline.
     private ChorePerformance? BuildPerformance(SpeakerModel speaker, ChoreLine line)
     {
         var catalog = _catalog!;
@@ -550,7 +524,7 @@ public sealed partial class SpeakerViewModel : ViewModelBase
         return clips.Count == 0 ? null : new ChorePerformance(speaker.Model.Geometry, speaker.Model.Skeleton!, clips);
     }
 
-    // The line's phoneme track sits beside its recording (<id>.anm next to <id>.wav).
+    // The line's phoneme track sits next to its recording.
     private IReadOnlyList<PhonemeKey> ReadKeys(DialogueEntry line)
     {
         var name = line.Audio is { } audio ? Path.ChangeExtension(audio.Name, ".anm") : line.Line.LipSyncFileName;

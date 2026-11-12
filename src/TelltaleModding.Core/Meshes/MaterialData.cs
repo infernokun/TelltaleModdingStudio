@@ -4,7 +4,7 @@ using TelltaleModding.Core.Meta;
 
 namespace TelltaleModding.Core.Meshes;
 
-/// <summary>Texture roles a compiled material declares for a texture (T3MaterialTextureType bits).</summary>
+/// <summary>Texture roles a compiled material declares for a texture.</summary>
 [Flags]
 public enum MaterialTextureTypes : uint
 {
@@ -28,7 +28,7 @@ public enum MaterialTextureTypes : uint
     ObjectNormalMap = 1 << 16,
 }
 
-/// <summary>How a material's main pass is blended (the engine's T3BlendMode).</summary>
+/// <summary>How a material's main pass is blended.</summary>
 public enum MaterialBlendMode
 {
     Normal = 0,
@@ -44,22 +44,19 @@ public enum MaterialBlendMode
     AlphaInvAlphaTest = 10,
 }
 
-/// <summary>One texture a material binds: the property key, the texture, and its declared role.</summary>
+/// <summary>One texture a material binds.</summary>
 /// <param name="Key">Symbol of the material property holding the texture.</param>
-/// <param name="TextureSymbol">Symbol of the texture file name (0 when the property is unset).</param>
-/// <param name="Types">Roles from the compiled material; <see cref="MaterialTextureTypes.None"/> when not compiled.</param>
-/// <param name="Layout">0 = 2D, 1 = 3D, 2 = cube, 3 = 2D array (shared detail atlases).</param>
-/// <param name="ShaderSlot">Texture slot in the compiled shader (-1 when not compiled).</param>
+/// <param name="TextureSymbol">Symbol of the texture file name, 0 when unset.</param>
+/// <param name="Types">Roles from the compiled material, <see cref="MaterialTextureTypes.None"/> when not compiled.</param>
+/// <param name="Layout">0 = 2D, 1 = 3D, 2 = cube, 3 = 2D array.</param>
+/// <param name="ShaderSlot">Texture slot in the compiled shader, -1 when not compiled.</param>
 public readonly record struct MaterialTextureBinding(
     ulong Key, ulong TextureSymbol, MaterialTextureTypes Types, int Layout, int ShaderSlot);
 
 /// <summary>
-/// The engine data of a material embedded in a mesh (a PropertySet with a compiled
-/// <c>T3MaterialData</c>): its parent material, texture properties, scalar/color
-/// properties, and (from the compiled data) each texture's role and the main pass's
-/// blend mode. Parsed from Definitive Series (v55) and Michonne / Tales from the
-/// Borderlands era (v22-51) meshes. The values of a type it does not know are stepped over
-/// when the types after them can be found (see <see cref="SkippedTypes"/>).
+/// A material embedded in a mesh: its parents, texture and value properties, and from the
+/// compiled data each texture's role and the blend mode. Unknown types get skipped when
+/// possible (see <see cref="SkippedTypes"/>).
 /// </summary>
 public sealed class MaterialData
 {
@@ -97,7 +94,7 @@ public sealed class MaterialData
         // Intrinsics, enums, flags and handles are written bare.
         Fixed(1, "bool", "int8", "uint8", "char", "unsigned char", "signed char");
         Fixed(2, "int16", "uint16", "short", "unsigned short");
-        // "int32" (0x7caceebcd26d075c) holds ints in Definitive Series materials and props.
+        // Definitive Series materials store ints as "int32".
         Fixed(4, "int", "long", "int32", "uint32", "unsigned int", "unsigned long", "__int32",
             "unsigned __int32", "float", "Flags", "FlagsT3LightEnvGroupSet", "BlendMode");
         Fixed(4, Enums);
@@ -112,7 +109,7 @@ public sealed class MaterialData
         Add("String", (d, at, end) =>
             at + 4 <= end && at + 4L + BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(at)) is var next && next <= end
                 ? (int)next : -1);
-        // A nested set: version, flags, then a block (whose size counts itself); version 1 has two.
+        // A nested set: version, flags, then a block. Version 1 has two blocks.
         Add("PropertySet", (d, at, end) =>
         {
             if (at + 12 > end)
@@ -126,8 +123,7 @@ public sealed class MaterialData
             return next > at && next <= end ? (int)next : -1;
         });
 
-        // Containers of any of those: a count, then the elements (a map's as key, value pairs),
-        // and containers of containers of the plainest ones.
+        // Containers of those: a count, then the elements. Simple types also nest one level.
         var keys = elements.Where(e => e.Name is "String" or "Symbol" or "int").ToList();
         var nestable = new List<(string Name, ValueLayout Layout)>();
         void AddContainers(string name, ValueLayout element, bool nest)
@@ -204,14 +200,12 @@ public sealed class MaterialData
     };
 
     /// <summary>
-    /// How to step over one value of each type a property set may hold, by type symbol: the
-    /// end of the value at an offset, or -1. A PropertySet gives no size per value or per
-    /// type, so a type missing here can only be stepped over by <see cref="Resync"/>.
-    /// (Declared after the name tables it is built from: static fields initialise in order.)
+    /// How to step over one value of each known type. PropertySets store no value sizes, so
+    /// other types need <see cref="Resync"/>. Must stay below the name tables it's built from.
     /// </summary>
     private static readonly Dictionary<ulong, ValueLayout> Layouts = BuildLayouts();
 
-    /// <summary>Symbol of the material type this one instances (e.g. <c>material_character_base.prop</c>).</summary>
+    /// <summary>Symbols of the materials this one instances.</summary>
     public IReadOnlyList<ulong> Parents { get; private init; } = Array.Empty<ulong>();
 
     /// <summary>Texture properties in stored order, with their compiled roles when known.</summary>
@@ -226,42 +220,31 @@ public sealed class MaterialData
     /// <summary>Bool properties by key symbol.</summary>
     public IReadOnlyDictionary<ulong, bool> Bools { get; private init; } = new Dictionary<ulong, bool>();
 
-    /// <summary>Integer properties (<c>int</c>, <c>long</c>, <c>int32</c>, unsigned) by key symbol.</summary>
+    /// <summary>Integer properties by key symbol.</summary>
     public IReadOnlyDictionary<ulong, int> Ints { get; private init; } = new Dictionary<ulong, int>();
 
-    /// <summary>
-    /// Type symbols whose values could not be read and were stepped over (the properties of
-    /// every other type still are; a run of unknown types is listed by its first); empty for a
-    /// fully understood material.
-    /// </summary>
+    /// <summary>Type symbols whose values couldn't be read and were skipped.</summary>
     public IReadOnlyList<ulong> SkippedTypes { get; private init; } = Array.Empty<ulong>();
 
-    /// <summary>
-    /// Type symbol of the value parsing gave up at (it and every later type's properties are
-    /// missing), or null when no type was left unread.
-    /// </summary>
+    /// <summary>Type symbol parsing gave up at, or null when everything was read.</summary>
     public ulong? StoppedAtType { get; private init; }
 
-    /// <summary>True when every type's values were read (none skipped) and they ended exactly at the end of the set.</summary>
+    /// <summary>True when every type was read and nothing was skipped.</summary>
     public bool IsComplete { get; private init; }
 
-    /// <summary>True when the compiled material data (texture roles, passes) was read.</summary>
+    /// <summary>True when the compiled material data was read.</summary>
     public bool IsCompiled { get; private init; }
 
     /// <summary>
-    /// Blend mode of the main pass: the material's "Material - Blend Mode" property when it
-    /// sets one, otherwise the compiled data's when it names exactly one (older games
-    /// compile a variant per blend mode, so without the property theirs stays null).
+    /// Blend mode of the main pass: the "Material - Blend Mode" property when set, otherwise
+    /// the compiled data's when it lists exactly one.
     /// </summary>
     public MaterialBlendMode? BlendMode { get; private init; }
 
-    /// <summary>The material's own "Material - Blend Mode" property, or null when it does not set one.</summary>
+    /// <summary>The material's own "Material - Blend Mode" property, or null when unset.</summary>
     public MaterialBlendMode? BlendModeProperty { get; private init; }
 
-    /// <summary>
-    /// Every (pass type, blend mode) pair the compiled data lists; pass 0 is the main
-    /// pass, 6 the shadow map.
-    /// </summary>
+    /// <summary>Every (pass, blend mode) pair in the compiled data. Pass 0 is main, 6 is the shadow map.</summary>
     public IReadOnlyList<(int Pass, MaterialBlendMode Blend)> Passes { get; private init; } =
         Array.Empty<(int, MaterialBlendMode)>();
 
@@ -270,7 +253,7 @@ public sealed class MaterialData
         or MaterialBlendMode.Add or MaterialBlendMode.Multiply or MaterialBlendMode.InvMultiply
         or MaterialBlendMode.AlphaAdd or MaterialBlendMode.AlphaSubtract;
 
-    /// <summary>True when the material only has passes other than the main one (e.g. shadow-only).</summary>
+    /// <summary>True when the material has no main pass, like a shadow-only material.</summary>
     public bool HasNoMainPass => IsCompiled && Passes.Count > 0 && Passes.All(p => p.Pass != 0);
 
     /// <summary>Parses a mesh's embedded material payload, or returns null when it isn't one.</summary>
@@ -325,8 +308,7 @@ public sealed class MaterialData
         CompiledTextures? compiled = null;
         ulong? stoppedAt = null;
 
-        // Find each type's values first, so that values of an unknown type can be stepped
-        // over and a misread is caught before anything is decoded from the wrong place.
+        // Locate every type's values first so unknown types can be skipped and misreads caught early.
         int typeCount = I32();
         var groups = new List<TypeGroup>();
         bool aligned = PlanGroups(d, off, typeCount, blockEnd, ResyncDepth, groups);
@@ -367,7 +349,7 @@ public sealed class MaterialData
             }
             catch (Exception ex) when (ex is ArgumentOutOfRangeException or IndexOutOfRangeException or InvalidDataException)
             {
-                // Planned but not decodable: keep what was read of it.
+                // Keep whatever was read.
             }
         }
 
@@ -393,23 +375,20 @@ public sealed class MaterialData
             IsComplete = aligned && skipped.Count == 0 && groups.Count == typeCount,
             Passes = passes,
             BlendModeProperty = blendProperty,
-            // Older games compile every blend variant; only a single main-pass mode is telling.
+            // Older games compile every blend variant, so only trust a single main-pass mode.
             BlendMode = blendProperty
                 ?? (passes.Where(p => p.Item1 == 0).Select(p => p.Item2).Distinct().ToList() is { Count: 1 } main
                     ? main[0] : null),
         };
     }
 
-    /// <summary>
-    /// How many further unknown types the remainder may hold when <see cref="Resync"/>
-    /// checks a candidate start (each check is a full read to the end of the set).
-    /// </summary>
+    /// <summary>How many more unknown types <see cref="Resync"/> allows after a candidate start.</summary>
     private const int ResyncDepth = 2;
 
-    /// <summary>One type's values in a set: <see cref="End"/> is -1 when it could not be found.</summary>
+    /// <summary>One type's values in a set. <see cref="End"/> is -1 when it couldn't be found.</summary>
     private readonly record struct TypeGroup(ulong Type, int Count, int Start, int End, bool Known);
 
-    /// <summary>End of one value of <paramref name="type"/>, or -1 when its layout is unknown or it would overrun.</summary>
+    /// <summary>End of one value of <paramref name="type"/>, or -1 when unknown or out of range.</summary>
     private static int ValueEnd(ulong type, byte[] d, int at, int end)
     {
         if (Layouts.TryGetValue(type, out var layout))
@@ -428,10 +407,9 @@ public sealed class MaterialData
     }
 
     /// <summary>
-    /// Walks <paramref name="types"/> type groups (<c>type, count, { key, value }…</c>) from
-    /// <paramref name="at"/>, stepping over a group of unknown layout when
-    /// <paramref name="depth"/> allows a <see cref="Resync"/>. Records each group in
-    /// <paramref name="groups"/> when given; true when they end exactly at <paramref name="end"/>.
+    /// Walks <paramref name="types"/> type groups from <paramref name="at"/>, skipping unknown ones
+    /// with <see cref="Resync"/> while <paramref name="depth"/> allows. Adds each to
+    /// <paramref name="groups"/> if given. True when they end exactly at <paramref name="end"/>.
     /// </summary>
     private static bool PlanGroups(byte[] d, int at, int types, int end, int depth, List<TypeGroup>? groups)
     {
@@ -457,7 +435,7 @@ public sealed class MaterialData
             groups?.Add(new TypeGroup(type, count, start, at, Known: false));
             if (at < 0)
                 return false;
-            g += alsoUnknown;   // further unknown types between this one and where reading resumes
+            g += alsoUnknown;   // unknown types skipped along with this one
         }
         return at == end;
     }
@@ -465,11 +443,10 @@ public sealed class MaterialData
     private static bool IsKnownType(ulong type) => Layouts.ContainsKey(type) || type == TypeMaterialData;
 
     /// <summary>
-    /// Finds where reading can resume after a type of unknown layout: the first offset from
-    /// <paramref name="from"/> holding a known type from which the remaining types read
-    /// through to exactly <paramref name="end"/>, allowing up to <paramref name="depth"/>
-    /// more unknown types (<paramref name="alsoUnknown"/>) before it. When every remaining
-    /// type may be unknown they run to the end. Returns -1 when nothing fits.
+    /// Finds where reading can resume after an unknown type: the first offset from
+    /// <paramref name="from"/> where the remaining types read through to <paramref name="end"/>,
+    /// allowing up to <paramref name="depth"/> more unknown types (<paramref name="alsoUnknown"/>).
+    /// Returns -1 when nothing fits.
     /// </summary>
     private static int Resync(byte[] d, int from, int typesLeft, int end, int depth, out int alsoUnknown)
     {
@@ -498,10 +475,8 @@ public sealed class MaterialData
     }
 
     /// <summary>
-    /// Reads a <c>T3MaterialData</c> value: names, domain, runtime properties, flags,
-    /// version, then its compiled data (one per quality level; the first is used):
-    /// parameters, textures, transforms, nested materials, pre-shaders, static
-    /// parameters, texture parameters and passes, each a block-sized array.
+    /// Reads a <c>T3MaterialData</c> value and the first of its compiled data entries: texture
+    /// roles and passes.
     /// </summary>
     private static CompiledTextures? ReadMaterialData(byte[] d, ref int off, int setEnd)
     {
@@ -509,7 +484,7 @@ public sealed class MaterialData
         uint U32() { var v = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(at)); at += 4; return v; }
         int I32() => (int)U32();
 
-        // Block-sized arrays: (block end, element count).
+        // Block-sized array: (block end, count).
         (int End, int Count) Array()
         {
             int start = at;
@@ -521,8 +496,8 @@ public sealed class MaterialData
         }
 
         at += 4 * 8;                          // material, runtime-properties, legacy texture/blend symbols
-        // Domain (Definitive Series): present when the next value is a small enum rather
-        // than the runtime-property array's block size.
+        // Definitive Series adds a domain enum here. Spot it by the next value not being the
+        // runtime array's block size.
         int probe = BinaryPrimitives.ReadInt32LittleEndian(d.AsSpan(at));
         int probeCount = BinaryPrimitives.ReadInt32LittleEndian(d.AsSpan(at + 4));
         bool hasDomain = !(probe == 8 + 16 * probeCount && probeCount >= 0);
@@ -546,8 +521,8 @@ public sealed class MaterialData
         }
         else
         {
-            // Older games write a bare count, then an index before each entry, with no
-            // block size: the rest of the set is taken as read.
+            // Older games write a bare count and an index, no block size, so assume it runs
+            // to the end of the set.
             compiledEnd = setEnd;
             int count = I32();
             if (count <= 0)
@@ -568,8 +543,8 @@ public sealed class MaterialData
             {
                 int e = at + i * stride;
                 ulong name = BinaryPrimitives.ReadUInt64LittleEndian(d.AsSpan(e));
-                // name, texture name, name without extension, layout, [property type,]
-                // texture types (a block-sized bitset), first param, param count, slot, nested.
+                // Entry: name, texture name, bare name, layout, [property type,] types bitset,
+                // first param, param count, slot, nested. Read the tail from the end.
                 int tail = e + stride;
                 int slot = BinaryPrimitives.ReadInt32LittleEndian(d.AsSpan(tail - 8));
                 uint types = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(tail - 20));
@@ -599,13 +574,12 @@ public enum InkMapKind
     None,
 
     /// <summary>
-    /// Graphic-black ink (Definitive Series "Ink Texture", and the ported seasons' single-channel
-    /// "Detail Texture"): white marks ink. Lines at full value are always inked; lower values
-    /// ink only as light falls off, down to solid black shadow.
+    /// Black shadow ink where white marks ink. Full values always ink; lower values ink as light
+    /// falls off.
     /// </summary>
     Shadow,
 
-    /// <summary>Drawn line art (Tales from the Borderlands "Detail Texture", The Wolf Among Us ink lines): dark lines multiplied over the color.</summary>
+    /// <summary>Drawn line art, dark lines multiplied over the color.</summary>
     LineArt,
 }
 
@@ -617,24 +591,17 @@ public enum SpecularMapLayout
     /// <summary>Color is the specular intensity (older games).</summary>
     Intensity,
 
-    /// <summary>Blue is gloss and alpha the intensity; red marks metal (Season 4 materials).</summary>
+    /// <summary>Blue is gloss, alpha the intensity, red marks metal.</summary>
     Packed,
 
-    /// <summary>
-    /// Color is the specular intensity and alpha the gloss (the Definitive Series' earlier
-    /// seasons): the game's shader takes 1 - alpha as the roughness, so a low alpha spreads the
-    /// highlight broad and dim.
-    /// </summary>
+    /// <summary>Color is the specular intensity and alpha the gloss; roughness is 1 - alpha.</summary>
     ColorGloss,
 }
 
-/// <summary>
-/// The shading values a viewer needs from a material: diffuse tint, specular color and
-/// power, outline color, and how its specular map and ink texture are laid out.
-/// </summary>
+/// <summary>The shading values a viewer needs from a material.</summary>
 public sealed record MaterialShading
 {
-    /// <summary>Key symbol of the engine's diffuse color (a tint multiplied with the diffuse texture).</summary>
+    /// <summary>Key symbol of the diffuse color property.</summary>
     public static readonly ulong DiffuseColorKey = TelltaleCrc64.HashSymbol("Material - Diffuse Color");
     public static readonly ulong SpecularColorKey = TelltaleCrc64.HashSymbol("Material - Specular Color");
     public static readonly ulong SpecularIntensityKey = TelltaleCrc64.HashSymbol("Material - Specular Intensity");
@@ -643,10 +610,10 @@ public sealed record MaterialShading
     public static readonly ulong OutlineColorKey = TelltaleCrc64.HashSymbol("Material - Outline Color");
     public static readonly ulong AlphaKey = TelltaleCrc64.HashSymbol("Material - Alpha");
 
-    /// <summary>Linear RGB tint multiplied with the diffuse texture (white when the material sets none).</summary>
+    /// <summary>Linear tint multiplied with the diffuse texture, white when unset.</summary>
     public Vector3 DiffuseColor { get; init; } = Vector3.One;
 
-    /// <summary>Specular color, or null when the material does not set one.</summary>
+    /// <summary>Specular color, or null when unset.</summary>
     public Vector3? SpecularColor { get; init; }
 
     /// <summary>Specular intensity, or null when unset.</summary>
@@ -662,36 +629,31 @@ public sealed record MaterialShading
 
     public InkMapKind InkKind { get; init; }
 
-    /// <summary>True when the ink texture's value is in its alpha channel (8-bit alpha textures).</summary>
+    /// <summary>True when the ink texture's value is in its alpha channel.</summary>
     public bool InkInAlpha { get; init; }
 
     /// <summary>
-    /// How opaque an alpha-blended batch is drawn (1 = as its texture says), e.g. about 0.3 for
-    /// tinted glasses lenses. <see cref="Scene.ModelAssembler"/> has already multiplied it into
-    /// the batch texture's alpha, so a renderer only needs it to order or classify draws.
+    /// How opaque an alpha-blended batch is. <see cref="Scene.ModelAssembler"/> already multiplied
+    /// it into the texture's alpha, so renderers only use it to sort or classify draws.
     /// </summary>
     public float Opacity { get; init; } = 1f;
 
     /// <summary>
-    /// Linear color the batch's emissive texture is added in, unaffected by light (black when
-    /// it has none or nothing makes it glow; see <see cref="Scene.AgentRenderSettings"/>).
+    /// Linear color the emissive texture is added in, black when it doesn't glow
+    /// (see <see cref="Scene.AgentRenderSettings"/>).
     /// </summary>
     public Vector3 EmissiveColor { get; init; }
 
     /// <summary>
-    /// True when the batch, if translucent, should show only its nearest surface: its depth is
-    /// drawn before its color, as the engine does for "Render 3D Alpha" agents (holograms).
+    /// True when a translucent batch should show only its nearest surface, like the engine's
+    /// "Render 3D Alpha" agents.
     /// </summary>
     public bool DrawAsOneLayer { get; init; }
 
-    /// <summary>
-    /// Light the surface gives off in its own color (linear), added whatever the scene's
-    /// light: an agent's emission color, which makes a hologram as bright as the game shows
-    /// it. Black for everything else.
-    /// </summary>
+    /// <summary>Linear light the surface gives off regardless of scene lighting. Black for most things.</summary>
     public Vector3 SelfIllumination { get; init; }
 
-    /// <summary>Shading values with nothing set: white tint, no specular data, no maps.</summary>
+    /// <summary>Shading values with nothing set.</summary>
     public static MaterialShading Default { get; } = new();
 
     /// <summary>Reads the shading values a parsed material sets.</summary>

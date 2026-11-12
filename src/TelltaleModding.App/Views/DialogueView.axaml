@@ -5,9 +5,7 @@
              x:Class="TelltaleModding.App.Views.DialogueView"
              x:DataType="vm:DialogueViewModel">
 
-    <!-- Filters · lines or conversations · speaker. The speaker takes a share of the width
-         and can be dragged wider or narrower; DialogueView.axaml.cs folds its column away
-         when it is hidden. -->
+    <!-- Filters, list and speaker. The code-behind folds the speaker column when hidden. -->
     <Grid x:Name="Columns" RowDefinitions="*,Auto" Margin="12">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="280" />
@@ -30,12 +28,12 @@
                                  Tag="{StaticResource IconVolume}" IsChecked="{Binding IsMusicMode}" />
                 </UniformGrid>
 
-                <!-- Episode narrows lines, conversations and music alike. -->
+                <!-- Episode filter -->
                 <ComboBox Grid.Row="2" HorizontalAlignment="Stretch" Margin="0,0,0,8"
                           ItemsSource="{Binding Episodes}" SelectedItem="{Binding SelectedEpisode}"
                           ToolTip.Tip="Episode: narrows lines, conversations and music" />
 
-                <!-- Subtitle language (lines and conversations) · voiced lines only -->
+                <!-- Subtitle language and voiced only -->
                 <Grid Grid.Row="3" ColumnDefinitions="*,8,*" Margin="0,0,0,12" IsVisible="{Binding !IsMusicMode}">
                     <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Languages}"
                               SelectedItem="{Binding SelectedLanguage}" IsEnabled="{Binding !IsIndexing}"
@@ -68,12 +66,12 @@
                                Text="Open a game from Home to hear its dialogue." TextWrapping="Wrap" />
                 </Grid>
 
-                <!-- Talks: what the episode leaves -->
+                <!-- Talks -->
                 <StackPanel Grid.Row="4" Spacing="6" Margin="2,0,0,0" IsVisible="{Binding IsConversationsMode}">
                     <TextBlock Classes="section" Text="CONVERSATIONS" />
                     <TextBlock Classes="faint" Text="{Binding Conversations.Status}" TextWrapping="Wrap" />
                     <TextBlock Classes="faint" TextWrapping="Wrap"
-                               Text="Pick a scene on the right; the episode above narrows the list." />
+                               Text="Pick a scene on the right. The episode above filters the list." />
                 </StackPanel>
 
                 <!-- Music: albums -->
@@ -120,7 +118,7 @@
             <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsLinesMode}">
                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
                     <TextBox Classes="search" Text="{Binding Query}" IsEnabled="{Binding HasSource}"
-                             Watermark="Search what's said, who says it, or the scene (e.g. airlock, rhys vasquez)…" />
+                             Watermark="Search by text, speaker or scene…" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
                     <Button Command="{Binding ShowInConversationCommand}" FontSize="12" VerticalAlignment="Stretch"
                             ToolTip.Tip="Open the selected line in its scene's conversation tree">
@@ -197,8 +195,7 @@
             </Panel>
         </Border>
 
-        <!-- Now playing: the player across the top, the line and the switches under it, so a
-             narrow window still leaves the timeline room. -->
+        <!-- Now playing -->
         <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Classes="panel" Margin="12,12,0,0" Padding="14,10">
             <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
                 <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
@@ -218,14 +215,14 @@
                         </StackPanel>
                     </ToggleButton>
                     <ToggleButton IsChecked="{Binding PlayPerformance}" Classes="ghost" IsEnabled="{Binding ShowSpeaker}"
-                                  ToolTip.Tip="Play the speaker's body language from the game: the turns, poses, gestures and blinks the scene's chore plays with the line">
+                                  ToolTip.Tip="Play the speaker's body language from the game">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <PathIcon Data="{StaticResource IconPerson}" Width="14" Height="14" />
                             <TextBlock Text="Performance" FontSize="12" VerticalAlignment="Center" />
                         </StackPanel>
                     </ToggleButton>
                     <ToggleButton IsChecked="{Binding Speaker.FollowCamera}" Classes="ghost" IsEnabled="{Binding ShowSpeaker}"
-                                  ToolTip.Tip="Follow the speaker: the camera frames the face, widens for gestures and turns with the character. Pan or zoom the speaker to take the camera over."
+                                  ToolTip.Tip="Camera follows the speaker. Pan or zoom to take over."
                                   AutomationProperties.Name="Follow the speaker">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <PathIcon Data="{StaticResource IconRecenter}" Width="14" Height="14" />
@@ -233,7 +230,7 @@
                         </StackPanel>
                     </ToggleButton>
                     <ToggleButton IsChecked="{Binding Speaker.UseGameCamera}" Classes="ghost" IsEnabled="{Binding Speaker.FollowCamera}"
-                                  ToolTip.Tip="Show the speaker from the camera the game uses for the line, when its chore has one that frames them. Lines without one use the follow camera."
+                                  ToolTip.Tip="Use the game's own camera for the line when it has one"
                                   AutomationProperties.Name="Use the game's camera">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <PathIcon Data="{StaticResource IconLandscape}" Width="14" Height="14" />
@@ -266,7 +263,7 @@
                     </Grid>
                     <TextBlock Text="{Binding Player.Error}" Foreground="{StaticResource Warn}" TextWrapping="Wrap"
                                IsVisible="{Binding Player.Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <TextBlock Classes="faint" Text="Pick a line to hear it. Enter replays; Continuous plays the scene through."
+                    <TextBlock Classes="faint" Text="Pick a line to hear it. Press Enter to replay."
                                IsVisible="{Binding IsLinesMode}" TextWrapping="Wrap" />
                 </StackPanel>
             </Grid>

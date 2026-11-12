@@ -6,7 +6,7 @@
              x:DataType="vm:ScriptsViewModel">
 
     <Grid Margin="12">
-        <!-- The gaps between the panels are drag handles; the code takes what is left. -->
+        <!-- Gaps between panels can be dragged to resize -->
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="0.38*" MinWidth="220" MaxWidth="520" />
             <ColumnDefinition Width="12" />
@@ -20,9 +20,9 @@
             <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
                 <TextBlock Classes="h2" Text="Scripts" Margin="2,0,0,10" />
                 <TextBox Grid.Row="1" Classes="search" Text="{Binding Query}" IsEnabled="{Binding HasSource}"
-                         Watermark="Find a script (e.g. achievement, menu)…" Margin="0,0,0,6" />
+                         Watermark="Find a script…" Margin="0,0,0,6" />
                 <CheckBox Grid.Row="2" IsChecked="{Binding SearchContents}" Margin="2,0,0,4" FontSize="12"
-                          Content="Also search inside scripts (strings, functions)" />
+                          Content="Also search inside scripts" />
                 <TextBlock Grid.Row="3" Classes="faint" Text="{Binding Summary}" Margin="4,0,0,6" />
                 <ListBox Grid.Row="4" ItemsSource="{Binding Scripts}" SelectedItem="{Binding Selected}">
                     <ListBox.ItemTemplate>

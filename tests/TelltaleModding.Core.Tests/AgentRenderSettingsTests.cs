@@ -5,10 +5,10 @@ using TelltaleModding.Core.Scene;
 
 namespace TelltaleModding.Core.Tests;
 
-/// <summary>An agent's render keys (hologram Handsome Jack's blue tint, glow and opacity) read from its property set.</summary>
+/// <summary>An agent's render settings read from its property set.</summary>
 public class AgentRenderSettingsTests
 {
-    /// <summary>Writes a version-2 PropertySet with the given parents and type groups.</summary>
+    /// <summary>Writes a version-2 PropertySet.</summary>
     private static MaterialData Properties(string[] parents, params (string Type, Action<BinaryWriter>[] Values)[] groups) =>
         MaterialData.TryParse(PropertyBytes(parents, groups))!;
 
@@ -78,7 +78,7 @@ public class AgentRenderSettingsTests
     [Fact]
     public void A_color_alone_is_scene_grading_not_an_effect()
     {
-        // As sk54_carver203.prop sets it: grey, nothing else.
+        // As sk54_carver203.prop sets it: gray, nothing else.
         var props = Properties(new[] { "character.prop" },
             ("Color", new[] { Color("Render Diffuse Color", 0.8117648f, 0.8117648f, 0.8117648f) }));
 
@@ -91,7 +91,6 @@ public class AgentRenderSettingsTests
     [Fact]
     public void Unset_keys_come_from_the_parent_and_otherwise_change_nothing()
     {
-        // module_renderable.prop's defaults: white, no glow, alpha -1 (unset), not one layer.
         var parent = Properties(Array.Empty<string>(),
             ("float", new[] { Float("Render Constant Alpha", -1f) }),
             ("Color", new[] { Color("Render Diffuse Color", 0.5f, 0.5f, 0.5f) }));
@@ -109,8 +108,7 @@ public class AgentRenderSettingsTests
     [Fact]
     public void A_scene_agent_reads_its_own_set_before_the_props_it_inherits()
     {
-        // As adv_heliosJacksOffice.scene sets GhostFiona01: a glow and one layer on the agent
-        // itself, over a parent that sets a color and leaves the alpha unset.
+        // As adv_heliosJacksOffice.scene sets GhostFiona01.
         var own = ScenePropertySet.TryParse(PropertyBytes(new[] { "ghost.prop" },
             ("bool", new[] { Bool("Render 3D Alpha", true) }),
             ("Color", new[] { Color("Render Emission Color", 0.776471f, 0.776471f, 0.776471f) })))!;
@@ -128,7 +126,7 @@ public class AgentRenderSettingsTests
         Assert.True(agent.IsEffect);
         Assert.Equal(new Vector3(MathF.Pow(0.5f, 2.2f), MathF.Pow(0.5f, 2.2f), 1f), agent.LinearTint);
 
-        // The parent alone is an ordinary agent: its color is left out.
+        // The parent alone is an ordinary agent.
         var plain = AgentRenderSettings.FromProperties(new[] { parent });
         Assert.False(plain.IsEffect);
         Assert.Equal(Vector3.One, plain.LinearTint);

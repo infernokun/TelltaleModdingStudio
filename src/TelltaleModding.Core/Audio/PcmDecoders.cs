@@ -5,7 +5,7 @@ namespace TelltaleModding.Core.Audio;
 /// <summary>Decoders for the uncompressed and ADPCM sample formats found in sound banks.</summary>
 internal static class PcmDecoders
 {
-    /// <summary>Little-endian linear PCM (8-bit, 16-bit or 32-bit float) to 16-bit.</summary>
+    /// <summary>Converts 8-bit, 16-bit or float PCM to 16-bit.</summary>
     public static short[] DecodeLinear(ReadOnlySpan<byte> data, int bytesPer, int channels, long frames, bool unsigned8 = true)
     {
         long n = Math.Min(frames * channels, data.Length / bytesPer);
@@ -34,8 +34,8 @@ internal static class PcmDecoders
     private static readonly int[] ImaIndexAdjust = { -1, -1, -1, -1, 2, 4, 6, 8 };
 
     /// <summary>
-    /// Xbox-style IMA ADPCM: 36-byte blocks per channel, each a 4-byte header (initial
-    /// sample and step index) followed by 64 nibbles; channels interleave in 4-byte words.
+    /// Xbox IMA ADPCM: 36-byte blocks per channel, a 4-byte header then 64 nibbles,
+    /// with channels interleaved in 4-byte words.
     /// </summary>
     public static short[] DecodeXboxIma(ReadOnlySpan<byte> data, int channels, long frames)
     {
@@ -76,10 +76,7 @@ internal static class PcmDecoders
 
     private static readonly int[,] FadpcmCoefs = { { 0, 0 }, { 60, 0 }, { 122, 60 }, { 115, 52 }, { 98, 55 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
 
-    /// <summary>
-    /// FMOD's own ADPCM: 0x8C-byte frames per channel (interleaved), each with packed
-    /// coefficient/shift selectors, two history samples and 256 nibbles.
-    /// </summary>
+    /// <summary>FMOD ADPCM: interleaved 0x8C-byte frames per channel, each holding 256 samples.</summary>
     public static short[] DecodeFadpcm(ReadOnlySpan<byte> data, int channels, long frames)
     {
         const int frameBytes = 0x8C, frameSamples = 256;

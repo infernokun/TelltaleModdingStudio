@@ -4,20 +4,15 @@ using TelltaleModding.Core.Meshes;
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// One animation an agent plays in a chore, placed on the chore's timeline (seconds).
-/// <see cref="Scale"/> is the playback speed; <see cref="Additive"/> clips (<c>_add</c>)
-/// layer on top of the pose rather than replacing it. <see cref="Control"/> carries the
-/// chore's curves for it, when it has any. <see cref="Groups"/> holds the resource-group
-/// weights (see <see cref="ChoreResource.GroupInclude"/>) of the resource and of each chore it
-/// is nested in that limits them, which narrow it to part of the skeleton.
+/// One animation an agent plays in a chore, placed on the chore's timeline in seconds.
+/// <see cref="Groups"/> holds the resource-group weights that limit it to part of the skeleton.
 /// </summary>
 public sealed record PerformanceClip(string Name, float Start, float End, bool Looping, float Scale, int Priority, bool Additive,
     ResourceControl? Control = null, IReadOnlyList<IReadOnlyDictionary<ulong, float>>? Groups = null);
 
 /// <summary>
-/// How a resource plays in the chore that holds it: the span of one of its blocks, its
-/// length, and the chore's time and contribution curves for it, under the resource that
-/// plays that chore inside another (<see cref="Parent"/>), if any.
+/// How a resource plays in its chore: one block's span, its length and its curves, under
+/// the <see cref="Parent"/> resource when the chore is nested.
 /// </summary>
 public sealed record ResourceControl(float Start, float End, float Length, float Scale,
     ChoreCurve? Time, ChoreCurve? Contribution, ResourceControl? Parent)
@@ -26,9 +21,8 @@ public sealed record ResourceControl(float Start, float End, float Length, float
     public bool HasCurves => Time is not null || Contribution is not null || (Parent?.HasCurves ?? false);
 
     /// <summary>
-    /// Seconds into the resource and how much it counts at <paramref name="time"/> seconds into
-    /// the outermost chore. Past the end of its block a resource counts nothing unless
-    /// <paramref name="hold"/>, which keeps it at its last moment.
+    /// Seconds into the resource and its weight at <paramref name="time"/> in the outermost
+    /// chore. Past its block it counts nothing unless <paramref name="hold"/> is set.
     /// </summary>
     public (float Time, float Weight) At(float time, bool hold)
     {
@@ -51,17 +45,10 @@ public sealed record ResourceControl(float Start, float End, float Length, float
 public sealed record ChoreLine(ChoreFile Chore, int Resource, string Agent, float Start, float End);
 
 /// <summary>
-/// Replays an agent's part of a chore on its skeleton: body animations (turns, arm
-/// crosses, sitting down) and additive gestures (breaths, nods, glances, blinks) at the
-/// times the chore plays them, weighted and timed by the chore's contribution and time
-/// curves, and mixed the way the engine's skeleton mixer does. Body animations go by
-/// priority, lowest first: those of one priority average by weight, then cover the pose
-/// below by the largest of their weights. Additive changes chain from the highest priority
-/// down, each in its bone's own frame. Each clip counts on a bone only as far as the
-/// chore's resource groups include it (a head gesture that leaves out the brows).
-/// Approximations of the engine: clips without curves fade linearly at the edges of each
-/// span; a body animation holds its last frame until the next one starts (in game a style
-/// idle takes over); and root motion is left out, so the character turns and gestures in place.
+/// Replays an agent's part of a chore on its skeleton, mixed like the engine's skeleton
+/// mixer. Body clips go by priority, lowest first: one priority averages by weight, then
+/// covers the pose below by its largest weight. Additive clips chain from the highest
+/// priority down, each in its bone's own frame.
 /// </summary>
 public sealed class ChorePerformance
 {
@@ -75,14 +62,12 @@ public sealed class ChorePerformance
 
     private sealed record Layer(PerformanceClip Spec, AnimationPlayer Player, float Length, float HoldUntil)
     {
-        // How much the clip counts on each bone (joint symbol), from the chore's resource
-        // groups; null when it counts on every bone it animates.
+        // Per-bone weight from the chore's resource groups, or null for every bone.
         public IReadOnlyDictionary<ulong, float>? Mask { get; init; }
 
-        // The chore's curves, when it keys any: they set the weight and the moment in the clip.
         private ResourceControl? Curves => Spec.Control is { HasCurves: true } control ? control : null;
 
-        // A body animation holds its last moment until the next one takes over; a gesture ends.
+        // Body clips hold their last frame; gestures end.
         private bool Holds => !Spec.Additive;
 
         public float ClipTime(float t)
@@ -106,7 +91,6 @@ public sealed class ChorePerformance
             return Math.Min(fadeIn, fadeOut);
         }
 
-        // The clip's weight on one bone at a moment, 0 when it leaves the bone alone.
         public float WeightOn(SkeletonBone bone, float t)
         {
             if (!Player.Animates(bone.JointSymbol))
@@ -133,8 +117,7 @@ public sealed class ChorePerformance
                 body.Add((spec, player));
         }
 
-        // Later body animations take over from earlier ones; each holds until the next starts,
-        // or, when the chore keys how much they count, for as long as the chore says.
+        // Each body clip holds until the next starts, unless the chore keys its weight.
         body.Sort((a, b) => a.Spec.Start != b.Spec.Start ? a.Spec.Start.CompareTo(b.Spec.Start) : a.Spec.Priority.CompareTo(b.Spec.Priority));
         _body = body.Select((b, i) => new Layer(b.Spec, b.Player, b.Player.Length,
                 b.Spec.Looping ? b.Spec.End
@@ -148,10 +131,8 @@ public sealed class ChorePerformance
         _additive = additive.OrderByDescending(a => a.Spec.Priority).ToArray();
     }
 
-    // How much a clip counts on each bone, as the engine works it out: for each set of group
-    // weights, a bone gets the sum of weight times its membership in each group, clamped to
-    // 0-1 (a large negative weight leaves the bone out whatever else includes it); a nested
-    // chore's sets multiply. Null when the clip counts on every bone.
+    // Per-bone weight like the engine: each group set sums weight times membership, clamped
+    // to 0-1, and nested sets multiply. Null when the clip counts on every bone.
     private static IReadOnlyDictionary<ulong, float>? BoneMask(SkeletonFile skeleton, IReadOnlyList<IReadOnlyDictionary<ulong, float>>? groups)
     {
         if (groups is not { Count: > 0 })
@@ -179,19 +160,12 @@ public sealed class ChorePerformance
     /// <summary>Number of clips that move this skeleton.</summary>
     public int ClipCount => _body.Sum(g => g.Length) + _additive.Length;
 
-    /// <summary>
-    /// A bone's local transform at <paramref name="time"/> seconds into the chore, layered
-    /// over <paramref name="under"/> (the pose without the chore: rest or an idle).
-    /// </summary>
+    /// <summary>A bone's local transform at <paramref name="time"/> in the chore, layered over <paramref name="under"/>.</summary>
     public (Vector3 Pos, Quaternion Rot) SampleLocal(SkeletonBone bone, float time, (Vector3 Pos, Quaternion Rot) under) =>
-        // The root carries the walk and turn motion that would take the character out of frame.
+        // Skip the root, which would walk the character out of frame.
         bone.ParentIndex < 0 ? under : Mix(bone, time, under);
 
-    /// <summary>
-    /// The root bone's local transform at <paramref name="time"/> seconds into the chore, with
-    /// the walk and turn motion <see cref="SampleLocal"/> leaves out: where the character has
-    /// moved to in the game.
-    /// </summary>
+    /// <summary>The root bone's local transform at <paramref name="time"/>, with the motion <see cref="SampleLocal"/> leaves out.</summary>
     public (Vector3 Pos, Quaternion Rot) SampleRoot(SkeletonBone root, float time, (Vector3 Pos, Quaternion Rot) under) =>
         Mix(root, time, under);
 
@@ -216,8 +190,7 @@ public sealed class ChorePerformance
                 local = (Vector3.Lerp(local.Pos, mix.Pos, Math.Min(cover, 1)), Quaternion.Slerp(local.Rot, mix.Rot, Math.Min(cover, 1)));
         }
 
-        // Additive clips are authored as rest pose plus a change. The changes chain, highest
-        // priority first, each scaled by its weight and taken in the bone's frame.
+        // Additive clips are rest pose plus a change; changes chain in the bone's frame.
         var restInverse = Quaternion.Inverse(bone.LocalRotation);
         var (addPos, addRot) = (Vector3.Zero, Quaternion.Identity);
         foreach (var layer in _additive)
@@ -236,16 +209,12 @@ public sealed class ChorePerformance
 
     /// <summary>
     /// The chore resource that voices <paramref name="lineSymbol"/>, with its speaker and span.
-    /// A line voiced in a chore embedded in this one (a cut of the scene kept inside the
-    /// chore) is placed on the embedded chore's own timeline.
+    /// Lines in embedded chores use the embedded chore's timeline.
     /// </summary>
     public static ChoreLine? FindLine(ChoreFile chore, ulong lineSymbol) =>
         Lines(chore).FirstOrDefault(l => l.Chore.Resources[l.Resource].Name == lineSymbol);
 
-    /// <summary>
-    /// Every voice line placed in <paramref name="chore"/>, then those of the chores embedded
-    /// in it (each on its own timeline).
-    /// </summary>
+    /// <summary>Every voice line in <paramref name="chore"/>, then those of its embedded chores.</summary>
     public static IEnumerable<ChoreLine> Lines(ChoreFile chore) => Lines(chore, 0);
 
     private static IEnumerable<ChoreLine> Lines(ChoreFile chore, int depth)
@@ -270,7 +239,7 @@ public sealed class ChorePerformance
 
     /// <summary>
     /// The animations <paramref name="agent"/> plays in <paramref name="chore"/>, including
-    /// those of the chores it plays (a blink, a move into a pose), placed on this chore's timeline.
+    /// nested chores, placed on this chore's timeline.
     /// </summary>
     /// <param name="nameOf">The file name of a resource symbol, or null when the game lacks it.</param>
     /// <param name="loadChore">Reads a chore file by name, or null.</param>
@@ -285,7 +254,7 @@ public sealed class ChorePerformance
             Add(chore.Resources[index], 0, float.PositiveInfinity, null, null, [], 0);
         return clips;
 
-        // The group weights a clip is under: those of the chores around it, then its own.
+        // Outer chores' group weights, then the resource's own.
         static IReadOnlyList<IReadOnlyDictionary<ulong, float>> Limit(
             IReadOnlyList<IReadOnlyDictionary<ulong, float>> outer, ChoreResource resource) =>
             resource.GroupInclude is { } own ? [.. outer, own] : outer;

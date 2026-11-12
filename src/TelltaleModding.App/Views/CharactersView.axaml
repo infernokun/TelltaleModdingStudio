@@ -6,7 +6,7 @@
              x:DataType="vm:CharactersViewModel">
 
     <Grid Margin="12">
-        <!-- The gaps between the panels are drag handles; the viewport takes what is left. -->
+        <!-- Gaps between panels can be dragged to resize -->
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="0.38*" MinWidth="230" MaxWidth="460" />
             <ColumnDefinition Width="12" />
@@ -61,7 +61,7 @@
                         <views:MeshViewport x:Name="Viewport" IsVisible="{Binding HasModel}" />
                     </Panel>
 
-                    <!-- Title overlay and view tools; a narrow viewport shortens the title rather than covering it. -->
+                    <!-- Title overlay and view tools -->
                     <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Top">
                         <StackPanel Margin="20,16,8,16" Spacing="2"
                                     IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
@@ -91,7 +91,7 @@
                                 <PathIcon Data="{StaticResource IconRecenter}" />
                             </Button>
                             <Button Classes="icon" Command="{Binding ExportGltfCommand}"
-                                    ToolTip.Tip="Export… (glTF .glb with skeleton and the playing clip)" AutomationProperties.Name="Export">
+                                    ToolTip.Tip="Export as glTF (.glb)" AutomationProperties.Name="Export">
                                 <PathIcon Data="{StaticResource IconExport}" />
                             </Button>
                         </StackPanel>
@@ -209,7 +209,7 @@
 
                 <TabItem Header="Animations">
                     <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="4,8,4,0">
-                        <TextBox Classes="search" Text="{Binding AnimationFilter}" Watermark="Search clips (walk, idle aj…)" />
+                        <TextBox Classes="search" Text="{Binding AnimationFilter}" Watermark="Search clips…" />
                         <CheckBox Grid.Row="1" Margin="0,6,0,0" IsChecked="{Binding OnlyCharacterClips}"
                                   Content="Only clips made for this character" />
                         <TextBlock Grid.Row="2" Classes="faint" Text="{Binding AnimationSummary}" Margin="2,4,0,6" />
@@ -227,7 +227,7 @@
                 <TabItem Header="Face">
                     <Panel DataContext="{Binding Face}" x:DataType="vm:FaceViewModel">
                         <Panel.Resources>
-                            <!-- Expanders in the app's card colors rather than the theme's near-black. -->
+                            <!-- Expanders use the app's card colors -->
                             <StaticResource x:Key="ExpanderHeaderBackground" ResourceKey="Card" />
                             <StaticResource x:Key="ExpanderHeaderBackgroundPointerOver" ResourceKey="CardHover" />
                             <StaticResource x:Key="ExpanderHeaderBackgroundPressed" ResourceKey="CardHover" />

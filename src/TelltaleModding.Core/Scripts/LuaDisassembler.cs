@@ -2,11 +2,7 @@ using System.Text;
 
 namespace TelltaleModding.Core.Scripts;
 
-/// <summary>
-/// Annotated instruction listings: one section per function with its constants, locals and
-/// upvalues, then each instruction with its source line and a readable description where
-/// registers are shown by local name and constants are resolved inline.
-/// </summary>
+/// <summary>Annotated instruction listings, one section per function, with locals and constants filled in.</summary>
 internal static class LuaDisassembler
 {
     public static string Disassemble(LuaChunk chunk, IReadOnlyDictionary<LuaFunction, string> names)
@@ -250,11 +246,7 @@ internal static class LuaDisassembler
     }
 }
 
-/// <summary>
-/// Best-effort names for function prototypes, from the instruction that stores each closure:
-/// a global (<c>Foo</c>), a field (<c>Menu.Show</c>, <c>obj:Update</c> when the first
-/// parameter is <c>self</c>), a local or an upvalue.
-/// </summary>
+/// <summary>Guesses function names from where each closure gets stored.</summary>
 internal static class LuaFunctionNames
 {
     public static Dictionary<LuaFunction, string> Compute(LuaChunk chunk)
@@ -281,7 +273,7 @@ internal static class LuaFunctionNames
 
     private static string? NameFor(LuaChunk chunk, LuaFunction f, LuaLocals locals, int pc, int next, int reg, LuaFunction proto)
     {
-        // A local whose scope starts at the closure (local function) or right after it.
+        // A local whose scope starts at the closure or right after it.
         if (locals.At(reg, pc) is { } l1) return l1.Name;
         if (next < f.Code.Length + 1 && locals.At(reg, next) is { } l2 && l2.StartPc <= next) return l2.Name;
         if (next >= f.Code.Length) return null;
@@ -309,7 +301,7 @@ internal static class LuaFunctionNames
         return null;
     }
 
-    // What register `reg` holds at `pc`: a local, or a global / field loaded just before.
+    // Name of what `reg` holds at `pc`: a local, or a global or field loaded just before.
     private static string? TableName(LuaChunk chunk, LuaFunction f, LuaLocals locals, int reg, int pc, int depth)
     {
         if (locals.At(reg, pc) is { } l) return l.Name;

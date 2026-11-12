@@ -88,7 +88,7 @@ public class D3dMeshFileTests
         Assert.Equal(3, mesh.MaterialResources.Count);
         Assert.Equal(3, mesh.MaterialHandles.Count);
 
-        // Simulated folder index containing this character's texture set.
+        // Fake folder index with this character's textures.
         string[] textureNames =
         {
             "skB4_banditMarauder_bodyLowerColorA", "skB4_banditMarauder_bodyLower_nm", "skB4_banditMarauder_bodyLower_detail",
@@ -98,8 +98,7 @@ public class D3dMeshFileTests
         var index = textureNames.ToDictionary(
             n => TelltaleModding.Core.Meta.TelltaleCrc64.HashSymbol(n), n => n + ".d3dtx");
 
-        // Every batch's material handle must resolve to an embedded resource, and each
-        // resource's diffuse must be the ColorA texture for its body region.
+        // Each material picks the ColorA texture for its body region.
         var diffuses = new List<string>();
         foreach (var (nameSymbol, payload) in mesh.MaterialResources)
         {
@@ -133,7 +132,7 @@ public class D3dMeshFileTests
         var geo = mesh.GetGeometry();
 
         Assert.Equal(mesh.VertexCount, geo.Positions.Length);
-        // Positions are UN16-quantized, so allow a quantization step of slack.
+        // Positions are quantized, so allow a little slack.
         var min = mesh.BoundsMin - new Vector3(1e-3f);
         var max = mesh.BoundsMax + new Vector3(1e-3f);
         foreach (var p in geo.Positions)
@@ -152,8 +151,7 @@ public class D3dMeshFileTests
 
     [SkippableTheory]
     [InlineData("sk62_clementine400_head.d3dmesh")]
-    // Its shadow index buffer omits the eye-wetness batch, so reading batches from
-    // the wrong buffer shifts every later batch onto another part's triangles.
+    // Its shadow index buffer skips a batch, so reading the wrong buffer shifts the rest.
     [InlineData("sk62_clementine400_eyesMouth.d3dmesh")]
     public void V55_batches_index_only_their_own_vertex_range(string sample)
     {
@@ -178,7 +176,7 @@ public class D3dMeshFileTests
         Assert.Equal(head.Batches.Count + body.Batches.Count, combined.Batches.Count);
         Assert.All(combined.Indices, i => Assert.InRange(i, 0, combined.Positions.Length - 1));
 
-        // The second part's batches point past the first part's indices and vertices.
+        // The second part's batches are offset past the first part.
         var firstBodyBatch = combined.Batches[head.Batches.Count];
         Assert.Equal(body.Batches[0].StartIndex + head.Indices.Length, firstBodyBatch.StartIndex);
         Assert.Equal(body.Batches[0].MinVertex + head.Positions.Length, firstBodyBatch.MinVertex);
@@ -186,7 +184,7 @@ public class D3dMeshFileTests
             combined.Indices[firstBodyBatch.StartIndex]);
         Assert.Equal(body.Batches[0].BonePaletteIndex + head.BonePalettes!.Count, firstBodyBatch.BonePaletteIndex);
 
-        // Both parts are skinned, so the merged model keeps per-vertex skinning data.
+        // Both parts are skinned, so the result is too.
         Assert.True(combined.IsSkinned);
         Assert.Equal(combined.Positions.Length, combined.BlendWeights!.Length);
         Assert.Equal(Vector3.Min(head.BoundsMin, body.BoundsMin), combined.BoundsMin);
@@ -197,8 +195,7 @@ public class D3dMeshFileTests
     {
         var mesh = Load(SampleData.Sample("sk62_clementine400_head.d3dmesh"));
 
-        // The material lists grime, decal, wrinkle and blended-normal maps ahead of
-        // the diffuse; v55 symbols hash the file name including ".d3dtx".
+        // v55 symbols hash the file name including ".d3dtx".
         string[] textureNames =
         {
             "sk62_clementine400_headWrinkleB_mask", "sk62_clementine400_head_nm", "sk62_clementine400_head_grime",
@@ -223,15 +220,14 @@ public class D3dMeshFileTests
         var batch = Assert.Single(mesh.Batches);
         Assert.Equal(2068, batch.PrimitiveCount);
 
-        // One interleaved buffer: float position, three float weights (the fourth implied),
-        // signed-normalized normal, tangent and UVs.
+        // One interleaved buffer with three float weights.
         Assert.Single(mesh.VertexBuffers);
         Assert.Contains(mesh.LegacyComponents, c => c.Semantic == LegacyVertexSemantic.Position &&
                                                     c.Type == LegacyVertexType.Float && c.Count == 3);
         Assert.Contains(mesh.LegacyComponents, c => c.Semantic == LegacyVertexSemantic.BlendWeight &&
                                                     c.Type == LegacyVertexType.Float && c.Count == 3);
 
-        // The batch's diffuse slot points at the head color texture's handle.
+        // The diffuse slot points at the head texture.
         Assert.Equal(TelltaleModding.Core.Meta.TelltaleCrc64.HashSymbol("sk54_bigby_head.d3dtx"),
             mesh.TextureSymbols[batch.DiffuseTextureIndex]);
     }
@@ -242,7 +238,7 @@ public class D3dMeshFileTests
         var mesh = Load(SampleData.Sample("sk61_bannermanWhitehillLow_handsBare.d3dmesh"));
         Assert.Equal(17, mesh.Version);
         Assert.True(mesh.Batches.Count > 0);
-        // Two buffers: skinning data in the first, UVs and tangents in the second.
+        // UVs are in the second of two buffers.
         Assert.Equal(2, mesh.VertexBuffers.Count);
         Assert.Contains(mesh.LegacyComponents, c => c.Semantic == LegacyVertexSemantic.BlendWeight &&
                                                     c.Type == LegacyVertexType.UN16 && c.Count == 4);
@@ -277,8 +273,7 @@ public class D3dMeshFileTests
         }
 
         Assert.All(geo.Normals, n => Assert.InRange(n.Length(), 0.99f, 1.01f));
-        // Signed-normalized UVs times the mesh's diffuse UV scale: The Wolf Among Us stores
-        // some as -1..0 and some at half range (scale ~2), relying on the GPU's wrap.
+        // UVs stay within the mesh's UV scale; some rely on texture wrapping.
         var scale = mesh.LegacyUvScales[0] + new Vector2(1e-3f);
         Assert.All(geo.TexCoords, uv => Assert.True(Math.Abs(uv.X) <= scale.X && Math.Abs(uv.Y) <= scale.Y, $"uv {uv}"));
 
@@ -291,8 +286,7 @@ public class D3dMeshFileTests
     [SkippableFact]
     public void Legacy_uv_scale_restores_half_range_uvs()
     {
-        // Bigby's head stores U at half range with a diffuse UV scale of ~2; unscaled, it
-        // would sample only half of its texture.
+        // Without the scale, Bigby's head would use only half its texture.
         var mesh = Load(SampleData.Sample("sk54_bigby_head.d3dmesh"));
         Assert.InRange(mesh.LegacyUvScales[0].X, 1.9f, 2.1f);
         var geo = mesh.GetGeometry();
@@ -321,8 +315,7 @@ public class D3dMeshFileTests
     [SkippableFact]
     public void Legacy_detail_stream_carries_the_ink_line_uvs()
     {
-        // The Wolf Among Us draws its ink lines through a separate detail-map stream with
-        // its own UV scale (1), not through the color UVs (scaled ~2 on U).
+        // Ink lines use a separate UV stream with its own scale.
         Assert.True(D3dMeshFile.TryLoad(File.ReadAllBytes(SampleData.Sample("sk54_bigby_head.d3dmesh")), out var mesh, out var error), error);
         var color = mesh!.GetGeometry().TexCoords;
         var detail = mesh.GetTexCoords(1);

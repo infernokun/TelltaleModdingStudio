@@ -23,7 +23,7 @@ public class SceneCharactersTests
     public async Task The_scene_names_the_exact_model_where_the_name_fits_many()
     {
         using var catalog = await Open(DefinitiveSeries);
-        // The game has a dozen Clementines; the Season 4 barn stages Clementine 402 with AJ.
+        // There are many Clementines; the barn uses Clementine 402.
         Assert.True(catalog.Characters.Count(c => c.DisplayName == "Clementine") > 5);
         var scenes = new SceneCharacters(catalog);
         Assert.Equal("sk62_clementine402", scenes.Find("adv_forestBarn.scene", "Clementine")?.Id);

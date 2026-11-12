@@ -6,11 +6,8 @@ using TelltaleModding.Core.Scene;
 namespace TelltaleModding.Core.Dialogue;
 
 /// <summary>
-/// Where a scene's voice lines play in its chores. The scene's dialog names the chore each
-/// exchange plays, whatever it is called; chores named after the scene
-/// (<c>env_cave_act1_cs_hardWorld_1.chore</c> for <c>env_cave_act1</c>) add the cutscenes
-/// its scripts play. A chore places a line by the symbol of <c>&lt;id&gt;.lang</c>, where a
-/// line that reuses another line's recording is often placed by that line's id instead.
+/// Where a scene's voice lines play in its chores: the chores its dialog names, plus the
+/// chores named after the scene. A chore places a line by the symbol of <c>&lt;id&gt;.lang</c>.
 /// </summary>
 public sealed class SceneChoreLines
 {
@@ -21,11 +18,11 @@ public sealed class SceneChoreLines
     /// <summary>Number of chores read for the scene.</summary>
     public int ChoreCount { get; private set; }
 
-    /// <summary>The scene files (<c>adv_forestBarn.scene</c>) the chores are staged in, most used first.</summary>
+    /// <summary>The scene files the chores are staged in, most used first.</summary>
     public IReadOnlyList<string> SceneFiles =>
         _sceneFiles.OrderByDescending(s => s.Value).Select(s => s.Key).ToList();
 
-    /// <summary>Indexes the voice lines of <paramref name="chore"/> and the chores embedded in it; earlier chores win.</summary>
+    /// <summary>Indexes the voice lines of <paramref name="chore"/>. Earlier chores win.</summary>
     public void Add(ChoreFile chore)
     {
         ChoreCount++;
@@ -47,7 +44,7 @@ public sealed class SceneChoreLines
         }
     }
 
-    /// <summary>Where <paramref name="line"/> plays: first in the chores its exchange plays, then in any indexed chore.</summary>
+    /// <summary>Where <paramref name="line"/> plays, checking its exchange's chores first.</summary>
     public ChoreLine? Find(DialogueEntry line)
     {
         var symbols = VoiceSymbols(line);
@@ -69,7 +66,7 @@ public sealed class SceneChoreLines
 
     /// <summary>
     /// The symbols a chore may place <paramref name="line"/> by: its own, then that of the
-    /// line whose recording it plays (<c>357138734</c> playing <c>295896370.wav</c>).
+    /// line whose recording it reuses.
     /// </summary>
     public static IReadOnlyList<ulong> VoiceSymbols(DialogueEntry line)
     {
@@ -81,9 +78,8 @@ public sealed class SceneChoreLines
     }
 
     /// <summary>
-    /// Reads the chores of <paramref name="scene"/> (a <see cref="DialogueEntry.Scene"/>): those
-    /// its dialog's exchanges and chore nodes play, then those named after it.
-    /// <paramref name="chores"/> is every <c>.chore</c> of the game.
+    /// Reads the chores of <paramref name="scene"/>: those its dialog plays, then those named after it.
+    /// <paramref name="chores"/> is every <c>.chore</c> in the game.
     /// </summary>
     public static SceneChoreLines Build(GameCatalog catalog, IReadOnlyList<ArchiveEntryRef> chores, string scene)
     {

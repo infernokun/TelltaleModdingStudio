@@ -19,8 +19,7 @@ public class GltfExportTests
         return SamplesAssembler().Build(meshes, "sk62_clementine400.skl");
     }
 
-    // Characters with a clip in samples/: compressed pose keys (Tales from the Borderlands),
-    // keyframed tracks (Wolf Among Us) and a Michonne-era clip.
+    // Sample characters with a clip, one per animation format.
     public static TheoryData<string, string, string> AnimatedCharacters => new()
     {
         { "sk55_sasha.d3dmesh", "sk55_sasha.skl", "sk55_idle_sashaHandsHips.anm" },
@@ -58,7 +57,7 @@ public class GltfExportTests
         Assert.Equal("2.0", root.GetProperty("asset").GetProperty("version").GetString());
         Assert.Equal(glb.Bin.Length, root.GetProperty("buffers")[0].GetProperty("byteLength").GetInt32());
 
-        // Every buffer view lies inside the buffer, every accessor inside its view.
+        // Views fit in the buffer and accessors fit in their views.
         foreach (var view in root.GetProperty("bufferViews").EnumerateArray())
         {
             int offset = view.GetProperty("byteOffset").GetInt32(), length = view.GetProperty("byteLength").GetInt32();
@@ -72,7 +71,7 @@ public class GltfExportTests
             Assert.True(size <= view.GetProperty("byteLength").GetInt32());
         }
 
-        // Positions: bounds match the data, and the data is the model's rest pose.
+        // Positions are the rest pose and the bounds match.
         var primitives = root.GetProperty("meshes")[0].GetProperty("primitives");
         int position = primitives[0].GetProperty("attributes").GetProperty("POSITION").GetInt32();
         var positions = glb.Vec3(position);
@@ -83,8 +82,7 @@ public class GltfExportTests
         Assert.Equal(new[] { positions.Min(p => p.X), positions.Min(p => p.Y), positions.Min(p => p.Z) }, min);
         Assert.Equal(new[] { positions.Max(p => p.X), positions.Max(p => p.Y), positions.Max(p => p.Z) }, max);
 
-        // Exactly the visible batches are drawn (the hidden eye-wetness shell stays out),
-        // with indices in range.
+        // Only the visible batches are drawn.
         int drawn = 0;
         foreach (var primitive in primitives.EnumerateArray())
         {
@@ -95,7 +93,7 @@ public class GltfExportTests
         }
         Assert.Equal(model.Geometry.Batches.Sum(b => b.PrimitiveCount) * 3, drawn);
 
-        // Skin: one joint per skeleton bone, named, with inverse bind matrices.
+        // One named joint per skeleton bone.
         var skin = root.GetProperty("skins")[0];
         var joints = skin.GetProperty("joints").EnumerateArray().Select(j => j.GetInt32()).ToArray();
         Assert.Equal(model.Skeleton!.Bones.Count, joints.Length);
@@ -106,7 +104,7 @@ public class GltfExportTests
         Assert.Contains("eye_L", names);
         Assert.Equal(names.Count, names.Distinct().Count());
 
-        // Weights are normalised; joints index the skin.
+        // Weights add up to 1.
         var attributes = primitives[0].GetProperty("attributes");
         var weights = glb.Floats(attributes.GetProperty("WEIGHTS_0").GetInt32());
         var vertexJoints = glb.Indices(attributes.GetProperty("JOINTS_0").GetInt32());
@@ -114,7 +112,7 @@ public class GltfExportTests
             Assert.InRange(weights[v * 4] + weights[v * 4 + 1] + weights[v * 4 + 2] + weights[v * 4 + 3], 0.9999f, 1.0001f);
         Assert.All(vertexJoints, j => Assert.InRange(j, 0, joints.Length - 1));
 
-        // Textures are embedded PNGs; materials are not metallic.
+        // Textures are embedded PNGs.
         var images = root.GetProperty("images").EnumerateArray().ToList();
         Assert.NotEmpty(images);
         foreach (var image in images)
@@ -155,7 +153,7 @@ public class GltfExportTests
         var (model, player) = Animated(mesh, skeleton, anim);
         var glb = Export(model, new[] { new GltfClip("clip", player) });
 
-        // A vertex names each joint at most once (some meshes repeat a bone across slots).
+        // A vertex uses each joint at most once.
         var attributes = glb.Json.GetProperty("meshes")[0].GetProperty("primitives")[0].GetProperty("attributes");
         var vertexJoints = glb.Indices(attributes.GetProperty("JOINTS_0").GetInt32());
         var weights = glb.Floats(attributes.GetProperty("WEIGHTS_0").GetInt32());
@@ -182,7 +180,7 @@ public class GltfExportTests
             AssertClose(expectedNormals, normals, 1e-3f);
         }
 
-        // Between keys the glTF interpolation stays close to the player's own sampling.
+        // Between keys it stays close to the player.
         float between = (times[1] + times[2]) / 2;
         player.Evaluate(between, expected, expectedNormals);
         AssertClose(expected, glb.Skin(animation, between).Positions, 5e-3f);
@@ -200,7 +198,7 @@ public class GltfExportTests
         var glb = Export(model, new[] { new GltfClip("handsHips", sasha), new GltfClip("dying", second) });
         var animations = glb.Json.GetProperty("animations").EnumerateArray().ToList();
         Assert.Equal(new[] { "handsHips", "dying" }, animations.Select(a => a.GetProperty("name").GetString()));
-        // Each clip drives every bone, so switching clips never leaves a stale pose behind.
+        // Each clip drives every bone so switching clips leaves no stale pose.
         int bones = model.Skeleton!.Bones.Count;
         Assert.All(animations, a => Assert.Equal(bones * 2, a.GetProperty("channels").GetArrayLength()));
 
@@ -224,7 +222,7 @@ public class GltfExportTests
         Assert.True(worst <= tolerance, $"vertex {worstAt} off by {worst} (expected {expected[Math.Max(0, worstAt)]}, got {actual[Math.Max(0, worstAt)]})");
     }
 
-    /// <summary>A minimal .glb reader: the chunks, accessors, and skinning of the first mesh.</summary>
+    /// <summary>A small .glb reader for these tests.</summary>
     private sealed class Glb
     {
         public required JsonElement Json { get; init; }
@@ -312,9 +310,7 @@ public class GltfExportTests
                 .MaxBy(t => t.Length)!;
 
         /// <summary>
-        /// Skins the first mesh as a glTF viewer would: node TRS (overridden by the
-        /// animation's channels sampled at <paramref name="time"/>), composed down the node
-        /// tree, times the inverse bind matrices, blended by the vertex weights.
+        /// Skins the first mesh at <paramref name="time"/> the way a glTF viewer would.
         /// </summary>
         public (Vector3[] Positions, Vector3[] Normals) Skin(JsonElement? animation, float time)
         {
@@ -373,7 +369,7 @@ public class GltfExportTests
                 }
             }
 
-            // Row-vector convention: local = S·R·T, global = local·parentGlobal.
+            // Row vectors: local is S*R*T, global is local times the parent's global.
             var global = new Matrix4x4?[count];
             Matrix4x4 Global(int i) => global[i] ??=
                 Matrix4x4.CreateScale(scale[i]) * Matrix4x4.CreateFromQuaternion(rotation[i]) * Matrix4x4.CreateTranslation(translation[i])

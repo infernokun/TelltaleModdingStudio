@@ -1,17 +1,9 @@
 namespace TelltaleModding.Core.Engine;
 
-/// <summary>
-/// Builds ttarchext command-line arguments as discrete tokens. Kept separate from
-/// process execution so the exact argument vector can be unit-tested without a
-/// Windows host. Every path is a distinct token, so the runtime quotes them
-/// correctly even when they contain spaces.
-/// </summary>
+/// <summary>Builds ttarchext command-line arguments, one token per argument.</summary>
 public static class TtarchArguments
 {
-    /// <summary>
-    /// Builds arguments for extracting (or, with <see cref="ExtractOptions.ListOnly"/>,
-    /// listing) an archive: <c>[options] &lt;gamenum&gt; &lt;archive&gt; &lt;outputDir&gt;</c>.
-    /// </summary>
+    /// <summary>Arguments to extract or list an archive.</summary>
     public static IReadOnlyList<string> Extract(
         int gameNum, string archivePath, string outputDir, ExtractOptions? options = null)
     {
@@ -38,11 +30,7 @@ public static class TtarchArguments
         return args;
     }
 
-    /// <summary>
-    /// Builds arguments for rebuilding an archive:
-    /// <c>-b -V &lt;ver&gt; [options] &lt;gamenum&gt; &lt;outputArchive&gt; &lt;inputFolder&gt;</c>.
-    /// Note the positional order for build is output-then-input, matching ttarchext.
-    /// </summary>
+    /// <summary>Arguments to build an archive. ttarchext takes the output before the input here.</summary>
     public static IReadOnlyList<string> Build(
         int gameNum, string outputArchive, string inputFolder, BuildOptions? options = null)
     {

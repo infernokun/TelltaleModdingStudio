@@ -8,16 +8,13 @@ namespace TelltaleModding.App.ViewModels;
 /// <summary>Exporting the shown character to glTF.</summary>
 public sealed partial class CharactersViewModel
 {
-    /// <summary>File pickers; set by the shell.</summary>
+    /// <summary>File pickers, set by the shell.</summary>
     public IDialogService? Dialogs { get; set; }
 
-    /// <summary>Raised with a short message for the status bar.</summary>
+    /// <summary>Raised with a message for the status bar.</summary>
     public event Action<string>? StatusMessage;
 
-    /// <summary>
-    /// Saves the character as shown (the worn parts, their textures and the skeleton)
-    /// as a .glb file, with the loaded clip baked in as an animation.
-    /// </summary>
+    /// <summary>Saves the character as shown to a .glb file, with the loaded clip baked in.</summary>
     [RelayCommand]
     private async Task ExportGltfAsync()
     {
@@ -43,7 +40,7 @@ public sealed partial class CharactersViewModel
                 var clips = new List<GltfClip>();
                 if (clip is { } loaded)
                 {
-                    // A player of its own, so exporting never disturbs playback.
+                    // Separate player so export doesn't touch playback.
                     var player = new AnimationPlayer(model.Geometry, model.Skeleton!);
                     player.Load(loaded.Clip, loaded.Name);
                     clips.Add(new GltfClip(Path.GetFileNameWithoutExtension(loaded.Name), player));

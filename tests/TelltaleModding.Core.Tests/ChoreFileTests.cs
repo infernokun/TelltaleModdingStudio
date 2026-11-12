@@ -24,7 +24,7 @@ public class ChoreFileTests
         Assert.Equal(150, chore.Resources.Count);
         Assert.Equal(13, chore.Agents.Count);
 
-        // AJ turns, then crosses his arms, starting about 8.7 s in.
+        // AJ crosses his arms about 8.7 s in.
         int arms = IndexOf(chore, "sk63_ajStandA_toArmsX.anm");
         Assert.True(arms >= 0);
         var resource = chore.Resources[arms];
@@ -60,7 +60,7 @@ public class ChoreFileTests
     [SkippableFact]
     public void Skips_embedded_data_after_the_last_resource()
     {
-        // The last resource carries style idle data; the agents follow it.
+        // The agents come after the last resource's style idle data.
         var chore = Read("env_airportExteriorDusk_cs_gabe_52.chore");
         Assert.Equal(36, chore.Resources.Count);
         Assert.Equal(new[] { "Javier", "Gabe" }, chore.Agents.Select(a => a.Name).Take(2));
@@ -133,8 +133,7 @@ public class ChoreFileTests
     [SkippableFact]
     public void Reads_the_camera_moves_a_chore_keys()
     {
-        // The chore swings the station camera's rig round between 23 and 25.3 s and zooms the
-        // camera from 35 to 25 degrees and back.
+        // The chore turns the camera rig and zooms from 35 to 25 degrees and back.
         var chore = Read("env_lodgeExteriorAndMainRoom_cs_hideCouch_1.chore");
         ChoreResource Keyed(string agent) => chore.Agents.First(a => a.Name == agent).Resources
             .Select(i => chore.Resources[i]).First(r => r.Transform is not null || r.FieldOfView is not null);
@@ -157,7 +156,7 @@ public class ChoreFileTests
     [SkippableFact]
     public void Reads_the_resource_groups_a_resource_is_limited_to()
     {
-        // The glance moves the head and eyes but leaves the face (brows, cheeks) alone.
+        // The glance moves the head and eyes but not the face.
         var chore = Read("clementine200_headGesture_lookUp_add.chore");
         var groups = chore.Resources[0].GroupInclude!;
         Assert.Equal(6, groups.Count);
@@ -186,7 +185,7 @@ public class ChoreFileTests
         Assert.NotEmpty(zeroed);
         Assert.All(zeroed, c => Assert.Equal(0f, c.Control!.At(1.5f, hold: false).Weight));
 
-        // The glance up is held near its peak, at about three quarters.
+        // The glance is held near its peak.
         var glance = Assert.Single(clips, c => c.Name == "clementine200_headGesture_lookUp_add.anm" && c.Priority == 1);
         var (time, weight) = glance.Control!.At(2f, hold: false);
         Assert.Equal(0.77f, weight, 0.02f);
@@ -216,7 +215,7 @@ public class ChoreFileTests
         Assert.Equal(ChoreItemKind.Animation, arms.Kind);
         Assert.Equal(8.70, arms.Start!.Value, 0.01f);
 
-        // Settings (no play span) lead, then items in start order.
+        // Settings come first, then items in start order.
         var timed = aj.Items.Where(i => i.Start is not null).Select(i => i.Start!.Value).ToList();
         Assert.Equal(timed.OrderBy(t => t), timed);
         Assert.All(aj.Items.Where(i => i.Name == "aj_headEyeGesture_lookUp_add.anm"), i => Assert.Equal(ChoreItemKind.Gesture, i.Kind));
@@ -235,20 +234,20 @@ public class ChoreFileTests
         Assert.True(line.End > line.Start);
         Assert.Null(ChorePerformance.FindLine(chore, 12345));
 
-        // Names come from the game's files; here, the hashes of the names the chore uses.
+        // Names the chore uses, by hash.
         var known = new[]
         {
             "sk63_ajStandA_toArmsX.anm", "sk63_ajStandA_turnRight90.anm", "aj_headEyeGesture_lookUp_add.anm",
             "sk62_clementine400StandA_toWalk.anm", "aJ_face_blink.chore",
         }.ToDictionary(TelltaleCrc64.HashSymbol);
-        // A nested chore that cannot be read (the blink here) adds nothing rather than failing.
+        // A nested chore that can't be read adds nothing.
         var clips = ChorePerformance.Collect(chore, "AJ", s => known.GetValueOrDefault(s), _ => null);
 
         var arms = Assert.Single(clips, c => c.Name == "sk63_ajStandA_toArmsX.anm");
         Assert.False(arms.Additive);
         Assert.Equal(8.70, arms.Start, 0.01f);
         Assert.Contains(clips, c => c.Name == "aj_headEyeGesture_lookUp_add.anm" && c.Additive);
-        // Only AJ's clips: Clementine's walk stays out.
+        // Only AJ's clips.
         Assert.DoesNotContain(clips, c => c.Name.Contains("clementine"));
         Assert.Empty(ChorePerformance.Collect(chore, "nobody", s => known.GetValueOrDefault(s), _ => null));
     }

@@ -1,10 +1,6 @@
 namespace TelltaleModding.Core.Audio;
 
-/// <summary>
-/// Walks a Vorbis setup header (codebooks, floors, residues, mappings, modes) far
-/// enough to learn its exact length and each mode's block flag, which is what an
-/// Ogg muxer needs to compute packet durations.
-/// </summary>
+/// <summary>Walks a Vorbis setup header to get its length and each mode's block flag.</summary>
 internal static class VorbisSetupParser
 {
     private sealed class BitReader
@@ -68,8 +64,8 @@ internal static class VorbisSetupParser
     }
 
     /// <summary>
-    /// Parses a setup packet starting at <paramref name="start"/> (at its 0x05 'vorbis' signature).
-    /// Returns the packet length in bytes and the per-mode block flags, or false if it is malformed.
+    /// Parses a setup packet whose 0x05 "vorbis" signature is at <paramref name="start"/>.
+    /// Returns false if it's malformed.
     /// </summary>
     internal static bool TryParse(byte[] data, int start, int end, int channels, out int length, out bool[] modeBlockFlags)
     {

@@ -8,7 +8,7 @@ public class TtarchArgumentsTests
     public void Extract_ProducesGamenumArchiveOutputInOrder()
     {
         var args = TtarchArguments.Extract(24, @"C:\games\mi.ttarch", @"C:\out");
-        // Default options: overwrite on.
+        // Overwrite is on by default.
         Assert.Equal(new[] { "-o", "24", @"C:\games\mi.ttarch", @"C:\out" }, args);
     }
 
@@ -16,7 +16,7 @@ public class TtarchArgumentsTests
     public void Extract_PathsWithSpacesRemainSingleTokens()
     {
         var args = TtarchArguments.Extract(24, @"C:\my games\a.ttarch", @"C:\new folder");
-        // The whole point: paths are discrete tokens, not a fragile concatenated string.
+        // Each path stays one argument.
         Assert.Contains(@"C:\my games\a.ttarch", args);
         Assert.Contains(@"C:\new folder", args);
     }
@@ -54,7 +54,7 @@ public class TtarchArgumentsTests
         Assert.Equal("-V", args[1]);
         Assert.Equal("7", args[2]);
 
-        // Positional order for build is gamenum, OUTPUT, INPUT.
+        // Build takes gamenum, output, then input.
         var tail = args.Skip(args.Count - 3).ToArray();
         Assert.Equal(new[] { "57", @"C:\mods\0.ttarch2", @"C:\mods\staging" }, tail);
     }

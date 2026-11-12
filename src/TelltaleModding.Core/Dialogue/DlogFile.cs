@@ -12,7 +12,7 @@ public enum DlogNodeKind
     /// <summary>One or more spoken lines in order (<c>DlgNodeExchange</c>).</summary>
     Exchange,
 
-    /// <summary>A single line of text (<c>DlgNodeText</c>), usually UI or narration.</summary>
+    /// <summary>A single line of text (<c>DlgNodeText</c>).</summary>
     Text,
 
     /// <summary>A choice menu; its options are <see cref="DlogChildKind.Choice"/> children.</summary>
@@ -24,7 +24,7 @@ public enum DlogNodeKind
     /// <summary>Sets or tests game logic.</summary>
     Logic,
 
-    /// <summary>Continues at another node (see <see cref="DlogJump"/>).</summary>
+    /// <summary>Continues at another node.</summary>
     Jump,
 
     /// <summary>Ends the conversation.</summary>
@@ -33,7 +33,7 @@ public enum DlogNodeKind
     Idle,
     Script,
 
-    /// <summary>Plays one of its elements per visit (random or in turn).</summary>
+    /// <summary>Plays one of its elements per visit.</summary>
     Sequence,
 
     /// <summary>Plays all of its elements at once.</summary>
@@ -43,7 +43,7 @@ public enum DlogNodeKind
     Chore,
     CancelChoices,
 
-    /// <summary>A class this reader has no layout for; kept with its class name.</summary>
+    /// <summary>A class we have no layout for.</summary>
     Other,
 }
 
@@ -76,10 +76,10 @@ public enum DlogJumpTarget
     /// <summary>The node named by <see cref="DlogJump.TargetName"/>.</summary>
     ToName = 1,
 
-    /// <summary>Back to the node that owns the jump's branch (e.g. re-show a choice hub).</summary>
+    /// <summary>Back to the node that owns the jump's branch.</summary>
     ToParent = 2,
 
-    /// <summary>The wait node that follows an enclosing node (usually the choice menu), and on from there.</summary>
+    /// <summary>The wait node after an enclosing node, usually the choice menu.</summary>
     ToNodeAfterParentWait = 3,
 }
 
@@ -92,14 +92,11 @@ public enum DlogJumpBehaviour
 }
 
 /// <summary>The target of a <see cref="DlogNodeKind.Jump"/> node.</summary>
-/// <param name="TargetName">Name symbol of the target node (for <see cref="DlogJumpTarget.ToName"/>).</param>
+/// <param name="TargetName">Name symbol of the target node.</param>
 /// <param name="OtherDialog">Symbol of another <c>.dlog</c> the jump continues in, or 0 for this one.</param>
 public sealed record DlogJump(DlogJumpTarget Target, DlogJumpBehaviour Behaviour, ulong TargetName, ulong OtherDialog);
 
-/// <summary>
-/// A branch hanging off a node or folder: a conversation in a folder, a choice option,
-/// a conditional case… <see cref="HeadId"/> links to the first node of its chain.
-/// </summary>
+/// <summary>A branch off a node or folder, like a conversation, choice option or conditional case.</summary>
 public sealed class DlogChild
 {
     internal DlogChild(ulong id, string className, DlogChildKind kind, ulong headId, ulong nameSymbol, IReadOnlyList<uint> textIds)
@@ -114,7 +111,7 @@ public sealed class DlogChild
 
     public ulong Id { get; }
 
-    /// <summary>The engine class (<c>DlgChoice</c>, <c>DlgConditionalCase</c>, …).</summary>
+    /// <summary>The engine class name.</summary>
     public string ClassName { get; }
 
     public DlogChildKind Kind { get; }
@@ -124,19 +121,16 @@ public sealed class DlogChild
 
     public ulong NameSymbol { get; }
 
-    /// <summary>Language line ids attached to the branch, a choice option's text, a case's label.</summary>
+    /// <summary>Language line ids on the branch, such as a choice option's text.</summary>
     public IReadOnlyList<uint> TextIds { get; }
 
-    /// <summary>
-    /// Condition classes a choice option waits on: <c>DlgConditionInput</c> (the player picks it),
-    /// <c>DlgConditionTime</c> (taken when the timer runs out), <c>DlgConditionRule</c>.
-    /// </summary>
+    /// <summary>Condition classes a choice option waits on.</summary>
     public IReadOnlyList<string> Conditions { get; internal set; } = Array.Empty<string>();
 
     /// <summary>True for an option taken when the player lets the timer run out.</summary>
     public bool IsTimeout => Conditions.Contains("DlgConditionTime") && !Conditions.Contains("DlgConditionInput");
 
-    /// <summary>The node that owns this branch; null for a folder's conversations.</summary>
+    /// <summary>The node that owns this branch, null for a folder's conversations.</summary>
     public DlogNode? Owner { get; internal set; }
 
     /// <summary>The folder that lists this branch, for conversations.</summary>
@@ -157,7 +151,7 @@ public sealed class DlogNode
 
     public ulong Id { get; internal set; }
 
-    /// <summary>The engine class (<c>DlgNodeExchange</c>, <c>DlgNodeChoices</c>, …).</summary>
+    /// <summary>The engine class name.</summary>
     public string ClassName { get; }
 
     public DlogNodeKind Kind { get; }
@@ -165,7 +159,7 @@ public sealed class DlogNode
     /// <summary>Byte offset of the node in the file.</summary>
     public int Offset { get; }
 
-    /// <summary>Name symbol (hash) of the node; 0 when unnamed. Jumps target nodes by it.</summary>
+    /// <summary>Name hash of the node, or 0. Jumps target nodes by it.</summary>
     public ulong NameSymbol { get; internal set; }
 
     /// <summary>The node's name when <see cref="DlogFile.ResolveNames"/> found it.</summary>
@@ -173,22 +167,16 @@ public sealed class DlogNode
 
     public ulong PrevId { get; internal set; }
 
-    /// <summary>The next node in the chain; ends the branch when it is not a node.</summary>
+    /// <summary>The next node in the chain. The branch ends when it isn't a node.</summary>
     public ulong NextId { get; internal set; }
 
     /// <summary>The language line ids spoken by this node, in order.</summary>
     public IReadOnlyList<uint> LineIds { get; internal set; } = Array.Empty<uint>();
 
-    /// <summary>
-    /// Symbol of the <c>.chore</c> file an exchange or chore node plays (the exchange's
-    /// lines are voiced on its timeline); 0 for none.
-    /// </summary>
+    /// <summary>Symbol of the <c>.chore</c> an exchange or chore node plays, or 0.</summary>
     public ulong ChoreSymbol { get; internal set; }
 
-    /// <summary>
-    /// Child branches in order: a choice menu's pre-choice, options, then post-choice;
-    /// a conditional's cases; a sequence's elements.
-    /// </summary>
+    /// <summary>Child branches in order, such as a choice menu's options or a conditional's cases.</summary>
     public IReadOnlyList<DlogChild> Children { get; internal set; } = Array.Empty<DlogChild>();
 
     public DlogJump? Jump { get; internal set; }
@@ -196,10 +184,10 @@ public sealed class DlogNode
     /// <summary>A script node's Lua text or a notes node's note.</summary>
     public string? Script { get; internal set; }
 
-    /// <summary>The branch whose chain this node is on (null for unreachable nodes).</summary>
+    /// <summary>The branch whose chain this node is on.</summary>
     public DlogChild? Branch { get; internal set; }
 
-    /// <summary>False when the node's layout was not understood and its fields were skipped.</summary>
+    /// <summary>False when the node's layout wasn't understood and its fields were skipped.</summary>
     public bool IsComplete { get; internal set; } = true;
 
     /// <summary>The player options of a choice menu.</summary>
@@ -230,7 +218,7 @@ public sealed class DlogNode
     };
 }
 
-/// <summary>A folder of conversations, as the dialog editor groups them.</summary>
+/// <summary>A folder of conversations.</summary>
 public sealed class DlogFolder
 {
     internal DlogFolder(ulong id, ulong nameSymbol, IReadOnlyList<DlogChild> conversations)
@@ -250,18 +238,13 @@ public sealed class DlogFolder
 }
 
 /// <summary>
-/// A <c>.dlog</c> dialog resource: folders of conversations, each a chain of nodes
-/// (lines, choice menus, conditionals, jumps…) linked by id. Spoken text is stored as
-/// language line ids that match the scene's <c>.landb</c> (same base name).
+/// A <c>.dlog</c> dialog: folders of conversations, each a chain of nodes linked by id.
+/// Spoken text is stored as line ids from the scene's <c>.landb</c>.
 /// </summary>
 /// <remarks>
-/// MSV5/MSV6 meta stream. The default section holds the <c>Dlg</c> members (id, name,
-/// version, default folder, an embedded language database, project/resource ids,
-/// flags, dependencies and (from Tales from the Borderlands on) production props,
-/// a Jira record block and a tool-data flag), then the folders, then the nodes, each
-/// prefixed by its class hash. Non-intrinsic members are wrapped in size-prefixed
-/// blocks, so unknown members are skipped by size; older games add a unique-id block
-/// to dialogs, folders and nodes.
+/// The default section holds the <c>Dlg</c> members, then the folders, then the nodes,
+/// each prefixed by its class hash. Non-intrinsic members are size-prefixed, so unknown
+/// ones can be skipped. Older games add a unique-id block to dialogs, folders and nodes.
 /// </remarks>
 public sealed class DlogFile
 {
@@ -293,13 +276,13 @@ public sealed class DlogFile
                 _children.TryAdd(child.Id, child);
             }
         }
-        // Jumps target names; a jump may share its target's name, so prefer other kinds.
+        // A jump can share its target's name, so prefer other node kinds.
         foreach (var node in nodes.Where(n => n.NameSymbol != 0).OrderBy(n => n.Kind == DlogNodeKind.Jump ? 1 : 0))
             _byName.TryAdd(node.NameSymbol, node);
         AssignBranches();
     }
 
-    /// <summary>The dialog's own name, e.g. <c>env_heliosoffice.dlog</c>.</summary>
+    /// <summary>The dialog's file name.</summary>
     public string Name { get; }
 
     public MetaStreamFormat Format { get; }
@@ -309,7 +292,7 @@ public sealed class DlogFile
     /// <summary>Every node in file order.</summary>
     public IReadOnlyList<DlogNode> Nodes { get; }
 
-    /// <summary>Bytes skipped while resynchronising after nodes whose layout was not understood.</summary>
+    /// <summary>Bytes skipped after nodes whose layout wasn't understood.</summary>
     public int SkippedBytes { get; }
 
     /// <summary>Every conversation of every folder, in order.</summary>
@@ -319,7 +302,7 @@ public sealed class DlogFile
 
     public DlogChild? FindChild(ulong id) => _children.GetValueOrDefault(id);
 
-    /// <summary>The node with the given name symbol (preferring non-jump nodes).</summary>
+    /// <summary>The node with the given name symbol, preferring non-jump nodes.</summary>
     public DlogNode? FindByName(ulong nameSymbol) => nameSymbol == 0 ? null : _byName.GetValueOrDefault(nameSymbol);
 
     /// <summary>The first node of a branch's chain.</summary>
@@ -328,7 +311,7 @@ public sealed class DlogFile
     /// <summary>The node after <paramref name="node"/> in its chain, or null at the end of the branch.</summary>
     public DlogNode? Next(DlogNode node) => FindNode(node.NextId);
 
-    /// <summary>The nodes of a branch's chain in order (stops on a loop).</summary>
+    /// <summary>The nodes of a branch's chain in order. Stops on a loop.</summary>
     public IEnumerable<DlogNode> Chain(DlogChild child)
     {
         var seen = new HashSet<ulong>();
@@ -336,10 +319,10 @@ public sealed class DlogFile
             yield return node;
     }
 
-    /// <summary>The node that owns the branch <paramref name="node"/> is on (null at a conversation's top level).</summary>
+    /// <summary>The node that owns the branch <paramref name="node"/> is on, or null at the top level.</summary>
     public DlogNode? Parent(DlogNode node) => node.Branch?.Owner;
 
-    /// <summary>The conversation (folder branch) that <paramref name="node"/> belongs to.</summary>
+    /// <summary>The conversation <paramref name="node"/> belongs to.</summary>
     public DlogChild? ConversationOf(DlogNode node)
     {
         var branch = node.Branch;
@@ -352,10 +335,7 @@ public sealed class DlogFile
         return null;
     }
 
-    /// <summary>
-    /// The node a jump continues at: the named node, the owner of the jump's branch, or
-    /// null when it leaves this dialog or the target is unknown.
-    /// </summary>
+    /// <summary>The node a jump continues at, or null if it leaves this dialog or the target is unknown.</summary>
     public DlogNode? JumpTarget(DlogNode jump)
     {
         if (jump.Jump is not { } info || info.OtherDialog != 0)
@@ -369,8 +349,8 @@ public sealed class DlogFile
         };
     }
 
-    // A choice menu is followed by the lines said while it shows, then a wait node that
-    // holds the conversation until a pick; the jump resumes there (the wait passes on).
+    // A choice menu is followed by some lines and then a wait node that holds until the
+    // player picks. The jump resumes at that wait.
     private DlogNode? AfterParentWait(DlogNode node)
     {
         for (var parent = Parent(node); parent is not null; parent = Parent(parent))
@@ -385,19 +365,18 @@ public sealed class DlogFile
         return null;
     }
 
-    /// <summary>Every language line id the dialog refers to (spoken lines and option texts).</summary>
+    /// <summary>Every language line id the dialog refers to.</summary>
     public IEnumerable<uint> AllTextIds() =>
         Nodes.SelectMany(n => n.LineIds)
             .Concat(_children.Values.SelectMany(c => c.TextIds))
             .Distinct();
 
-    /// <summary>The resolved name of a branch's first node (a conversation's start node), or null.</summary>
+    /// <summary>The name of a branch's first node, or null.</summary>
     public string? NameOf(DlogChild branch) => Head(branch)?.Name;
 
     /// <summary>
-    /// Fills in <see cref="DlogNode.Name"/> and <see cref="DlogFolder.Name"/> for every
-    /// name symbol that matches one of <paramref name="candidates"/> (the engine keeps only
-    /// the hash of each name). Returns how many names were resolved.
+    /// Fills in node and folder names whose hash matches one of <paramref name="candidates"/>.
+    /// Returns how many were found.
     /// </summary>
     public int ResolveNames(IEnumerable<string> candidates)
     {
@@ -433,9 +412,8 @@ public sealed class DlogFile
     }
 
     /// <summary>
-    /// Likely names for the dialog's symbols: readable strings embedded in
-    /// <paramref name="data"/> (agent names, rule names, script text), the same with the
-    /// interaction prefixes the games use, and common node names.
+    /// Likely names for the dialog's symbols: strings found in <paramref name="data"/>,
+    /// those with common prefixes, and common node names.
     /// </summary>
     public static IEnumerable<string> NameCandidates(byte[] data)
     {
@@ -480,7 +458,6 @@ public sealed class DlogFile
         "random", "chores", "next", "Head", "Reticle", "Dialog exhausted", "Win/Lose", "missionUpdate",
     };
 
-    // Each branch's chain is owned by that branch; walking from every child marks them.
     private void AssignBranches()
     {
         var pending = new Queue<DlogChild>(Folders.SelectMany(f => f.Conversations));
@@ -511,7 +488,7 @@ public sealed class DlogFile
         }
     }
 
-    /// <summary>Parses a <c>.dlog</c>; returns false with a reason for anything else. Never throws.</summary>
+    /// <summary>Parses a <c>.dlog</c>. Returns false with a reason instead of throwing.</summary>
     public static bool TryRead(byte[] data, out DlogFile? dialog, out string? error)
     {
         dialog = null;
@@ -526,10 +503,6 @@ public sealed class DlogFile
         }
     }
 
-    /// <summary>
-    /// The scene name a <c>.dlog</c> shares with its <c>.landb</c>
-    /// (<c>env_heliosOffice.dlog</c> → <c>env_heliosoffice</c>, the form
-    /// <see cref="LandbFile.SplitName"/> gives after lower-casing).
-    /// </summary>
+    /// <summary>The lowercased scene name a <c>.dlog</c> shares with its <c>.landb</c>.</summary>
     public static string SceneOf(string fileName) => Path.GetFileNameWithoutExtension(fileName).ToLowerInvariant();
 }

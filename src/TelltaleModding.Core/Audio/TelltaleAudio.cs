@@ -2,11 +2,7 @@ using System.Buffers.Binary;
 
 namespace TelltaleModding.Core.Audio;
 
-/// <summary>
-/// Entry point for game audio: recognizes the containers Telltale games ship sounds in
-/// (FSB5 and FSB4 sound banks named .wav, FMOD Studio .bank files, plain Ogg Vorbis,
-/// and meta-wrapped .aud streams) and turns them into playable <see cref="AudioClip"/>s.
-/// </summary>
+/// <summary>Turns the audio files Telltale games ship into playable <see cref="AudioClip"/>s.</summary>
 public static class TelltaleAudio
 {
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
@@ -14,13 +10,12 @@ public static class TelltaleAudio
         ".wav", ".ogg", ".aud", ".bank", ".fsb",
     };
 
-    /// <summary>True for entry names whose extension may hold audio this reader understands.</summary>
+    /// <summary>True for file names that may hold audio we can read.</summary>
     public static bool IsAudioFile(string name) => Extensions.Contains(Path.GetExtension(name));
 
     /// <summary>
-    /// Parses an audio entry. <paramref name="setups"/> supplies Vorbis setup headers for
-    /// FSB5 Vorbis banks and may be <see cref="VorbisSetupLibrary.Empty"/> otherwise.
-    /// Returns false with a readable <paramref name="error"/> when nothing could be loaded.
+    /// Loads the clips in an audio file. <paramref name="setups"/> is only needed for
+    /// FSB5 Vorbis banks. Returns false with an <paramref name="error"/> if nothing loads.
     /// </summary>
     public static bool TryLoad(byte[] data, string name, VorbisSetupLibrary setups,
         out IReadOnlyList<AudioClip> clips, out string? error)
@@ -55,7 +50,7 @@ public static class TelltaleAudio
                 return false;
             }
 
-            // Meta-wrapped streams: look for a known container a little way in.
+            // Meta-wrapped files have the real container a little way in.
             int window = Math.Min(data.Length, 8192);
             int ogg = span[..window].IndexOf("OggS"u8);
             if (ogg > 0)

@@ -4,10 +4,8 @@ using TelltaleModding.Core.Textures;
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// Ambient light estimated from a Definitive Series scene's light-probe snapshot
-/// (<c>&lt;scene&gt;_module_lightprobe.d3dtx</c>): a small, upright render of the location.
-/// The mean of its top rows stands in for light from above, the bottom rows for light
-/// bounced off the ground.
+/// Ambient light estimated from a Definitive Series scene's light-probe snapshot. The top rows
+/// give the sky color, the bottom rows the ground.
 /// </summary>
 public static class SceneProbeAmbient
 {
@@ -28,7 +26,7 @@ public static class SceneProbeAmbient
         }
     }
 
-    /// <summary>The snapshot's file name for a scene (<c>adv_x.scene</c> → <c>adv_x_module_lightprobe.d3dtx</c>).</summary>
+    /// <summary>The snapshot's file name for a scene.</summary>
     public static string TextureName(string sceneName) =>
         Path.GetFileNameWithoutExtension(sceneName) + "_module_lightprobe.d3dtx";
 

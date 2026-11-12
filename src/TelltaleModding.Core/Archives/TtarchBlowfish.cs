@@ -3,24 +3,21 @@ using System.Buffers.Binary;
 namespace TelltaleModding.Core.Archives;
 
 /// <summary>
-/// The Blowfish variant Telltale uses for archive versions 7+ and every .ttarch2
-/// container (ttarchext's <c>blf_key7</c>/<c>blf_dec7</c>). It differs from stock
-/// Blowfish in two places: entry 118 of the first S-box is byte-swapped before
-/// the key schedule runs, and the round keys P1/P3 and P2/P4 trade places when
-/// encrypting or decrypting (the schedule itself uses the stock order). Blocks are
-/// pairs of little-endian u32s, and a trailing partial block is left untouched.
+/// The Blowfish variant Telltale uses for archive version 7+ and .ttarch2, ported from ttarchext's
+/// <c>blf_key7</c>/<c>blf_dec7</c>. Unlike stock Blowfish, S-box entry 118 is byte-swapped before
+/// the key schedule, and round keys P1/P3 and P2/P4 swap places after it. Blocks are two
+/// little-endian u32s.
 /// </summary>
-/// <remarks>Immutable once keyed, so one instance can decrypt from several threads.</remarks>
+/// <remarks>Doesn't change once keyed, so one instance can decrypt from several threads.</remarks>
 internal sealed class TtarchBlowfish
 {
     private const int Rounds = 16;
 
-    // _p is the round-key order the cipher actually uses (P1<->P3, P2<->P4
-    // already swapped); _s holds the four S-boxes back to back.
+    // _p already has P1/P3 and P2/P4 swapped. _s holds the four S-boxes back to back.
     private readonly uint[] _p = new uint[Rounds + 2];
     private readonly uint[] _s = new uint[4 * 256];
 
-    /// <summary>Runs the key schedule for <paramref name="key"/> (the raw bytes of a ttarchext game key).</summary>
+    /// <summary>Runs the key schedule for the raw bytes of a ttarchext game <paramref name="key"/>.</summary>
     public TtarchBlowfish(ReadOnlySpan<byte> key)
     {
         if (key.IsEmpty)
@@ -33,8 +30,7 @@ internal sealed class TtarchBlowfish
         InitS3.CopyTo(_s, 768);
         _s[118] = BinaryPrimitives.ReverseEndianness(_s[118]);
 
-        // Stock Blowfish key schedule: XOR the cycled key into P, then replace P
-        // and the S-boxes with successive encryptions of an all-zero block.
+        // Stock Blowfish key schedule.
         int j = 0;
         for (int i = 0; i < Rounds + 2; i++)
         {
@@ -62,12 +58,12 @@ internal sealed class TtarchBlowfish
             _s[i + 1] = r;
         }
 
-        // The version-7 twist: from here on rounds 1-4 use P3, P4, P1, P2.
+        // Version 7 change: rounds 1-4 use P3, P4, P1, P2 from here on.
         (_p[1], _p[3]) = (_p[3], _p[1]);
         (_p[2], _p[4]) = (_p[4], _p[2]);
     }
 
-    /// <summary>Decrypts every whole 8-byte block of <paramref name="data"/> in place.</summary>
+    /// <summary>Decrypts every whole 8-byte block of <paramref name="data"/> in place. A partial last block is left alone.</summary>
     public void Decrypt(Span<byte> data)
     {
         for (int at = 0; at + 8 <= data.Length; at += 8)
@@ -89,8 +85,7 @@ internal sealed class TtarchBlowfish
         }
     }
 
-    // Stock encipher over the current (still unswapped) P order; only the key
-    // schedule calls it.
+    // Stock encipher with the unswapped P order. Only the key schedule uses it.
     private void Encipher(ref uint xl, ref uint xr)
     {
         uint l = xl, r = xr;
@@ -110,7 +105,7 @@ internal sealed class TtarchBlowfish
     private uint F(uint x) =>
         ((_s[x >> 24] + _s[256 + (x >> 16 & 0xFF)]) ^ _s[512 + (x >> 8 & 0xFF)]) + _s[768 + (x & 0xFF)];
 
-    // Initial P-array and S-boxes (hex digits of pi), copied from ttarchext's bf_tab.h.
+    // Initial P-array and S-boxes, copied from ttarchext's bf_tab.h.
 
     private static readonly uint[] InitP =
     {

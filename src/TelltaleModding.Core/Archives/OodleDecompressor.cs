@@ -6,19 +6,13 @@ using System.Text.RegularExpressions;
 namespace TelltaleModding.Core.Archives;
 
 /// <summary>
-/// Binds <c>OodleLZ_Decompress</c> from a game's own <c>oo2core_*_win64.dll</c>.
-/// Oodle is proprietary, so nothing is bundled: the archive reader looks for the
-/// DLL next to the game. Each DLL is loaded once per process and never unloaded.
-/// Windows loads the DLL directly; x86-64 Linux loads it through
-/// <c>libtelltale_oodle.so</c> (built from <c>engine/oodle</c>), which maps the
-/// Windows DLL and calls it with the Windows calling convention.
+/// Calls <c>OodleLZ_Decompress</c> from the game's own <c>oo2core_*_win64.dll</c>, since Oodle
+/// can't be bundled. On Linux the DLL is loaded through <c>libtelltale_oodle.so</c>, which
+/// calls it with the Windows calling convention.
 /// </summary>
 internal sealed class OodleDecompressor
 {
-    // intptr_t OodleLZ_Decompress(const void* comp, intptr_t compLen, void* raw, intptr_t rawLen,
-    //     int fuzzSafe, int checkCRC, int verbosity, void* decBufBase, intptr_t decBufSize,
-    //     void* fpCallback, void* callbackUserData, void* decoderMemory, intptr_t decoderMemorySize,
-    //     int threadPhase), the same 14 arguments ttarchext passes.
+    // Same 14 arguments ttarchext passes to OodleLZ_Decompress.
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate nint DecompressFn(
         [In] byte[] comp, nint compLen, [Out] byte[] raw, nint rawLen,
@@ -30,7 +24,7 @@ internal sealed class OodleDecompressor
     private static readonly Regex DllName = new(@"^oo2core_(\d+)_win64\.dll$", RegexOptions.IgnoreCase);
     private static readonly Dictionary<string, OodleDecompressor> Loaded = new(StringComparer.OrdinalIgnoreCase);
 
-    // Windows: the export as a delegate. Linux: the export's address, called through the helper.
+    // Windows uses the delegate, Linux calls the export's address through the helper.
     private readonly DecompressFn? _decompress;
     private readonly nint _export;
 
@@ -45,10 +39,8 @@ internal sealed class OodleDecompressor
     public string DllPath { get; }
 
     /// <summary>
-    /// Finds and loads an oo2core DLL. Looks in <paramref name="searchDir"/>, its
-    /// parent and its immediate subfolders, then beside the archive and in the
-    /// archive folder's parent (a game's install root usually holds the DLL while
-    /// the archives sit one level down). The newest oo2core version found wins.
+    /// Finds and loads the newest oo2core DLL in or around <paramref name="searchDir"/>
+    /// and the archive's folder.
     /// </summary>
     /// <exception cref="FileNotFoundException">No oo2core DLL could be found.</exception>
     public static OodleDecompressor Locate(string? searchDir, string archivePath)
@@ -114,8 +106,7 @@ internal sealed class OodleDecompressor
 
     /// <summary>
     /// Decompresses <paramref name="compLength"/> bytes of <paramref name="comp"/> into
-    /// <paramref name="raw"/> (at most <paramref name="rawLength"/> bytes) and returns
-    /// the decoded length, or 0 when Oodle rejects the data.
+    /// <paramref name="raw"/>. Returns the decoded length, or 0 when Oodle rejects the data.
     /// </summary>
     public int Decompress(byte[] comp, int compLength, byte[] raw, int rawLength) =>
         _decompress is not null
@@ -133,7 +124,7 @@ internal sealed class OodleDecompressor
         if (archiveDir is not null)
             AddWithNeighbours(archiveDir, children: false);
 
-        // Linux keeps the DLL's Windows name, but matches names with case.
+        // Linux file names are case-sensitive.
         var anyCase = new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive };
         foreach (var dir in dirs)
         {
@@ -184,7 +175,7 @@ internal sealed class OodleDecompressor
         }
     }
 
-    // libtelltale_oodle.so (engine/oodle/oodle_linux.c), found next to the app.
+    // libtelltale_oodle.so, built from engine/oodle and shipped next to the app.
     private static class LinuxHelper
     {
         public const string FileName = "libtelltale_oodle.so";

@@ -184,7 +184,7 @@ public class DlogFileTests
         Assert.Equal(DlogEndReason.OtherDialog, step.End);
         Assert.NotEqual(0ul, step.OtherDialog);
 
-        // Starting inside a choice option returns to the menu's post-choice branch, which jumps on.
+        // Starting inside an option carries on through the menu's post-choice branch.
         var menu = dialog.Nodes.Single(n => n.Kind == DlogNodeKind.Choices);
         walker.StartAt(dialog.Head(menu.Options.First())!);
         var said = new List<string>();

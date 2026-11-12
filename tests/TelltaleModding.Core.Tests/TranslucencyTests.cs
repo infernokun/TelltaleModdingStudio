@@ -3,10 +3,10 @@ using TelltaleModding.Core.Scene;
 
 namespace TelltaleModding.Core.Tests;
 
-/// <summary>Opacity of alpha-blended Tales from the Borderlands batches: tinted lenses and clear eye shells.</summary>
+/// <summary>Opacity of alpha-blended Tales from the Borderlands batches.</summary>
 public class TranslucencyTests
 {
-    /// <summary>Serves a mesh sample and gives every texture its materials bind a tiny stand-in.</summary>
+    /// <summary>Serves a mesh sample with a tiny stand-in for each of its textures.</summary>
     private sealed class SampleResolver : IAssetResolver
     {
         private readonly string _meshName;
@@ -57,8 +57,7 @@ public class TranslucencyTests
         Assert.Equal(MaterialBlendMode.Alpha, model.BatchBlendModes[1]);
         Assert.Equal(80 / 255f, model.BatchMaterialParams[1]!.Opacity, 0.002f);
         Assert.Equal(1f, model.BatchMaterialParams[0]!.Opacity);
-        // The opacity is in the lens texture's alpha (widened from the 4×4 stand-in so a
-        // viewer counting translucent pixels sees it); the frame keeps the texture as is.
+        // The opacity goes in the lens texture's alpha; the frame's texture is unchanged.
         var lens = model.BatchTextures[1]!;
         Assert.True(lens.Width >= 8 && lens.Height >= 8);
         Assert.All(Enumerable.Range(0, lens.Width * lens.Height), i => Assert.InRange(lens.Rgba[i * 4 + 3], 78, 82));
@@ -69,8 +68,7 @@ public class TranslucencyTests
     [SkippableFact]
     public void Clear_shell_over_the_eyes_is_left_out()
     {
-        // A cornea shell: alpha-blended with vertex alpha 0, it is invisible in the game; drawn
-        // opaque it covered the iris in the eye texture's grey corner.
+        // A cornea shell with vertex alpha 0 is invisible in the game.
         var model = Build("tftb_sk54_hyperionSuit_eyes.d3dmesh");
 
         Assert.Single(model.Geometry.Batches);

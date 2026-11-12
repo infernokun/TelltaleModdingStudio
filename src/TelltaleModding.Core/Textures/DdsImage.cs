@@ -2,11 +2,7 @@ using System.Buffers.Binary;
 
 namespace TelltaleModding.Core.Textures;
 
-/// <summary>
-/// A decoded DDS texture as a top-down, tightly-packed RGBA8888 pixel buffer, suitable
-/// for handing to any UI toolkit's bitmap. Supports the block formats Telltale textures
-/// most commonly use (BC1/DXT1, BC2/DXT3, BC3/DXT5, BC4/ATI1, BC5/ATI2) plus uncompressed 32-bit.
-/// </summary>
+/// <summary>A DDS texture decoded to top-down RGBA8888 pixels.</summary>
 public sealed class DdsImage
 {
     public int Width { get; }
@@ -28,10 +24,10 @@ public sealed class DdsImage
 
     private const uint MagicDds = 0x20534444; // "DDS "
 
-    /// <summary>Decodes a DDS image, throwing on unsupported input.</summary>
-    /// <summary>The same image with other pixels (same size and source format), e.g. with its channels rearranged.</summary>
+    /// <summary>The same image with different pixels of the same size.</summary>
     public DdsImage WithPixels(byte[] rgba) => new(Width, Height, rgba, Format);
 
+    /// <summary>Decodes a DDS image, throwing on unsupported input.</summary>
     public static DdsImage Decode(byte[] data)
     {
         if (!TryDecode(data, out var image, out var error))
@@ -39,10 +35,7 @@ public sealed class DdsImage
         return image!;
     }
 
-    /// <summary>
-    /// Attempts to decode a DDS image. Returns false with a human-readable
-    /// <paramref name="error"/> for unsupported formats rather than throwing.
-    /// </summary>
+    /// <summary>Attempts to decode a DDS image, returning false with an <paramref name="error"/> if it can't.</summary>
     public static bool TryDecode(byte[] data, out DdsImage? image, out string? error)
     {
         image = null;
@@ -54,7 +47,7 @@ public sealed class DdsImage
             return false;
         }
 
-        // DDS_HEADER starts at offset 4. Fields we need (little-endian):
+        // DDS_HEADER starts at offset 4.
         int height = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(12));
         int width = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(16));
 
@@ -132,7 +125,7 @@ public sealed class DdsImage
                 error = "8-bit DDS data is truncated.";
                 return false;
             }
-            // Shown as opaque grayscale: masks/alpha maps are unreadable as actual alpha.
+            // Shown as opaque gray, since masks are hard to see as real alpha.
             for (int i = 0; i < width * height; i++)
             {
                 byte v = body[i];
@@ -193,7 +186,7 @@ public sealed class DdsImage
         return true;
     }
 
-    // Packs to 0xAABBGGRR so the copy loop above can splat it into RGBA bytes.
+    // Packs to 0xAABBGGRR, which is RGBA in memory.
     private static uint Pack(byte r, byte g, byte b, byte a) =>
         (uint)(r | (g << 8) | (b << 16) | (a << 24));
 
@@ -250,7 +243,7 @@ public sealed class DdsImage
         DecodeColorInto(block[8..], alpha, outPixels);
     }
 
-    /// <summary>BC4: one interpolated channel, shown as opaque grey.</summary>
+    /// <summary>BC4: one channel, shown as opaque gray.</summary>
     private static void DecodeBc4Block(ReadOnlySpan<byte> block, Span<uint> outPixels)
     {
         Span<byte> v = stackalloc byte[16];
@@ -259,10 +252,7 @@ public sealed class DdsImage
             outPixels[i] = Pack(v[i], v[i], v[i], 255);
     }
 
-    /// <summary>
-    /// BC5: two interpolated channels (red, green), a normal map's X and Y. Blue is the
-    /// reconstructed Z so the image previews as a familiar normal map.
-    /// </summary>
+    /// <summary>BC5: a normal map's X and Y in red and green, with Z rebuilt into blue.</summary>
     private static void DecodeBc5Block(ReadOnlySpan<byte> block, Span<uint> outPixels)
     {
         Span<byte> r = stackalloc byte[16];
@@ -331,8 +321,7 @@ public sealed class DdsImage
     {
         Span<(byte r, byte g, byte b)> pal = stackalloc (byte, byte, byte)[4];
         UnpackColors(colorBlock, out _, out _, pal);
-        // In DXT3/5 the color block is always treated as 4-color mode:
-        // color2 = (2·c0 + c1)/3, color3 = (c0 + 2·c1)/3.
+        // DXT3/5 color blocks are always 4-color mode.
         pal[2] = Lerp(pal[0], pal[1], 2, 1);
         pal[3] = Lerp(pal[0], pal[1], 1, 2);
 
@@ -410,8 +399,8 @@ public enum DdsPixelFormat
     Bc1,
     Bc2,
     Bc3,
-    /// <summary>One channel (decoded to grey).</summary>
+    /// <summary>One channel, decoded to gray.</summary>
     Bc4,
-    /// <summary>Two channels, normal X in red, Y in green (blue holds the reconstructed Z).</summary>
+    /// <summary>Two channels: normal X in red, Y in green.</summary>
     Bc5,
 }

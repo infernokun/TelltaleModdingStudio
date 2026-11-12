@@ -5,13 +5,12 @@ namespace TelltaleModding.Core.Audio;
 /// <summary>Builds, inspects and decodes Ogg Vorbis streams.</summary>
 internal static class OggVorbis
 {
-    /// <summary>The block sizes FMOD always encodes with (256 / 2048 samples).</summary>
+    /// <summary>FMOD always encodes with 256 and 2048 sample blocks.</summary>
     private const int ShortBlockExp = 8, LongBlockExp = 11;
 
     /// <summary>
-    /// Wraps bare Vorbis audio packets into a complete Ogg Vorbis file, synthesizing the
-    /// identification and comment headers and computing page granule positions.
-    /// <paramref name="totalSamples"/> (if positive) trims the final page to the true length.
+    /// Wraps bare Vorbis packets into an Ogg Vorbis file with made-up ident and comment headers.
+    /// A positive <paramref name="totalSamples"/> trims the last page to the real length.
     /// </summary>
     public static byte[] Build(int channels, int sampleRate, byte[] setup, IReadOnlyList<ReadOnlyMemory<byte>> packets,
         long totalSamples, uint serial)
@@ -65,7 +64,7 @@ internal static class OggVorbis
         return w.ToArray();
     }
 
-    /// <summary>Reads channels, rate and length (last granule) from an Ogg Vorbis file without decoding it.</summary>
+    /// <summary>Reads channels, rate and length from an Ogg Vorbis file without decoding it.</summary>
     public static bool TryReadInfo(byte[] ogg, out int channels, out int sampleRate, out long samples)
     {
         channels = 0; sampleRate = 0; samples = 0;
@@ -77,7 +76,7 @@ internal static class OggVorbis
         sampleRate = BinaryPrimitives.ReadInt32LittleEndian(ogg.AsSpan(body + 12));
         uint serial = BinaryPrimitives.ReadUInt32LittleEndian(ogg.AsSpan(14));
 
-        // Last page of this stream carries the total length.
+        // The stream's last page holds the total length.
         for (int pos = ogg.Length - 27; pos >= 0; pos--)
         {
             if (ogg[pos] == 'O' && ogg.AsSpan(pos, 4).SequenceEqual("OggS"u8)
@@ -130,7 +129,7 @@ internal static class OggVorbis
             while (true)
             {
                 int remaining = span.Length - offset;
-                // Lace the packet; a page holds at most 255 segments.
+                // A page holds at most 255 segments.
                 while (remaining >= 255 && _segments.Count < 255)
                 {
                     _segments.Add(255);

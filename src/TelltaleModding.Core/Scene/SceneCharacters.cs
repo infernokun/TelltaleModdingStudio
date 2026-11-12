@@ -4,10 +4,8 @@ using TelltaleModding.Core.Meshes;
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// The character model a scene places under an agent name. A scene agent ("Clementine" in
-/// adv_forestBarn.scene) inherits from the character's <c>.prop</c> (sk62_clementine402.prop),
-/// which names the exact model, where the agent name alone fits every Clementine in the game.
-/// Scenes are read once and kept.
+/// The character model a scene places under an agent name, found through the character
+/// <c>.prop</c> the agent inherits. Scenes are cached.
 /// </summary>
 public sealed class SceneCharacters
 {
@@ -28,9 +26,8 @@ public sealed class SceneCharacters
     }
 
     /// <summary>
-    /// The character <paramref name="sceneFile"/> places as <paramref name="agentName"/>, or null
-    /// when the scene, the agent or a character prop in its inheritance is not found. Names are
-    /// compared without case, spaces or punctuation ("LADYFORRESTER" finds "Lady_Forrester").
+    /// The character <paramref name="sceneFile"/> places as <paramref name="agentName"/>, or null.
+    /// Names are compared without case, spaces or punctuation.
     /// </summary>
     public CharacterEntry? Find(string sceneFile, string agentName)
     {
@@ -46,7 +43,7 @@ public sealed class SceneCharacters
         }
     }
 
-    /// <summary>A scene file, read once and kept with the others, or null when it cannot be read.</summary>
+    /// <summary>A cached scene file, or null when it cannot be read.</summary>
     public SceneFile? Scene(string sceneFile)
     {
         if (sceneFile.Length == 0)

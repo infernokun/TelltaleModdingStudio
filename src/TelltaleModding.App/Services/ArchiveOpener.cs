@@ -7,9 +7,7 @@ namespace TelltaleModding.App.Services;
 public static class ArchiveOpener
 {
     /// <summary>
-    /// An archive opener for <paramref name="install"/>'s archives: the native reader
-    /// for .ttarch2 (the game's root folder is searched for its Oodle DLL when needed),
-    /// and the bundled ttarchext extractor for classic .ttarch archives.
+    /// Opens .ttarch2 archives with the native reader and older .ttarch archives with ttarchext.
     /// </summary>
     public static Func<string, IArchiveSource> For(GameInstall install)
     {

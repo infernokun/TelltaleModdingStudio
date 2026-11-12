@@ -6,7 +6,7 @@
              x:DataType="vm:ScenesViewModel">
 
     <Grid Margin="12">
-        <!-- The gaps between the panels are drag handles; the viewport takes what is left. -->
+        <!-- Gaps between panels can be dragged to resize -->
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="0.39*" MinWidth="240" MaxWidth="480" />
             <ColumnDefinition Width="12" />
@@ -56,7 +56,7 @@
                     <views:MeshViewport x:Name="Viewport" IsVisible="{Binding HasScene}" />
                 </Panel>
 
-                <!-- Title overlay and view tools; a narrow viewport shortens the title rather than covering it. -->
+                <!-- Title overlay and view tools -->
                 <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Top">
                     <StackPanel Margin="20,16,8,16" Spacing="2"
                                 IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
@@ -73,7 +73,7 @@
                             <PathIcon Data="{StaticResource IconRecenter}" />
                         </Button>
                         <Button Classes="icon" Command="{Binding ExportGltfCommand}"
-                                ToolTip.Tip="Export the shown agents… (glTF .glb)" AutomationProperties.Name="Export">
+                                ToolTip.Tip="Export the shown agents as glTF (.glb)" AutomationProperties.Name="Export">
                             <PathIcon Data="{StaticResource IconExport}" />
                         </Button>
                     </StackPanel>
@@ -180,12 +180,11 @@
                             Content="Default" IsEnabled="{Binding HasLights}"
                             ToolTip.Tip="Switch on the lights the scene starts with" />
                 </Grid>
-                <!-- Radios group by their shared panel. A GroupName would be process-wide for views
-                     outside a window, so a closed view's pair would fight a new one's forever. -->
+                <!-- No GroupName on purpose: it's process-wide outside a window, so old views would fight new ones. -->
                 <StackPanel Grid.Row="8" Orientation="Horizontal" Spacing="12" Margin="2,0,0,4">
                     <RadioButton Content="Scene lighting" FontSize="12"
                                  IsChecked="{Binding UseSceneLighting}" IsEnabled="{Binding HasLights}"
-                                 ToolTip.Tip="Light the location with its own lights (the brightest eight are drawn)" />
+                                 ToolTip.Tip="Light the location with its own lights" />
                     <RadioButton Content="Studio lighting" FontSize="12"
                                  IsChecked="{Binding UseStudioLighting}"
                                  ToolTip.Tip="Light the location with the neutral studio rig" />
@@ -193,7 +192,7 @@
                 <Grid Grid.Row="9" ColumnDefinitions="*,Auto" Margin="2,0,0,6">
                     <TextBlock Classes="faint" Text="{Binding LightSummary}" VerticalAlignment="Center" Margin="2,0,0,0" />
                     <CheckBox Grid.Column="1" Content="All lights" IsChecked="{Binding ShowAllLights}" FontSize="12"
-                              ToolTip.Tip="Also list character rig, effect, sky dome and foliage lights" />
+                              ToolTip.Tip="Also list character, effect, sky and foliage lights" />
                 </Grid>
                 <ListBox Grid.Row="10" ItemsSource="{Binding Lights}">
                     <ListBox.ItemTemplate>

@@ -16,7 +16,7 @@ public class DdsImageTests
     [SkippableFact]
     public void DecodesUncompressed32BitBgra()
     {
-        // A8R8G8B8 masks; one red pixel (R=255,G=0,B=0,A=255).
+        // One opaque red A8R8G8B8 pixel.
         var header = BuildHeader(1, 1, fourCc: null,
             rMask: 0x00FF0000, gMask: 0x0000FF00, bMask: 0x000000FF, aMask: 0xFF000000);
         var pixel = new byte[4];
@@ -34,7 +34,7 @@ public class DdsImageTests
     public void DecodesDxt1SolidRedBlock()
     {
         var header = BuildHeader(4, 4, fourCc: "DXT1");
-        // c0 = c1 = 0xF800 (pure red in RGB565), indices all 0 -> whole block is color 0.
+        // Both colors are pure red, so the whole block is red.
         var block = new byte[8];
         BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(0), 0xF800);
         BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(2), 0xF800);
@@ -58,8 +58,7 @@ public class DdsImageTests
     [InlineData("DXT5")]
     public void Interpolated_colors_weight_toward_their_nearer_endpoint(string fourCc)
     {
-        // c0 = white, c1 = black; pixels use indices 0,1,2,3 in turn.
-        // Spec: color2 = (2·c0 + c1)/3 (light grey), color3 = (c0 + 2·c1)/3 (dark grey).
+        // c0 is white, c1 is black, and the pixels use indices 0 to 3 in turn.
         var color = new byte[8];
         BinaryPrimitives.WriteUInt16LittleEndian(color.AsSpan(0), 0xFFFF);
         BinaryPrimitives.WriteUInt16LittleEndian(color.AsSpan(2), 0x0000);
@@ -79,10 +78,10 @@ public class DdsImageTests
     {
         var header = BuildHeader(4, 4, fourCc: "DXT5");
         var block = new byte[16];
-        // Alpha: a0=255, a1=255 -> every pixel fully opaque regardless of indices.
+        // Both alpha endpoints are 255, so every pixel is opaque.
         block[0] = 255;
         block[1] = 255;
-        // Color: c0=c1=0x07E0 (pure green in RGB565), indices 0 -> whole block green.
+        // Both colors are pure green, so the whole block is green.
         BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(8), 0x07E0);
         BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(10), 0x07E0);
         var dds = Concat(header, block);

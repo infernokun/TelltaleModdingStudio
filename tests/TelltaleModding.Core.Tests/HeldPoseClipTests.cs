@@ -7,12 +7,9 @@ using TelltaleModding.Core.Scene;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// The Wolf Among Us ships two copies of many gesture clips: the episode 1 original
-/// (Fables101_anichore, Menu_anichore) and an episode 2-5 / patch re-export that overrides it.
-/// The re-export of a subtle clip such as bigby_headGesture_nodYes keeps only the original's
-/// first frame (one absolute key plus one zero delta), so it decodes, correctly, to a held pose.
-/// Samples: <c>wau_bigby_headGesture_nodYes_ep1.anm</c> (Fables101_anichore) and
-/// <c>wau_bigby_headGesture_nodYes_patch.anm</c> (PC-Mac_TTG_Update_03_Episode_05_Menu_all).
+/// The Wolf Among Us has two copies of many gesture clips, and the later copy of some only
+/// holds the first frame. Samples: <c>wau_bigby_headGesture_nodYes_ep1.anm</c> (Fables101_anichore)
+/// and <c>wau_bigby_headGesture_nodYes_patch.anm</c> (PC-Mac_TTG_Update_03_Episode_05_Menu_all).
 /// </summary>
 public class HeldPoseClipTests
 {
@@ -93,7 +90,7 @@ public class HeldPoseClipTests
         Directory.CreateDirectory(archives);
         File.WriteAllBytes(Path.Combine(dir.Path, "WDC.exe"), Array.Empty<byte>());
 
-        // Name-guessed priorities: the episode archive overrides the season archive.
+        // The episode archive overrides the season archive.
         const string Low = "WDC_pc_ProjectSeason4_data.ttarch2";
         const string High = "WDC_pc_WalkingDead401_data.ttarch2";
         var ep1 = File.ReadAllBytes(SampleData.Sample(Ep1Sample));
@@ -103,7 +100,7 @@ public class HeldPoseClipTests
         {
             [Low] = new(StringComparer.OrdinalIgnoreCase)
             {
-                ["nod.anm"] = ep1,         // overridden original that moves
+                ["nod.anm"] = ep1,         // moving original, overridden
                 ["moving.anm"] = ep1,      // overridden by a copy that also moves
                 ["held.anm"] = patch,      // every copy holds a pose
             },

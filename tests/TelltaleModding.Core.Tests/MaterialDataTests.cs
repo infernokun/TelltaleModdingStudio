@@ -30,7 +30,7 @@ public class MaterialDataTests
         Assert.Equal(MaterialBlendMode.Normal, head.BlendMode);
         Assert.False(head.IsBlended);
         Assert.Equal(TelltaleCrc64.HashSymbol("sk62_clementine400_head.d3dtx"), Diffuse(head));
-        // The compiled data gives each texture a role: the normal map is never a color map.
+        // The normal map is never treated as a color map.
         var normal = head.Textures.Single(t => t.Key == MaterialTextureLocator.NormalMapKey);
         Assert.Equal(MaterialTextureTypes.NormalXYMap, normal.Types);
         Assert.True(head.Textures.Single(t => t.Key == MaterialTextureLocator.DiffuseTextureKey).Types
@@ -51,9 +51,7 @@ public class MaterialDataTests
     [SkippableFact]
     public void Engine_diffuse_beats_name_heuristics()
     {
-        // "sk55_norma_…" contains "_norm", so judged by name every one of Norma's textures once
-        // looked like a normal map and the black placeholder won. The property names the
-        // diffuse, and the name check now needs the marker to end its word.
+        // Norma's textures contain "_norm" but are not normal maps.
         var material = Materials(Mesh("sk62_clementine400_head.d3dmesh")).Single();
         var names = new Dictionary<ulong, string>
         {
@@ -77,7 +75,7 @@ public class MaterialDataTests
         Assert.NotEmpty(materials);
         Assert.All(materials, m => Assert.Contains(TelltaleCrc64.HashSymbol("module_material.prop"), m.Parents));
         Assert.Contains(materials, MaterialTextureLocator.HasDiffuseProperty);
-        // Older games compile a variant per blend mode, so no single mode is reported.
+        // Older games have a variant per blend mode, so there is no single mode.
         Assert.All(materials, m => Assert.Null(m.BlendMode));
     }
 
@@ -86,8 +84,7 @@ public class MaterialDataTests
     {
         var materials = Materials(Mesh("tftb_sk54_vaughn_glasses.d3dmesh"));
 
-        // The frame draws as compiled (no single mode); the lens names Alpha outright, and the
-        // compiled data after that property is still read.
+        // The frame has no single mode; the lens sets Alpha directly.
         Assert.Null(materials[0].BlendModeProperty);
         Assert.Null(materials[0].BlendMode);
         var lens = materials[1];

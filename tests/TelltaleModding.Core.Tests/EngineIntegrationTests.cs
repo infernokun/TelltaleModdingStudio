@@ -6,9 +6,7 @@ using TelltaleModding.Core.Projects;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// End-to-end tests that drive a real ttarchext binary against the real sample
-/// archives. The Game of Thrones sample is ECTT (Blowfish-encrypted + zlib), the
-/// test sample is NCTT (plain); together they exercise both container paths.
+/// Runs a real ttarchext against the sample archives, one encrypted and one plain.
 /// </summary>
 public class EngineIntegrationTests
 {
@@ -23,7 +21,7 @@ public class EngineIntegrationTests
 
         Assert.Equal(1706, listing.Count);
         Assert.Contains(listing.Files, f => f.Name == "obj_chairLYunkaiTavern.prop");
-        // Real archives should classify into real categories.
+        // Files get sorted into categories.
         Assert.NotEmpty(listing.InCategory(AssetCategory.Skeleton));
         Assert.NotEmpty(listing.InCategory(AssetCategory.Scene));
     }
@@ -51,14 +49,14 @@ public class EngineIntegrationTests
 
         var bytes = File.ReadAllBytes(extracted);
         Assert.Equal(197, bytes.Length);
-        // Telltale property files start with the "5VSM" meta-stream magic.
+        // Property files start with "5VSM".
         Assert.Equal("5VSM", Encoding.ASCII.GetString(bytes, 0, 4));
     }
 
     [EngineFact]
     public async Task PatchRoundTrip_BuildFromSwap_ThenListContainsTarget()
     {
-        // 1. Extract a real asset to act as our "replacement" file.
+        // 1. Extract a real asset to use as the replacement.
         using var work = new TempDir();
         var extractDir = Path.Combine(work.Path, "extracted");
         await Runner().ExtractAsync(
@@ -67,7 +65,7 @@ public class EngineIntegrationTests
         var replacement = Path.Combine(extractDir, "obj_chestGoldTazall.prop");
         Assert.True(File.Exists(replacement));
 
-        // 2. Build a minimal patch from a one-swap project.
+        // 2. Build a patch from a one-swap project.
         var project = new ModProject
         {
             Name = "integration-test",
@@ -89,10 +87,10 @@ public class EngineIntegrationTests
 
         Assert.True(result.Success);
         Assert.Equal(1, result.StagedFileCount);
-        Assert.Equal(7, result.Version); // detected from the real ECTT reference archive
+        Assert.Equal(7, result.Version); // read from the reference archive
         Assert.True(File.Exists(patchPath));
 
-        // 3. The built patch must list exactly our swapped asset.
+        // 3. The patch holds only the swapped asset.
         var listing = await Runner().ListAsync(GameOfThronesNum, patchPath);
         Assert.Single(listing.Files);
         Assert.Equal("obj_chestGoldTazall.prop", listing.Files[0].Name);

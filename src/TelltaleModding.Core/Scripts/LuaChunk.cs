@@ -68,7 +68,7 @@ public sealed class LuaConstant
     public double Number { get; }
     /// <summary>Raw string bytes, for <see cref="LuaConstantKind.String"/>.</summary>
     public byte[]? Bytes { get; }
-    /// <summary>The string decoded as UTF-8 (or Latin-1 when it isn't valid UTF-8).</summary>
+    /// <summary>The string as UTF-8, or Latin-1 if it isn't valid UTF-8.</summary>
     public string? Text { get; }
 
     public bool IsString => Kind == LuaConstantKind.String;
@@ -88,7 +88,7 @@ public sealed class LuaConstant
 /// <summary>A local variable's debug record: active for <c>StartPc &lt;= pc &lt; EndPc</c>.</summary>
 public sealed record LuaLocalVariable(string Name, int StartPc, int EndPc);
 
-/// <summary>An upvalue: where the closure captures it from (5.2) and its debug name.</summary>
+/// <summary>An upvalue: where the closure captures it from (5.2 only) and its debug name.</summary>
 public sealed record LuaUpvalue(bool InStack, int Index, string? Name);
 
 /// <summary>One compiled function prototype.</summary>
@@ -108,12 +108,12 @@ public sealed class LuaFunction
     public LuaConstant[] Constants { get; internal set; } = Array.Empty<LuaConstant>();
     public LuaFunction[] Protos { get; internal set; } = Array.Empty<LuaFunction>();
     public LuaUpvalue[] Upvalues { get; internal set; } = Array.Empty<LuaUpvalue>();
-    /// <summary>The chunk name stored with this function (null when stripped or inherited).</summary>
+    /// <summary>The chunk name stored with this function, if any.</summary>
     public string? Source { get; internal set; }
     public int[] LineInfo { get; internal set; } = Array.Empty<int>();
     public LuaLocalVariable[] Locals { get; internal set; } = Array.Empty<LuaLocalVariable>();
     public LuaFunction? Parent { get; internal set; }
-    /// <summary>Position in the chunk: "main", "main/0", "main/0/2", ...</summary>
+    /// <summary>Position in the chunk, like "main/0/2".</summary>
     public string Path { get; internal set; } = "main";
 
     /// <summary>True when the function carries line or local debug info.</summary>
@@ -121,7 +121,7 @@ public sealed class LuaFunction
 
     internal uint[] RawCode { get; set; } = Array.Empty<uint>();
 
-    /// <summary>Source line of instruction <paramref name="pc"/>, or 0 when unknown.</summary>
+    /// <summary>Source line of instruction <paramref name="pc"/>, or 0.</summary>
     public int LineAt(int pc) => pc >= 0 && pc < LineInfo.Length ? LineInfo[pc] : 0;
 
     /// <summary>Debug name of upvalue <paramref name="index"/>, if recorded.</summary>
@@ -145,10 +145,8 @@ public sealed class LuaFormatException : Exception
 }
 
 /// <summary>
-/// A compiled Lua 5.1 ("\x1bLuaQ") or 5.2 ("\x1bLuaR") chunk. Any integer, size_t and number
-/// width in the header is accepted (Telltale builds use 32-bit sizes and 4-byte floats).
-/// Telltale's Lua 5.1 build numbers its opcodes differently from stock Lua (seven unused
-/// slots are interleaved); the numbering is detected by validating the code against both.
+/// A compiled Lua 5.1 or 5.2 chunk. Telltale's 5.1 build numbers its opcodes differently
+/// from stock Lua, so we check the code against both numberings and keep the better fit.
 /// </summary>
 public sealed class LuaChunk
 {
@@ -202,10 +200,10 @@ public sealed class LuaChunk
     public bool TelltaleOpcodes { get; private set; }
     public LuaFunction Main { get; private set; } = null!;
 
-    /// <summary>The chunk name from debug info ("@file.lua", "=stdin", ...), if any.</summary>
+    /// <summary>The chunk name from debug info, if any.</summary>
     public string? SourceName => Main.Source;
 
-    /// <summary>Numbers are 4-byte floats, so they should print with float precision.</summary>
+    /// <summary>Numbers are 4-byte floats and should print with float precision.</summary>
     public bool SinglePrecision => SizeOfNumber == 4 && !IntegralNumbers;
 
     /// <summary>True for data starting with a Lua 5.1 or 5.2 bytecode signature.</summary>

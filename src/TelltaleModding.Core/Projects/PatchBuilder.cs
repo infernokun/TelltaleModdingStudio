@@ -5,13 +5,9 @@ using TelltaleModding.Core.Games;
 namespace TelltaleModding.Core.Projects;
 
 /// <summary>Inputs for building a patch from a <see cref="ModProject"/>.</summary>
-/// <param name="OutputArchivePath">Full path of the patch archive to write (e.g. <c>0.ttarch2</c>).</param>
-/// <param name="StagingDirectory">
-/// Folder to assemble the swapped files in. If null, a temp folder is used. It is
-/// (re)created fresh so it contains ONLY the swapped assets; that is what keeps the
-/// patch minimal.
-/// </param>
-/// <param name="CompatibilityMode">Pass ttarchext's <c>-x</c> for v7+ archives that crash otherwise.</param>
+/// <param name="OutputArchivePath">Full path of the patch archive to write.</param>
+/// <param name="StagingDirectory">Folder to collect the swapped files in, or null for a temp folder. It gets wiped first.</param>
+/// <param name="CompatibilityMode">Pass ttarchext's <c>-x</c>, needed by some v7+ archives.</param>
 public sealed record PatchBuildRequest(
     string OutputArchivePath,
     string? StagingDirectory = null,
@@ -31,10 +27,8 @@ public sealed record PatchBuildResult(
     IReadOnlyList<string> Output);
 
 /// <summary>
-/// Turns a <see cref="ModProject"/> into a minimal override archive. Rather than
-/// rebuilding the whole game archive, it stages only the swapped files and asks
-/// ttarchext to build a small patch archive (conventionally <c>0.ttarch</c>) that the
-/// game loads on top of its originals.
+/// Builds a small patch archive from a <see cref="ModProject"/> holding only the swapped
+/// files. The game loads it on top of its own archives.
 /// </summary>
 public sealed class PatchBuilder
 {
@@ -47,9 +41,8 @@ public sealed class PatchBuilder
         kind == ArchiveKind.Ttarch2 ? "0.ttarch2" : "0.ttarch";
 
     /// <summary>
-    /// Determines the format version to build with: an explicit override wins, else the
-    /// version detected from the project's reference archive, else the game's default
-    /// (7 for .ttarch2, 1 for classic .ttarch).
+    /// Picks the format version: the override, else the reference archive's version,
+    /// else the game's default.
     /// </summary>
     public static int ResolveBuildVersion(ModProject project, GameEntry game)
     {
@@ -64,10 +57,8 @@ public sealed class PatchBuilder
     }
 
     /// <summary>
-    /// Copies each enabled swap's replacement file into <paramref name="stagingDir"/> at
-    /// its target name, and returns the staged relative names. The directory is created
-    /// if missing; existing contents are left untouched (callers that want a clean build
-    /// should clear it first; <see cref="BuildAsync"/> does).
+    /// Copies each enabled swap's file into <paramref name="stagingDir"/> under its target
+    /// name and returns the staged names. Doesn't clear the folder first.
     /// </summary>
     public static IReadOnlyList<string> Stage(ModProject project, string stagingDir)
     {
@@ -79,7 +70,7 @@ public sealed class PatchBuilder
             var rel = NormalizeRelative(swap.TargetAssetName);
             var dest = Path.GetFullPath(Path.Combine(stagingDir, rel));
 
-            // Guard against a malicious/typo'd target name escaping the staging folder.
+            // Don't let a bad target name write outside the staging folder.
             var root = Path.GetFullPath(stagingDir) + Path.DirectorySeparatorChar;
             if (!dest.StartsWith(root, StringComparison.Ordinal))
                 throw new InvalidOperationException(
@@ -93,10 +84,7 @@ public sealed class PatchBuilder
         return staged;
     }
 
-    /// <summary>
-    /// Builds the patch archive for <paramref name="project"/>. Validates first, stages
-    /// the enabled swaps into a fresh folder, then invokes ttarchext to build the patch.
-    /// </summary>
+    /// <summary>Validates the project, stages its swaps and runs ttarchext to build the patch.</summary>
     public async Task<PatchBuildResult> BuildAsync(
         ModProject project,
         PatchBuildRequest request,

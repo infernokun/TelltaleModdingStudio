@@ -3,11 +3,8 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Meshes;
 
 /// <summary>
-/// Finds the diffuse texture a material uses. Materials parsed as <see cref="MaterialData"/>
-/// name it outright: the texture bound to the engine's "Material - Diffuse Texture"
-/// property. Otherwise (or when that property is unset) Telltale's material payloads
-/// embed texture references as 8-byte name symbols; scanning for symbols that match
-/// known texture files and judging them by name recovers it.
+/// Finds the textures a material uses, from its <see cref="MaterialData"/> properties when set,
+/// otherwise by scanning the payload for texture symbols and judging them by name.
 /// </summary>
 public static class MaterialTextureLocator
 {
@@ -20,13 +17,13 @@ public static class MaterialTextureLocator
     /// <summary>Key symbol of the engine's specular map property.</summary>
     public static readonly ulong SpecularMapKey = TelltaleCrc64.HashSymbol("Material - Specular Map Texture");
 
-    /// <summary>Key symbol of the Definitive Series' graphic-black ink texture property.</summary>
+    /// <summary>Key symbol of the ink texture property.</summary>
     public static readonly ulong InkTextureKey = TelltaleCrc64.HashSymbol("Material - Ink Texture");
 
-    /// <summary>Key symbol of the detail texture property (line art or ink, by its role).</summary>
+    /// <summary>Key symbol of the detail texture property.</summary>
     public static readonly ulong DetailTextureKey = TelltaleCrc64.HashSymbol("Material - Detail Texture");
 
-    /// <summary>Key symbol of the emissive (glow) texture property, e.g. Tales from the Borderlands' hologram <c>*_glow</c> maps.</summary>
+    /// <summary>Key symbol of the emissive texture property.</summary>
     public static readonly ulong EmissiveTextureKey = TelltaleCrc64.HashSymbol("Material - Emissive Texture");
 
     /// <summary>Texture roles that are never a surface's color.</summary>
@@ -47,10 +44,8 @@ public static class MaterialTextureLocator
             .Select(t => textureForSymbol(t.TextureSymbol)).FirstOrDefault(n => n is not null);
 
     /// <summary>
-    /// The material's diffuse texture: its diffuse property when set and known; otherwise the
-    /// most diffuse-looking texture of <paramref name="payload"/>, leaving out textures the
-    /// compiled material declares as normal, flow, detail or similar maps, and shared
-    /// detail atlases.
+    /// The material's diffuse texture: its diffuse property when set, otherwise the most
+    /// diffuse-looking texture in <paramref name="payload"/> that isn't declared as another kind of map.
     /// </summary>
     public static string? PickDiffuseTexture(MaterialData material, byte[] payload, Func<ulong, string?> textureForSymbol)
     {
@@ -58,9 +53,8 @@ public static class MaterialTextureLocator
             return diffuse;
         if (HasDiffuseProperty(material))
         {
-            // The diffuse the material names is not shipped (generic NPCs in Tales from the
-            // Borderlands). Its maps are named after it (face_nm → face), so try the stem of
-            // the normal map; failing that, no texture beats painting a map on as color.
+            // The named diffuse isn't shipped. Try the normal map's stem, else use no texture
+            // rather than painting a map on as color.
             foreach (var map in material.Textures.Where(t => t.Key == NormalMapKey && t.TextureSymbol != 0))
             {
                 if (textureForSymbol(map.TextureSymbol) is not { } normal)
@@ -90,7 +84,7 @@ public static class MaterialTextureLocator
     {
         var bound = material.Textures.Where(t => t.Key == NormalMapKey && t.TextureSymbol != 0)
             .Select(t => textureForSymbol(t.TextureSymbol)).FirstOrDefault(n => n is not null);
-        // Engine placeholders (normalxy_000) mean "flat": no map.
+        // An engine placeholder means a flat normal, so no map.
         if (bound is not null)
             return IsEnginePlaceholder(bound) ? null : bound;
         return PickNormalMap(payload, textureForSymbol);
@@ -109,10 +103,8 @@ public static class MaterialTextureLocator
             .FirstOrDefault(n => n is not null && !IsEnginePlaceholder(n));
 
     /// <summary>
-    /// The material's ink texture and how it applies: the Definitive Series' "Ink Texture"
-    /// (graphic-black shadow ink); otherwise its "Detail Texture": drawn line art when the
-    /// compiled role is a sharp detail map (Tales from the Borderlands), shadow ink when it is
-    /// a single-channel detail map (the ported earlier seasons). Null when there is none.
+    /// The material's ink texture and how it applies: "Ink Texture" as shadow ink, otherwise
+    /// "Detail Texture" as line art or shadow ink depending on its role. Null when there's none.
     /// </summary>
     public static (string Name, InkMapKind Kind)? PickInkTexture(MaterialData material, Func<ulong, string?> textureForSymbol)
     {
@@ -137,11 +129,8 @@ public static class MaterialTextureLocator
     }
 
     /// <summary>
-    /// For meshes without material data (The Wolf Among Us, Game of Thrones), the normal map
-    /// and drawn line art among <paramref name="meshTextures"/> that belong to the color
-    /// texture <paramref name="diffuse"/>, judged by name: <c>head</c> → <c>head_nm</c> or
-    /// <c>head_brushnormal</c>, and <c>head_lines</c>, <c>head_detail</c> or the character's
-    /// <c>inkLinesHead</c>.
+    /// For meshes without material data, finds the normal map and line art in
+    /// <paramref name="meshTextures"/> that go with <paramref name="diffuse"/>, by name.
     /// </summary>
     public static (string? Normal, string? Lines) PickLegacyMaps(string diffuse, IEnumerable<string> meshTextures)
     {
@@ -174,21 +163,19 @@ public static class MaterialTextureLocator
     private static readonly string[] NormalMapMarkers = { "_nm", "_nrm", "_norm" };
 
     /// <summary>
-    /// Scans a material payload for texture symbols known to <paramref name="textureIndex"/>
-    /// (symbol → file path) and picks the most diffuse-looking one, skipping
-    /// normal/detail/spec maps by name. Returns null when nothing matches.
+    /// Scans a material payload for texture symbols in <paramref name="textureIndex"/> and picks
+    /// the most diffuse-looking one, or null when nothing matches.
     /// </summary>
     public static string? PickDiffuseTexture(byte[] payload, IReadOnlyDictionary<ulong, string> textureIndex) =>
         PickDiffuseTexture(payload, symbol => textureIndex.TryGetValue(symbol, out var path) ? path : null);
 
     /// <summary>
-    /// As <see cref="PickDiffuseTexture(byte[], IReadOnlyDictionary{ulong, string})"/>, resolving
-    /// symbols through <paramref name="textureForSymbol"/> (returns null for unknown symbols).
+    /// Same as <see cref="PickDiffuseTexture(byte[], IReadOnlyDictionary{ulong, string})"/>, resolving
+    /// symbols through <paramref name="textureForSymbol"/>.
     /// </summary>
     public static string? PickDiffuseTexture(byte[] payload, Func<ulong, string?> textureForSymbol)
     {
-        // Engine placeholders (solid colors filling unused slots) can be listed before
-        // the real diffuse, so they only win over normal/detail/spec maps.
+        // Placeholders can come before the real diffuse, so they only beat non-diffuse maps.
         string? placeholder = null, fallback = null;
         var all = EnumerateTextures(payload, textureForSymbol).ToList();
         var candidates = new List<string>();
@@ -205,9 +192,7 @@ public static class MaterialTextureLocator
         if (candidates.Count <= 1)
             return candidates.FirstOrDefault() ?? placeholder ?? fallback;
 
-        // Telltale names a material's maps after its color texture (head → head_nm,
-        // head_spec, head303_damageMask…), so the color texture is the stem the most
-        // other textures extend; damage/blood overlays listed earlier lose to it.
+        // Maps are named after the color texture, so pick the stem most other textures extend.
         var stems = all.Select(p => Path.GetFileNameWithoutExtension(p).ToLowerInvariant()).Distinct().ToList();
         string best = candidates[0];
         int bestScore = -1;
@@ -224,7 +209,7 @@ public static class MaterialTextureLocator
         return best;
     }
 
-    /// <summary>True for normal, detail, specular, mask and similar maps (judged by name).</summary>
+    /// <summary>True for normal, detail, specular, mask and similar maps, judged by name.</summary>
     public static bool IsNonDiffuseMap(string textureName)
     {
         var name = Path.GetFileNameWithoutExtension(textureName);
@@ -240,14 +225,10 @@ public static class MaterialTextureLocator
         return false;
     }
 
-    // A suffix marker must end its word: "_norm" in sk55_norma_body and "_spec" in a
-    // Specialist's texture start longer words, not map suffixes.
+    // A suffix marker must end its word, so "_norma" doesn't count as "_norm".
     private static bool EndsWord(string name, int end) => end >= name.Length || !char.IsLower(name[end]);
 
-    /// <summary>
-    /// True for the engine's built-in fill textures (<c>color_000</c>, <c>color_EEE</c>,
-    /// <c>color_array_000</c>, <c>normalxy_000</c>) that materials use for unused slots.
-    /// </summary>
+    /// <summary>True for the engine's built-in fill textures, like <c>color_000</c>.</summary>
     public static bool IsEnginePlaceholder(string textureName)
     {
         var name = Path.GetFileNameWithoutExtension(textureName).ToLowerInvariant();
@@ -267,10 +248,8 @@ public static class MaterialTextureLocator
         PickNormalMap(payload, symbol => textureIndex.TryGetValue(symbol, out var path) ? path : null);
 
     /// <summary>
-    /// Finds the material's tangent-space normal map, resolving symbols through a function:
-    /// the one named after the color texture (head → head_nm) when present. Wrinkle maps
-    /// (headWrinkle_nm) are never used; the game blends them in only for expressions,
-    /// and applied permanently they age the face.
+    /// Finds the material's normal map, preferring the one named after the color texture.
+    /// Wrinkle maps are skipped since the game only blends them in for expressions.
     /// </summary>
     public static string? PickNormalMap(byte[] payload, Func<ulong, string?> textureForSymbol)
     {

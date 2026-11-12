@@ -15,7 +15,7 @@ public sealed partial class CharactersViewModel
 
     private void InitFace()
     {
-        // Face edits redraw the frame; while a clip plays its own timer does.
+        // Redraw on face edits unless a clip is already playing.
         Face.PoseChanged += () =>
         {
             if (!IsPlaying)
@@ -27,10 +27,7 @@ public sealed partial class CharactersViewModel
     private void UseFaceSource(GameCatalog? catalog, IAssetResolver assets, IEnumerable<string> fileNames) =>
         Face.UseSource(catalog, assets.TryRead, fileNames);
 
-    /// <summary>
-    /// Every bone's local transform as shown (face over the body clip at the current time),
-    /// for export as a single-frame "face pose" clip; null when the face isn't posed.
-    /// </summary>
+    /// <summary>Every bone's current local transform for a "face pose" export. Null when the face isn't posed.</summary>
     private IReadOnlyDictionary<ulong, (Vector3 Pos, Quaternion Rot)>? FacePoseSnapshot()
     {
         if (Face.Rig is not { } rig || !Face.IsActive || rig.Geometry != _model?.Geometry)
@@ -43,10 +40,7 @@ public sealed partial class CharactersViewModel
         return pose;
     }
 
-    /// <summary>
-    /// The frame's skinning matrices through the face rig when the face differs from the
-    /// body clip; null leaves the frame to the body clip alone.
-    /// </summary>
+    /// <summary>Skinning matrices from the face rig, or null to use the body clip alone.</summary>
     private Matrix4x4[]? FaceSkinMatrices(float time)
     {
         if (Face.Rig is not { } rig || !Face.IsActive || rig.Geometry != _player?.Geometry)

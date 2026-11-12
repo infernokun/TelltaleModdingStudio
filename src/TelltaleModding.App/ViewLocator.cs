@@ -4,7 +4,7 @@ using TelltaleModding.App.ViewModels;
 
 namespace TelltaleModding.App;
 
-/// <summary>Resolves a view for a view-model by naming convention (…ViewModel -> …View).</summary>
+/// <summary>Finds the view for a view model by name.</summary>
 public class ViewLocator : IDataTemplate
 {
     public Control? Build(object? data)

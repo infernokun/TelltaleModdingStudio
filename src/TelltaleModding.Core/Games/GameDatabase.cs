@@ -5,11 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace TelltaleModding.Core.Games;
 
-/// <summary>
-/// The catalogue of games ttarchext can handle, loaded once from the embedded
-/// <c>games.json</c> (generated directly from ttarchext's <c>gamekeys[]</c> table
-/// so the indices stay authoritative).
-/// </summary>
+/// <summary>Games ttarchext can handle, loaded from the embedded games.json.</summary>
 public static class GameDatabase
 {
     private static readonly Lazy<ImmutableArray<GameEntry>> _games = new(Load);
@@ -36,7 +32,6 @@ public static class GameDatabase
     private static ImmutableArray<GameEntry> Load()
     {
         var asm = Assembly.GetExecutingAssembly();
-        // Resource name follows <RootNamespace>.<folder>.<file> with '/' -> '.'.
         var resourceName = asm.GetManifestResourceNames()
             .FirstOrDefault(n => n.EndsWith("games.json", StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException("Embedded games.json resource not found.");

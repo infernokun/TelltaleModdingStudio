@@ -30,7 +30,7 @@ public class MeshCombineTests
 
         Assert.True(combined.IsSkinned);
         Assert.Equal(head.Positions.Length + 3, combined.BlendWeights!.Length);
-        // The unskinned part's vertices carry no weights and its batch no palette: it stays at rest.
+        // The unskinned part has no weights or palette, so it stays at rest.
         Assert.All(combined.BlendWeights[^3..], w => Assert.Equal(Vector4.Zero, w));
         Assert.Equal(-1, combined.Batches[^1].BonePaletteIndex);
         Assert.Equal(head.BonePalettes!.Count, combined.BonePalettes!.Count);
@@ -60,7 +60,7 @@ public class MeshCombineTests
     [SkippableFact]
     public void Packed_10_bit_positions_fill_the_declared_bounds()
     {
-        // Definitive Series props store positions as UN10x3_UN2 fractions of the bounds.
+        // Definitive Series props store positions as fractions of the bounds.
         Assert.True(D3dMeshFile.TryLoad(File.ReadAllBytes(SampleData.Sample("obj_tableMedical.d3dmesh")), out var mesh, out var error), error);
         Assert.Contains(mesh!.PlatformAttributes, a => a.Attribute == GfxVertexAttribute.Position && a.Format == GfxPlatformFormat.UN10x3_UN2);
         var geometry = mesh.GetGeometry();
@@ -87,7 +87,7 @@ public class MeshCombineTests
     [SkippableFact]
     public void Index_only_rigid_parts_decode_as_skinned()
     {
-        // A sheath stores blend indices without weights: every vertex follows one bone.
+        // The sheath has blend indices but no weights, so each vertex follows one bone.
         Assert.True(D3dMeshFile.TryLoad(File.ReadAllBytes(SampleData.Sample("sk61_asher_swordSheath.d3dmesh")), out var mesh, out var error), error);
         var geometry = mesh!.GetGeometry();
         Assert.True(geometry.IsSkinned);

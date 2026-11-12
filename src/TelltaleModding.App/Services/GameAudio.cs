@@ -13,14 +13,13 @@ public sealed class GameAudio
     public GameAudio(GameCatalog catalog)
     {
         _catalog = catalog;
-        // Vorbis setup headers come from the FMOD library the game ships.
         _setups = new Lazy<VorbisSetupLibrary>(() => VorbisSetupLibrary.FromFolder(catalog.Install.RootFolder));
     }
 
-    /// <summary>The Vorbis setup headers from the game's FMOD library (read on first use).</summary>
+    /// <summary>The Vorbis setup headers from the game's FMOD library.</summary>
     public VorbisSetupLibrary Setups => _setups.Value;
 
-    /// <summary>Every clip in <paramref name="entry"/> (one for voice files, many for banks).</summary>
+    /// <summary>Every clip in <paramref name="entry"/>.</summary>
     public IReadOnlyList<AudioClip> LoadClips(ArchiveEntryRef entry)
     {
         var data = _catalog.Read(entry);

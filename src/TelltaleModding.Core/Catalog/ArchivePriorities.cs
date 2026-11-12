@@ -4,27 +4,20 @@ namespace TelltaleModding.Core.Catalog;
 
 /// <summary>One archive of an install with the priority the catalog resolves it at.</summary>
 /// <param name="Path">Full path of the archive.</param>
-/// <param name="Priority">Resource-set priority; a higher value overrides files of the same name.</param>
+/// <param name="Priority">Resource-set priority. Higher overrides files of the same name.</param>
 /// <param name="SetName">Resource set that loads the archive, or null when no description mentions it.</param>
-/// <param name="Enabled">False for archives the English game never mounts (other languages' sets).</param>
-/// <param name="FromDescription">True when the priority came from a <c>_resdesc_</c> file; false when guessed from the name.</param>
+/// <param name="Enabled">False for archives the game never mounts, like other languages' sets.</param>
+/// <param name="FromDescription">True when the priority came from a <c>_resdesc_</c> file, false when guessed from the name.</param>
 public sealed record CatalogArchive(string Path, int Priority, string? SetName, bool Enabled, bool FromDescription);
 
 /// <summary>
-/// Works out which archive "wins" when the same file name exists in several. The rule,
-/// mirroring the engine's resource system:
+/// Works out which archive wins when the same file name exists in several, following the engine:
 /// <list type="number">
-/// <item>Each archive gets the priority of the resource set that lists it in its
-/// <c>gameDataArchives</c> (from the decrypted <c>_resdesc_50_*.lua</c> files beside the
-/// archives). E.g. Definitive Series: Project -8888, ProjectSeason4 55, WalkingDead401 101 …
-/// 404 104, PC_P01_WalkingDead401 patch 400, PC_P03_Proj4 patch 402, user mods 700.</item>
-/// <item>Sets the English game doesn't enable are dropped: <c>enableMode = "localization"</c>
-/// sets for other languages, and sets mounted into them (<c>logicalDestination</c>).</item>
-/// <item>Archives no description mentions get a priority guessed from their name
-/// (<see cref="GuessPriority"/>).</item>
-/// <item>Highest priority wins; ties (e.g. WalkingDead101 and WalkingDead401 are both 101,
-/// which the game never mounts together) go to the archive whose file name sorts last
-/// (ordinal, case-insensitive), i.e. the later episode/season.</item>
+/// <item>Each archive gets the priority of the resource set that lists it in
+/// <c>gameDataArchives</c> in the <c>_resdesc_50_*.lua</c> files.</item>
+/// <item>Localization sets for other languages, and sets mounted into them, are dropped.</item>
+/// <item>Archives no description mentions get a priority from <see cref="GuessPriority"/>.</item>
+/// <item>Highest priority wins. Ties go to the file name that sorts last, which is the later episode.</item>
 /// </list>
 /// </summary>
 public static class ArchivePriorities
@@ -39,9 +32,8 @@ public static class ArchivePriorities
         @"patch|update|_pc_pc[_-]|(^|_)p\d\d(_|$)|_dt_", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
-    /// Assigns a priority to every archive in <paramref name="archivePaths"/>, using
-    /// <paramref name="sets"/> where they cover it and <see cref="GuessPriority"/> otherwise.
-    /// Returned in the original order.
+    /// Assigns a priority to every archive, from <paramref name="sets"/> where they cover it and
+    /// <see cref="GuessPriority"/> otherwise. Keeps the order of <paramref name="archivePaths"/>.
     /// </summary>
     public static IReadOnlyList<CatalogArchive> Resolve(
         IReadOnlyList<string> archivePaths, IReadOnlyList<ResourceSetDescription> sets, string language = "English")
@@ -62,7 +54,7 @@ public static class ArchivePriorities
             return active;
         }
 
-        // Archive file name -> best (active first, then highest priority) set listing it.
+        // Archive file name to the best set listing it: active first, then highest priority.
         var owner = new Dictionary<string, ResourceSetDescription>(StringComparer.OrdinalIgnoreCase);
         foreach (var set in sets)
         {
@@ -87,9 +79,8 @@ public static class ArchivePriorities
     }
 
     /// <summary>
-    /// Fallback priority from an archive's file name, used when no resource description
-    /// covers it. Mirrors the shape of the real tables: engine/shaders lowest, project
-    /// -8888, boot 10, menu 20, UI 30, season ~50, episode 1xx, patches/updates 400+.
+    /// Guesses a priority from the file name when no resource description covers it.
+    /// The values follow the real tables: engine lowest, project -8888, episodes 1xx, patches 400+.
     /// </summary>
     public static int GuessPriority(string archiveFileName)
     {
@@ -113,17 +104,14 @@ public static class ArchivePriorities
         return PatchMarker.IsMatch(stem) ? 400 + episode : basePriority;
     }
 
-    /// <summary>True for archives that only hold another language's data (French, De, …).</summary>
+    /// <summary>True for archives that only hold another language's data.</summary>
     public static bool IsForeignLanguageArchive(string archiveFileName, string language = "English")
     {
         var stem = Path.GetFileNameWithoutExtension(archiveFileName);
         return LanguageArchive.IsMatch(stem) && !stem.Contains(language, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Orders archives from lowest to highest precedence, so that inserting their files
-    /// into a dictionary in this order leaves each name mapped to the winning copy.
-    /// </summary>
+    /// <summary>Orders enabled archives from lowest to highest precedence, so the last one added wins.</summary>
     public static IEnumerable<CatalogArchive> InPrecedenceOrder(IEnumerable<CatalogArchive> archives) =>
         archives
             .Where(a => a.Enabled)

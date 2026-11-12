@@ -1,8 +1,8 @@
 namespace TelltaleModding.Core.Scripts;
 
 /// <summary>
-/// Maps registers to local variables using the debug records: at any pc the active locals
-/// (<c>StartPc &lt;= pc &lt; EndPc</c>) occupy registers 0, 1, 2, ... in declaration order.
+/// Maps registers to locals using the debug records. At any pc the active locals fill
+/// registers 0, 1, 2, ... in declaration order.
 /// </summary>
 internal sealed class LuaLocals
 {
@@ -53,7 +53,7 @@ internal sealed class LuaLocals
     }
 
     public int Count => _locals.Length;
-    /// <summary>Highest register any local occupies (-1 when there are none).</summary>
+    /// <summary>Highest register any local uses, or -1.</summary>
     public int MaxRegister => _register.Length == 0 ? -1 : _register.Max();
     public LuaLocalVariable this[int index] => _locals[index];
     public int RegisterOf(int index) => _register[index];

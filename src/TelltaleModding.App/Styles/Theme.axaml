@@ -1,7 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Design tokens. Dark-only: the app is centred on a 3D viewport. -->
+    <!-- Colors. Dark only. -->
     <Styles.Resources>
         <ResourceDictionary>
             <Color x:Key="BgColor">#0E1014</Color>
@@ -30,7 +30,7 @@
             <SolidColorBrush x:Key="Success" Color="{StaticResource SuccessColor}" />
             <SolidColorBrush x:Key="Warn" Color="{StaticResource WarnColor}" />
 
-            <!-- Fluent theme hooks so stock controls pick up the palette. -->
+            <!-- Fluent overrides so stock controls use these colors. -->
             <Color x:Key="SystemAccentColor">#F0545C</Color>
             <Color x:Key="SystemAccentColorDark1">#D9434B</Color>
             <Color x:Key="SystemAccentColorLight1">#F4767D</Color>
@@ -39,7 +39,7 @@
             <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{StaticResource CardColor}" />
             <SolidColorBrush x:Key="TextControlBorderBrush" Color="{StaticResource BorderColor}" />
 
-            <!-- Icons (Material Design paths, 24×24). -->
+            <!-- Icons (Material Design). -->
             <StreamGeometry x:Key="IconHome">M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z</StreamGeometry>
             <StreamGeometry x:Key="IconPerson">M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z</StreamGeometry>
             <StreamGeometry x:Key="IconGrid">M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z</StreamGeometry>
@@ -152,7 +152,7 @@
         <Setter Property="CornerRadius" Value="999" />
     </Style>
 
-    <!-- Minimize, maximize and close, drawn in the header (the window has no system title bar) -->
+    <!-- Minimize, maximize and close buttons in the header -->
     <Style Selector="Button.caption">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
@@ -182,7 +182,7 @@
         <Setter Property="Template">
             <ControlTemplate>
                 <Border Name="bg" CornerRadius="8" Padding="12,7" Background="Transparent">
-                    <!-- Text-only tabs (no icon in Tag) keep their label centred in the highlight. -->
+                    <!-- Keeps text-only tabs centered. -->
                     <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
                         <PathIcon Data="{TemplateBinding Tag}" Width="15" Height="15"
                                   Foreground="{TemplateBinding Foreground}"
@@ -206,7 +206,7 @@
         <Setter Property="Background" Value="{StaticResource CardHover}" />
     </Style>
 
-    <!-- The gap between two panels, doubling as a drag handle to resize them. -->
+    <!-- Gap between panels that also works as a resize handle. -->
     <Style Selector="GridSplitter.gap">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Template">
@@ -222,7 +222,7 @@
         <Setter Property="Background" Value="{StaticResource Faint}" />
     </Style>
 
-    <!-- Lists: quiet rows with a soft accent selection. -->
+    <!-- Lists -->
     <Style Selector="ListBox">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />

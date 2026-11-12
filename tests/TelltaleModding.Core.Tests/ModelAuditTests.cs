@@ -6,7 +6,7 @@ using TelltaleModding.Core.Textures;
 
 namespace TelltaleModding.Core.Tests;
 
-/// <summary>A fact that runs only when the given game is installed (the developer machine).</summary>
+/// <summary>A fact that runs only when the given game is installed.</summary>
 public sealed class GameFactAttribute : FactAttribute
 {
     public GameFactAttribute(string folder)
@@ -17,8 +17,7 @@ public sealed class GameFactAttribute : FactAttribute
 }
 
 /// <summary>
-/// Assembles real characters from installed games and checks the textures and layers
-/// chosen from their materials' engine data.
+/// Builds real characters from installed games and checks the textures and layers they get.
 /// </summary>
 public class ModelAuditTests
 {
@@ -74,7 +73,7 @@ public class ModelAuditTests
     [GameFact(DefinitiveSeries)]
     public async Task Norma_uses_her_diffuse_textures_not_black_placeholders()
     {
-        // Her name contains "_norm", which name heuristics read as a normal-map marker.
+        // Her name contains "_norm", which looks like a normal map name.
         using var catalog = await Open(DefinitiveSeries);
         var model = Build(catalog, "sk55_norma");
         Assert.Contains("sk55_norma_bodyUpper.d3dtx", model.TexturesUsed);
@@ -93,7 +92,7 @@ public class ModelAuditTests
         Assert.DoesNotContain("handMissing", worn);
 
         var model = Build(catalog, "sk61_abel403");
-        // The clouded "zombie" cornea shell of his human eyes is an overlay without a diffuse.
+        // The zombie cornea shell is an overlay with no diffuse.
         Assert.DoesNotContain(model.Details, d => d.Contains("· sk_wd4SharedParts_corneaZombie.d3dtx"));
         Assert.True(model.CanAnimate);
     }
@@ -101,7 +100,7 @@ public class ModelAuditTests
     [GameFact(DefinitiveSeries)]
     public async Task Season_four_zombies_are_colored_through_their_gradient()
     {
-        // Their "diffuse" holds red shading and green masks; the material's gradient strip colors it.
+        // Their diffuse is colored through a gradient strip.
         using var catalog = await Open(DefinitiveSeries);
         var model = Build(catalog, "sk61_zombie400");
         Assert.Contains(model.Details, d => d.Contains("sk61_zombie400_bodySkinny.d3dtx (colored through sk_wd4SharedParts_gradientZombieSkins.d3dtx)"));
@@ -121,13 +120,12 @@ public class ModelAuditTests
     public async Task Borderlands_faces_are_no_longer_hidden_as_overlays()
     {
         using var catalog = await Open(Borderlands);
-        // A generic NPC whose face material names a diffuse that isn't shipped: the face is
-        // drawn (with the texture its normal map is named after), not hidden.
+        // His face diffuse isn't shipped, but the face is still drawn.
         var horace = Build(catalog, "sk54_blGenericMaleHorace");
         Assert.DoesNotContain(horace.Details, d => d.Contains("hidden"));
         Assert.DoesNotContain(horace.Details, d => d.Contains("· sk54_rudiger_face_nm.d3dtx"));
 
-        // Rhys's robot eye parts are rigid (blend indices only) and still animate with him.
+        // Rhys's rigid robot eye parts still animate.
         var rhys = Build(catalog, "sk54_rhys");
         Assert.True(rhys.CanAnimate);
     }
@@ -136,7 +134,7 @@ public class ModelAuditTests
     public async Task Hologram_Jack_is_tinted_blue_glows_and_is_see_through()
     {
         using var catalog = await Open(Borderlands);
-        // His textures are grey; his agent .prop makes them a blue, glowing, see-through hologram.
+        // His agent .prop makes him a blue, glowing, see-through hologram.
         var ai = Build(catalog, "skB1_handsomeJackAI");
         Assert.Equal("skB1_handsomeJackAI.prop", ai.AgentProp);
         Assert.Equal(66 / 255f, ai.Agent.DiffuseColor.X, 0.002f);
@@ -144,7 +142,6 @@ public class ModelAuditTests
         {
             Assert.True(p!.DiffuseColor.Z > 4 * p.DiffuseColor.X, "tinted blue");
             Assert.Equal(Vector3.One, p.EmissiveColor);
-            // His white emission lights his own color, as bright as the game shows him.
             Assert.Equal(Vector3.One, p.SelfIllumination);
             Assert.True(p.DrawAsOneLayer);
         });
@@ -154,11 +151,10 @@ public class ModelAuditTests
 
         var ai102 = Build(catalog, "skB1_handsomeJackAI102");
         Assert.All(ai102.BatchMaterialParams, p => Assert.Equal(0.85f, p!.Opacity, 0.002f));
-        // His textures have no glow maps: nothing is listed as glowing.
+        // No glow maps here.
         Assert.Empty(ai102.BatchEmissiveMaps);
 
-        // The plain (non-hologram) mesh names face and body textures the game does not ship;
-        // it borrows the plain art of AI103, built on the same UV layout, untinted.
+        // The plain mesh's textures aren't shipped, so it borrows AI103's.
         var plain = Build(catalog, "skB1_handsomeJack");
         Assert.True(plain.Agent.IsDefault);
         Assert.All(plain.BatchTextures, Assert.NotNull);
@@ -174,7 +170,7 @@ public class ModelAuditTests
         using var catalog = await Open(Borderlands);
         var assembler = new SceneAssembler(new SceneAssetResolver(catalog));
         var layout = assembler.Describe(SceneFile.Load(catalog.Read(catalog.Find("adv_arenaGortysCoreSilo.scene")!)));
-        // He inherits skB1_handsomeJackAI.prop, which makes him a blue, glowing hologram.
+        // He inherits the hologram .prop.
         var jack = layout.Objects.Single(o => o.Name == "Jack");
         Assert.True(jack.Render.IsEffect);
         Assert.Equal(66 / 255f, jack.Render.DiffuseColor.X, 0.002f);
@@ -195,7 +191,7 @@ public class ModelAuditTests
             Assert.NotNull(built.BatchEmissiveMaps[b]);
         });
         Assert.Contains(built.Details, d => d.Contains("Jack: drawn as an effect · tinted #427EFF, glowing #FFFFFF"));
-        // The room around him is drawn as before.
+        // The room is unchanged.
         Assert.All(Enumerable.Range(0, built.Geometry.Batches.Count).Except(jackBatches), b =>
         {
             var p = built.BatchMaterialParams[b];
@@ -221,7 +217,7 @@ public class ModelAuditTests
             Assert.Equal(cyan, p!.OutlineColor);
             Assert.Equal(0.85f, p.Opacity, 0.002f);
         });
-        // His 85% opacity is in the textures' alpha, as on the Characters page.
+        // His 85% opacity is in the texture alpha.
         Assert.All(built.BatchTextures, t => Assert.True(t!.Rgba.Where((_, i) => i % 4 == 3).Max() <= 218));
     }
 
@@ -229,7 +225,7 @@ public class ModelAuditTests
     public async Task Borderlands_eye_shells_are_left_out_and_lenses_are_see_through()
     {
         using var catalog = await Open(Borderlands);
-        // Vasquez's grey cornea shell (vertex alpha 0) no longer covers his irises.
+        // Vasquez's gray cornea shell is hidden.
         var vasquez = Build(catalog, "sk54_vasquez");
         Assert.Contains(vasquez.Details, d => d.Contains("hidden (fully transparent, color_7F7F7F.d3dtx)"));
 
@@ -246,8 +242,7 @@ public class ModelAuditTests
     [GameFact(DefinitiveSeries)]
     public async Task Mike_s_eyes_are_not_inked_over_by_their_blank_detail_maps()
     {
-        // The shared eyes and mouths carry a blank 8-bit alpha detail map. Read as shadow ink
-        // (white = ink) it painted them black; it is line art, and blank paper draws nothing.
+        // The shared eyes and mouths have a blank detail map that should be read as line art.
         using var catalog = await Open(DefinitiveSeries);
         var model = Build(catalog, "sk54_mike");
         int eyeAndMouthBatches = 0;

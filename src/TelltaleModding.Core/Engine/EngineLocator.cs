@@ -3,24 +3,20 @@ using System.Runtime.InteropServices;
 namespace TelltaleModding.Core.Engine;
 
 /// <summary>
-/// Finds the ttarchext executable. Two flavours exist: the shipped Windows binary
-/// (<c>ttarchext.exe</c>, required for Oodle-compressed archives since it loads the
-/// game's own oo2core DLL) and a native build (<c>ttarchext</c>, produced by the
-/// Makefile in engine/ttarchext) that handles zlib/uncompressed archives on any OS.
+/// Finds the ttarchext executable, either the Windows ttarchext.exe (needed for Oodle
+/// archives) or a native build for other systems.
 /// </summary>
 public static class EngineLocator
 {
-    /// <summary>Environment variable that, if set, points directly at the executable.</summary>
+    /// <summary>Environment variable that can point straight at the executable.</summary>
     public const string PathEnvVar = "TTARCHEXT_PATH";
 
     private const string WindowsExeName = "ttarchext.exe";
     private const string NativeExeName = "ttarchext";
 
     /// <summary>
-    /// Resolves the ttarchext executable path, or returns null if it cannot be found.
-    /// Search order: the <see cref="PathEnvVar"/> env var, then layout-relative
-    /// locations starting at <paramref name="baseDirectory"/> (defaults to the app
-    /// base), preferring the flavour that can actually run on this OS.
+    /// Finds the ttarchext path, or null. Checks <see cref="PathEnvVar"/> first, then
+    /// folders around <paramref name="baseDirectory"/>, preferring a build that runs here.
     /// </summary>
     public static string? TryLocate(string? baseDirectory = null)
     {
@@ -38,11 +34,11 @@ public static class EngineLocator
                 return Path.GetFullPath(candidate);
             fallback ??= Path.GetFullPath(candidate);
         }
-        // Nothing runnable: return whatever exists so callers can explain why.
+        // Nothing runnable, so return what exists and let the caller explain.
         return fallback;
     }
 
-    /// <summary>Like <see cref="TryLocate"/> but throws a descriptive exception on failure.</summary>
+    /// <summary>Like <see cref="TryLocate"/> but throws if nothing is found.</summary>
     public static string Locate(string? baseDirectory = null)
     {
         var path = TryLocate(baseDirectory);
@@ -54,10 +50,7 @@ public static class EngineLocator
             $"full path, or place it under an 'engine/ttarchext/' folder next to the application.");
     }
 
-    /// <summary>
-    /// True when the executable at <paramref name="path"/> can run on this OS: any
-    /// flavour on Windows; only a native (non-.exe) build elsewhere.
-    /// </summary>
+    /// <summary>True when the executable can run on this OS. Off Windows, .exe files can't.</summary>
     public static bool CanExecute(string path) =>
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ||
         !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
@@ -65,14 +58,12 @@ public static class EngineLocator
     private static IEnumerable<string> CandidatePaths(string start)
     {
         bool windows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-        // Prefer the flavour that runs on this OS.
         var names = windows
             ? new[] { WindowsExeName, NativeExeName }
             : new[] { NativeExeName, WindowsExeName };
 
-        // Walk up a few levels so this works from bin/ output dirs and the repo root.
-        // Normalize away any trailing separator first: GetDirectoryName("…\net8.0\")
-        // returns "…\net8.0", which would silently burn one walk iteration.
+        // Walk up a few levels so this works from bin/ and the repo root. Trim the
+        // trailing separator first or GetDirectoryName wastes one step on it.
         var dir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(start));
         for (int i = 0; i < 8 && dir is not null; i++)
         {

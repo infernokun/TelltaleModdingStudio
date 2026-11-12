@@ -6,10 +6,7 @@ using TelltaleModding.Core.Catalog;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>
-/// The Settings page: the user's preferences for every workspace, plus a little upkeep
-/// (the game index cache and the crash log). Changes apply at once and are saved.
-/// </summary>
+/// <summary>The Settings page. Changes apply right away and are saved.</summary>
 public sealed partial class SettingsViewModel : ViewModelBase
 {
     public SettingsViewModel(UserPreferences preferences, ViewportLookViewModel look)
@@ -21,7 +18,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     public UserPreferences Preferences { get; }
 
-    /// <summary>The default viewport look (Studio or Game), shared with the viewports.</summary>
+    /// <summary>The viewport look, shared with the viewports.</summary>
     public ViewportLookViewModel Look { get; }
 
     /// <summary>Set by the shell so the export folder can be picked.</summary>
@@ -75,10 +72,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         CacheSize = bytes == 0 ? "empty" : AssetsViewModel.FormatSize(bytes);
     }
 
-    /// <summary>
-    /// Deletes the saved game indexes; each game re-indexes (a few seconds) the next
-    /// time it opens. The game files themselves are never touched.
-    /// </summary>
+    /// <summary>Deletes the saved game indexes. Game files are never touched.</summary>
     [RelayCommand]
     private void ClearCache()
     {
@@ -130,7 +124,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedSceneTextureSize));
     }
 
-    /// <summary>Refreshes values that live outside the preferences when the page is shown.</summary>
+    /// <summary>Refreshes the cache size and crash log state.</summary>
     public void Refresh()
     {
         RefreshCacheSize();

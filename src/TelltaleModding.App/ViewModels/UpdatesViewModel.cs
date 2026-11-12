@@ -9,17 +9,13 @@ namespace TelltaleModding.App.ViewModels;
 /// <summary>What the user picked in the new version popup.</summary>
 public enum UpdateChoice { Later, Download, Skip }
 
-/// <summary>
-/// Checks GitHub for a newer release: quietly on start (when the setting is on), and on
-/// demand from the status bar, which always reports what it found. The outcome shows next
-/// to the version at the left of the status bar.
-/// </summary>
+/// <summary>Checks GitHub for a newer release, on start or from the status bar.</summary>
 public sealed partial class UpdatesViewModel : ViewModelBase
 {
     private readonly AppSettings _settings;
     private UpdateChecker? _checker;
 
-    /// <param name="checker">Tests pass one over a fake handler; otherwise one is made on first use.</param>
+    /// <param name="checker">The checker to use. One is made on first use if null.</param>
     public UpdatesViewModel(AppSettings settings, UpdateChecker? checker = null)
     {
         _settings = settings;
@@ -28,33 +24,30 @@ public sealed partial class UpdatesViewModel : ViewModelBase
 
     private UpdateChecker Checker => _checker ??= new UpdateChecker();
 
-    /// <summary>Set by the window to show the new version popup; null in unit tests.</summary>
+    /// <summary>Set by the window to show the new version popup. Null in tests.</summary>
     public Func<UpdatePrompt, Task<UpdateChoice>>? ShowPrompt { get; set; }
 
-    /// <summary>Opens a link in the default browser (replaced in tests).</summary>
+    /// <summary>Opens a link in the default browser.</summary>
     public Action<string> OpenUrl { get; set; } = OpenInBrowser;
 
     [ObservableProperty]
     private bool _isChecking;
 
-    /// <summary>The running version, at the left of the status bar.</summary>
+    /// <summary>The running version shown in the status bar.</summary>
     public string VersionLabel => $"Version {Checker.CurrentVersionText}";
 
-    /// <summary>What the last check found, shown after the version; empty until there is something to say.</summary>
+    /// <summary>What the last check found. Empty until there's a result.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCheckStatus))]
     private string _checkStatus = "";
 
-    /// <summary>Why the last check failed (the status's tooltip), or null.</summary>
+    /// <summary>Why the last check failed, or null.</summary>
     [ObservableProperty]
     private string? _checkStatusDetail;
 
     public bool HasCheckStatus => CheckStatus.Length > 0;
 
-    /// <summary>
-    /// The start-up check: notes the result next to the version and offers a version the user
-    /// has not skipped. A failure, or a skipped version, says nothing.
-    /// </summary>
+    /// <summary>The start-up check. Stays quiet on failure or a skipped version.</summary>
     public async Task CheckOnStartAsync()
     {
         if (!_settings.Preferences.CheckForUpdatesOnStart || IsChecking)
@@ -73,7 +66,7 @@ public sealed partial class UpdatesViewModel : ViewModelBase
         }
     }
 
-    /// <summary>The status bar button: reports the outcome either way and ignores skipped versions.</summary>
+    /// <summary>The status bar button. Always reports the result, even for skipped versions.</summary>
     [RelayCommand]
     private async Task CheckNowAsync()
     {
@@ -105,7 +98,7 @@ public sealed partial class UpdatesViewModel : ViewModelBase
         IsChecking = true;
         try
         {
-            // Off the UI thread so the first request's setup never holds up the window.
+            // Off the UI thread so the first request doesn't stall the window.
             var checker = Checker;
             return await Task.Run(() => checker.CheckAsync());
         }

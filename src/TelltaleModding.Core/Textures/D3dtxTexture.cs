@@ -11,19 +11,10 @@ public readonly record struct D3dtxRegion(
     int FaceIndex, int MipIndex, int MipCount, int DataSize, int Pitch, int DataOffset);
 
 /// <summary>
-/// A parsed Telltale .d3dtx texture (D3DTX version 4 for The Wolf Among Us and Walking Dead
-/// Season Two, version 5 for Game of Thrones, version 7 for the Michonne / Tales from
-/// the Borderlands era, and version 9 for Walking Dead: The Telltale Definitive Series)
-/// with conversion to standard DDS. Handles both the usual meta-stream-wrapped form
-/// (MSV5 or MSV6) and bare V7 payloads without the meta-stream header (as produced by
-/// some extraction paths).
-///
-/// V7 field layout ported from Telltale-Modding-Group's texture tool, V9 additions
-/// from TelltaleToolLib's T3Texture metaclass. V5 is V7 without the swizzle fields
-/// and with an import specular power; V4 additionally lacks the import specular power,
-/// layout, gamma and one shading float, and its region headers have no face index.
-/// All verified against real files: every mip region's size must sum exactly to the
-/// pixel payload.
+/// A parsed Telltale .d3dtx texture (versions 4, 5, 7 and 9) with conversion to DDS. Reads
+/// both the meta-stream-wrapped form and bare V7 payloads. V5 is V7 without the swizzle and
+/// with an import specular power; V4 also lacks that power, layout, gamma, one shading float
+/// and the region face index.
 /// </summary>
 public sealed class D3dtxTexture
 {
@@ -35,8 +26,8 @@ public sealed class D3dtxTexture
     public T3SurfaceFormat SurfaceFormat { get; private init; }
 
     /// <summary>
-    /// The channel each of X, Y, Z and W reads from (0-3 for red to alpha, 4 zero, 5 one), or
-    /// null for the older textures that have none. See <see cref="NormalMapSwizzle"/>.
+    /// The channel X, Y, Z and W read from (0-3 red to alpha, 4 zero, 5 one), or null for older
+    /// textures. See <see cref="NormalMapSwizzle"/>.
     /// </summary>
     public IReadOnlyList<byte>? Swizzle { get; private init; }
     public IReadOnlyList<D3dtxRegion> Regions { get; private init; } = Array.Empty<D3dtxRegion>();
@@ -66,8 +57,7 @@ public sealed class D3dtxTexture
             }
             else if (data.Length >= 4 && BinaryPrimitives.ReadUInt32LittleEndian(data) == 7)
             {
-                // Bare V7 payload with no meta-stream wrapper; pixel data follows the
-                // fields; its start is only known after parsing, marked by -1 here.
+                // Bare V7 payload. Pixels follow the fields, so -1 means "find it while parsing".
                 payloadStart = 0;
                 payloadLength = data.Length;
                 pixelsStart = -1;
@@ -143,8 +133,7 @@ public sealed class D3dtxTexture
         byte[]? swizzle = null;
         if (v4 || v5)
         {
-            // The MSV5 games have no swizzle; V4 also lacks layout, gamma and one of
-            // the three shading floats.
+            // No swizzle here. V4 also lacks layout, gamma and one shading float.
             if (v5)
                 off += 4 * 2;   // mTextureLayout, mSurfaceGamma
             off += 4 * 3;       // mResourceUsage, mType, mNormalMapFormat
@@ -195,7 +184,7 @@ public sealed class D3dtxTexture
             dataOffset += size;
         }
 
-        // Headerless form: pixel data follows the fields we just read.
+        // Headerless form: pixels start right here.
         if (pixelsStart < 0)
         {
             pixelsStart = off;
@@ -237,8 +226,8 @@ public sealed class D3dtxTexture
     }
 
     /// <summary>
-    /// Attempts conversion to DDS. The d3dtx stores mip regions smallest-first;
-    /// DDS wants largest-first, so regions are re-ordered by (face, mip).
+    /// Attempts conversion to DDS. Regions are stored smallest mip first, so they get
+    /// reordered for DDS.
     /// </summary>
     public bool TryToDds(out byte[]? dds, out string? error)
     {
@@ -291,7 +280,7 @@ public sealed class D3dtxTexture
         Put(108, caps);
         Put(112, caps2);
 
-        // Emit regions face-major, mip 0 (largest) first, as DDS expects.
+        // DDS wants each face's largest mip first.
         int outPos = 128;
         foreach (var region in Regions.OrderBy(r => r.FaceIndex).ThenBy(r => r.MipIndex))
         {

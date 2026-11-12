@@ -5,10 +5,8 @@ using TelltaleModding.Core.Dialogue;
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// Names a chore's resources from a game's files: voice lines by speaker and text from
-/// the English databases that go with the chore, everything else by its file name.
-/// Databases are read once and kept, so one instance can name many chores (an export);
-/// it is not safe to share between threads.
+/// Names a chore's resources from a game's files: voice lines by speaker and text, everything
+/// else by file name. Caches databases and is not thread-safe.
 /// </summary>
 public sealed class ChoreNames
 {
@@ -19,9 +17,8 @@ public sealed class ChoreNames
     public ChoreNames(GameCatalog catalog) => _catalog = catalog;
 
     /// <summary>
-    /// The voice lines a chore can name, by name symbol: those of the English databases
-    /// whose scene name starts the chore's name (env_cave_act1.landb for
-    /// env_cave_act1_cs_hardWorld_1.chore).
+    /// The voice lines a chore can name, by name symbol, from English databases whose scene
+    /// name starts the chore's name.
     /// </summary>
     public IReadOnlyDictionary<ulong, DialogueLine> LinesFor(string choreFileName)
     {
@@ -60,10 +57,7 @@ public sealed class ChoreNames
     public string? NameOf(ChoreResource resource, IReadOnlyDictionary<ulong, DialogueLine> lines) =>
         NameOf(resource, lines, symbol => _catalog.FindBySymbol(symbol)?.Name);
 
-    /// <summary>
-    /// A resource's name: a voice line as <c>Speaker: "text"</c>, a nested chore by its own
-    /// name, anything else by the file <paramref name="fileName"/> finds for its symbol.
-    /// </summary>
+    /// <summary>A resource's name: a voice line as <c>Speaker: "text"</c>, a nested chore by its name, else via <paramref name="fileName"/>.</summary>
     public static string? NameOf(ChoreResource resource, IReadOnlyDictionary<ulong, DialogueLine> lines, Func<ulong, string?> fileName)
     {
         if (resource.Type == ChoreFile.LanguageResType && lines.TryGetValue(resource.Name, out var line))
@@ -80,7 +74,7 @@ public sealed class ChoreNames
         return ChoreTimeline.ToText(chore, r => NameOf(r, lines), lines);
     }
 
-    // Speakers are stored in capitals ("CLEMENTINE").
+    // Speakers are stored in capitals.
     private static string TitleCase(string name) =>
         name.Length == 0 ? name : char.ToUpperInvariant(name[0]) + name[1..].ToLowerInvariant();
 }

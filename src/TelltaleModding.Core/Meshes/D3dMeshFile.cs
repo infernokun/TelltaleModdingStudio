@@ -4,17 +4,14 @@ using TelltaleModding.Core.Meta;
 
 namespace TelltaleModding.Core.Meshes;
 
-/// <summary>Vertex attribute semantics (GFXPlatformVertexAttribute).</summary>
+/// <summary>Vertex attribute semantics.</summary>
 public enum GfxVertexAttribute
 {
     Position = 0, Normal = 1, Tangent = 2, BlendWeight = 3,
     BlendIndex = 4, Color = 5, TexCoord = 6,
 }
 
-/// <summary>
-/// Vertex element formats as used by the GoT / Tales from the Borderlands era
-/// (values differ from later engine versions; sizes verified against real files).
-/// </summary>
+/// <summary>Vertex element formats for mesh versions 22-51. Later versions renumbered them.</summary>
 public enum GfxFormat
 {
     F32x2 = 0x01,
@@ -25,10 +22,7 @@ public enum GfxFormat
     UN8x4 = 0x19,
 }
 
-/// <summary>
-/// Vertex element formats (GFXPlatformFormat) as used by the Walking Dead Season 4 /
-/// Definitive Series tier; the engine renumbered the enum after the GoT era.
-/// </summary>
+/// <summary>Vertex element formats for mesh version 55.</summary>
 public enum GfxPlatformFormat
 {
     F32x2 = 0x02,
@@ -43,11 +37,8 @@ public enum GfxPlatformFormat
 }
 
 /// <summary>
-/// Vertex component slots of a legacy (MSV5-era: The Wolf Among Us, Game of Thrones)
-/// mesh. Each vertex buffer has a fixed table with one entry per slot, in this order
-/// (12 slots in The Wolf Among Us, 13 in Game of Thrones). Slot 7 is the tangent (four
-/// elements, the fourth the ±1 handedness, perpendicular to the normal) and slot 8 a
-/// second, smoothed normal (verified on real meshes).
+/// Vertex component slots of a legacy MSV5 mesh, in table order. Slot 7 is the tangent with
+/// handedness in its fourth element; slot 8 is a smoothed normal.
 /// </summary>
 public enum LegacyVertexSemantic
 {
@@ -56,7 +47,7 @@ public enum LegacyVertexSemantic
     ShadowMapTexCoord = 9, DetailMapTexCoord = 10, ScaledTexCoord = 11, LightmapTexCoord = 12,
 }
 
-/// <summary>Element types of a legacy vertex component (N = normalized to ±1 or 0..1).</summary>
+/// <summary>Element types of a legacy vertex component.</summary>
 public enum LegacyVertexType
 {
     None = 0, Float = 1, SN8 = 2, UN8 = 3, SN16 = 4, UN16 = 5,
@@ -70,7 +61,7 @@ public enum LegacyVertexType
 /// <summary>One component of a legacy mesh's vertex layout.</summary>
 /// <param name="BufferIndex">Which of the mesh's two vertex buffers holds it.</param>
 /// <param name="Offset">Byte offset inside the buffer's vertex.</param>
-/// <param name="Count">Number of elements (e.g. 3 for a position).</param>
+/// <param name="Count">Number of elements.</param>
 public readonly record struct LegacyVertexComponent(
     LegacyVertexSemantic Semantic, int BufferIndex, int Offset, int Count, LegacyVertexType Type);
 
@@ -78,27 +69,23 @@ public readonly record struct LegacyVertexComponent(
 public readonly record struct GfxAttributeParams(
     GfxVertexAttribute Attribute, GfxFormat Format, int AttributeIndex, int BufferIndex, int BufferOffset);
 
-/// <summary>Where one attribute lives inside the vertex buffers (v55 format numbering).</summary>
+/// <summary>Where one attribute lives inside the vertex buffers, for v55.</summary>
 public readonly record struct GfxPlatformAttributeParams(
     GfxVertexAttribute Attribute, GfxPlatformFormat Format, int AttributeIndex, int BufferIndex, int BufferOffset);
 
 /// <summary>One GPU buffer: element count, stride, and offset into the bulk payload.</summary>
 public readonly record struct GfxBufferInfo(int Count, int Stride, int DataOffset);
 
-/// <summary>One draw batch of LOD 0: an index range with its material and texture slot.</summary>
-/// <param name="DiffuseTextureIndex">Index into the mesh's texture list (-1 when untextured).</param>
-/// <param name="BonePaletteIndex">Index into the mesh's bone palettes (-1 for static batches).</param>
+/// <summary>One draw batch of LOD 0.</summary>
+/// <param name="DiffuseTextureIndex">Index into the mesh's texture list, -1 when untextured.</param>
+/// <param name="BonePaletteIndex">Index into the mesh's bone palettes, -1 for static batches.</param>
 public readonly record struct MeshBatch(
     int StartIndex, int PrimitiveCount, int MaterialIndex, int MinVertex, int MaxVertex,
     int DiffuseTextureIndex, int BonePaletteIndex);
 
 /// <summary>
-/// A parsed Telltale .d3dmesh: the legacy MSV5 layout (The Wolf Among Us v13, Walking
-/// Dead Season Two v14, Game of Thrones v17), versions 22-51 (the Michonne / Tales from
-/// the Borderlands tier) and version 55 (Walking Dead: The Telltale Definitive
-/// Series). Layouts ported from TelltaleToolLib's serializer and verified
-/// byte-exact against real meshes: every block boundary is checked, and the
-/// vertex/index buffers must account for the bulk data to the byte.
+/// A parsed Telltale .d3dmesh: the legacy MSV5 layout, versions 22-51, and version 55.
+/// Every block boundary is checked and the buffers must match the bulk data exactly.
 /// </summary>
 public sealed class D3dMeshFile
 {
@@ -111,45 +98,38 @@ public sealed class D3dMeshFile
     /// <summary>LOD 0 draw batches.</summary>
     public IReadOnlyList<MeshBatch> Batches { get; private init; } = Array.Empty<MeshBatch>();
 
-    /// <summary>Symbols (CRC64 of the texture file name, no extension) of referenced textures.</summary>
+    /// <summary>Symbols of referenced textures.</summary>
     public IReadOnlyList<ulong> TextureSymbols { get; private init; } = Array.Empty<ulong>();
 
-    /// <summary>Per-material handle symbols (parallel to batch MaterialIndex).</summary>
+    /// <summary>Material handle symbols, indexed by batch MaterialIndex.</summary>
     public IReadOnlyList<ulong> MaterialHandles { get; private init; } = Array.Empty<ulong>();
 
-    /// <summary>Bone symbols this mesh is skinned to (empty for static meshes).</summary>
+    /// <summary>Bone symbols this mesh is skinned to, empty for static meshes.</summary>
     public IReadOnlyList<ulong> BoneSymbols { get; private init; } = Array.Empty<ulong>();
 
     /// <summary>Bone palettes; batch <see cref="MeshBatch.BonePaletteIndex"/> selects one.</summary>
     public IReadOnlyList<IReadOnlyList<ulong>> BonePalettes { get; private init; } =
         Array.Empty<IReadOnlyList<ulong>>();
 
-    /// <summary>
-    /// Embedded material property sets (name symbol + raw payload). The payload holds
-    /// compiled material data whose texture references can be found by scanning for
-    /// known texture symbols.
-    /// </summary>
+    /// <summary>Embedded material property sets: name symbol and raw payload.</summary>
     public IReadOnlyList<(ulong NameSymbol, byte[] Payload)> MaterialResources { get; private init; } =
         Array.Empty<(ulong, byte[])>();
 
-    /// <summary>Vertex layout for versions 22-51 (empty for v55; see <see cref="PlatformAttributes"/>).</summary>
+    /// <summary>Vertex layout for versions 22-51. See <see cref="PlatformAttributes"/> for v55.</summary>
     public IReadOnlyList<GfxAttributeParams> Attributes { get; private init; } = Array.Empty<GfxAttributeParams>();
 
-    /// <summary>Vertex layout for version 55 (empty for older meshes; see <see cref="Attributes"/>).</summary>
+    /// <summary>Vertex layout for version 55. See <see cref="Attributes"/> for older meshes.</summary>
     public IReadOnlyList<GfxPlatformAttributeParams> PlatformAttributes { get; private init; } =
         Array.Empty<GfxPlatformAttributeParams>();
 
     /// <summary>
-    /// Vertex layout of a legacy (MSV5-era) mesh; empty for newer meshes (see
-    /// <see cref="Attributes"/> and <see cref="PlatformAttributes"/>).
+    /// Vertex layout of a legacy MSV5 mesh. Newer meshes use <see cref="Attributes"/> or
+    /// <see cref="PlatformAttributes"/>.
     /// </summary>
     public IReadOnlyList<LegacyVertexComponent> LegacyComponents { get; private init; } =
         Array.Empty<LegacyVertexComponent>();
 
-    /// <summary>
-    /// Per-channel UV scales of a legacy mesh (diffuse, lightmap, shadow map, detail; Game
-    /// of Thrones adds a fifth); empty for newer meshes.
-    /// </summary>
+    /// <summary>Per-channel UV scales of a legacy mesh, empty for newer meshes.</summary>
     public IReadOnlyList<Vector2> LegacyUvScales { get; private init; } = Array.Empty<Vector2>();
 
     public GfxBufferInfo? IndexBuffer { get; private init; }
@@ -158,7 +138,7 @@ public sealed class D3dMeshFile
     private byte[] _bufferData = Array.Empty<byte>();
     // v55 positions are UN16-quantized: pos = raw.xyz * scale + raw.w * wScale + offset.
     private Vector3 _positionScale = Vector3.One, _positionWScale, _positionOffset;
-    // v55 batches carry a base vertex added to every index in their range.
+    // v55 batches add a base vertex to every index in their range.
     private int[] _batchBaseIndices = Array.Empty<int>();
     private readonly (Vector2 Scale, Vector2 Offset)[] _texCoordTransforms =
         { (Vector2.One, Vector2.Zero), (Vector2.One, Vector2.Zero),
@@ -166,7 +146,7 @@ public sealed class D3dMeshFile
 
     private D3dMeshFile() { }
 
-    /// <summary>Bytes of vertex and index data held (for cache budgets).</summary>
+    /// <summary>Bytes of vertex and index data held.</summary>
     internal long DataSize => _bufferData.LongLength;
 
     public string Describe() =>
@@ -240,7 +220,7 @@ public sealed class D3dMeshFile
         if (version is < 22 or >= 52)
             throw new InvalidDataException($"D3DMesh version {version} is outside the supported tiers (MSV5 legacy, 22-51, 55).");
 
-        // Internal resources: embedded material property sets are kept for texture lookup.
+        // Internal resources. Keep embedded material property sets for texture lookup.
         ulong propertySetHash = TelltaleCrc64.HashSymbol("PropertySet");
         var materialResources = new List<(ulong NameSymbol, byte[] Payload)>();
         int resourceCount = I32();
@@ -261,8 +241,7 @@ public sealed class D3dMeshFile
 
         void Sphere() => SkipBlock();
         void Handle() => SkipBlock();
-        // Custom payload: (slot, value) pairs terminated by a slot with the high bit
-        // set. Slot 0 = diffuse texture index into mTextures.
+        // (slot, value) pairs ending at a slot with the high bit set. Slot 0 is the diffuse.
         int TexIndices()
         {
             int end = Block();
@@ -343,8 +322,7 @@ public sealed class D3dMeshFile
         for (int i = 0; i < ovCount; i++) { Handle(); U32(); }
         Expect(ovsEnd, "mMaterialOverrides");
 
-        // mBones / mLocalTransforms: arrays of palettes (outer count, then per
-        // palette an inner count + entries), verified against skinned meshes.
+        // mBones and mLocalTransforms: an outer count, then per palette an inner count and entries.
         void NestedArray(Action element)
         {
             int end = Block();
@@ -357,8 +335,7 @@ public sealed class D3dMeshFile
             }
             Expect(end, "nested array");
         }
-        // mBones is an array of palettes: batches index a palette; vertex blend
-        // indices index within that palette.
+        // Batches pick a palette; vertex blend indices index into it.
         var bonePalettes = new List<IReadOnlyList<ulong>>();
         {
             int end = Block();
@@ -418,7 +395,7 @@ public sealed class D3dMeshFile
         if ((meshFlags & 0x10) != 0)
             throw new InvalidDataException("CPU skinning data present (unsupported)");
 
-        // Vertex states: attribute layout + buffer descriptors.
+        // Vertex states: attribute layout and buffer descriptors.
         var attrs = new List<GfxAttributeParams>();
         var vbufs = new List<GfxBufferInfo>();
         GfxBufferInfo? ibuf = null;
@@ -427,7 +404,7 @@ public sealed class D3dMeshFile
         GfxBufferInfo ReadBuffer()
         {
             U32();                            // resource usage
-            U32();                            // buffer format (index width comes from stride)
+            U32();                            // buffer format (stride gives index width)
             U32();                            // buffer usage
             int count = I32(), stride = I32();
             var info = new GfxBufferInfo(count, stride, dataOffset);
@@ -436,12 +413,12 @@ public sealed class D3dMeshFile
         }
 
         int stateCount = I32();
-        // A mesh with no vertex states carries no geometry at all (e.g. a placeholder part).
+        // A mesh with no vertex states has no geometry.
         if (stateCount > 0 && (lodVertexStateIndex < 0 || lodVertexStateIndex >= stateCount))
             throw new InvalidDataException($"unexpected vertex state layout (index {lodVertexStateIndex} of {stateCount})");
         for (int s = 0; s < stateCount; s++)
         {
-            // Only LOD 0's vertex state is decoded; the others still occupy bulk data.
+            // Only LOD 0's state is decoded, but the others still take up bulk data.
             bool used = s == lodVertexStateIndex;
             U32();                            // vertex count per instance
             int vbufCount = I32();
@@ -491,11 +468,9 @@ public sealed class D3dMeshFile
     }
 
     /// <summary>
-    /// Parses the rest of a version 55 mesh (Definitive Series), starting just after
-    /// the tool-props flag. Members follow TelltaleToolLib's metaclass layout with its
-    /// game gates resolved for WDC: batches gain base index / index count / adjacency
-    /// and lose the bone palette; LODs gain vertex ranges and their own bone list;
-    /// mesh bones become a flat list; vertex states carry explicit index buffers.
+    /// Parses the rest of a version 55 mesh after the tool-props flag. Compared to 22-51, batches
+    /// gain a base index and lose the bone palette, LODs carry their own bone list, mesh bones are
+    /// a flat list, and vertex states list their index buffers.
     /// </summary>
     private static D3dMeshFile ParseDefinitive(byte[] file, MetaStreamHeader meta, int off, string name, int version)
     {
@@ -533,7 +508,7 @@ public sealed class D3dMeshFile
         // ---- D3DMesh: lightmap scale, lightmap texcoord version, LOD param CRC
         F32(); I32(); U64();
 
-        // Internal resources: embedded material property sets are kept for texture lookup.
+        // Internal resources. Keep embedded material property sets for texture lookup.
         ulong propertySetHash = TelltaleCrc64.HashSymbol("PropertySet");
         var materialResources = new List<(ulong NameSymbol, byte[] Payload)>();
         int resourceCount = I32();
@@ -554,7 +529,7 @@ public sealed class D3dMeshFile
         // ---- T3MeshData --------------------------------------------------
         int meshEnd = Block();
 
-        // T3MeshTextureIndices: (slot, value) pairs terminated by a slot with the high bit set.
+        // (slot, value) pairs ending at a slot with the high bit set.
         int TexIndices()
         {
             int end = Block();
@@ -571,8 +546,7 @@ public sealed class D3dMeshFile
             return diffuse;
         }
 
-        // mLODs: each LOD has default and shadow batch arrays; only LOD 0's default
-        // batches are rendered.
+        // mLODs: each has default and shadow batches. Only LOD 0's default batches are used.
         var batches = new List<MeshBatch>();
         var baseIndices = new List<int>();
         var lodBones = new List<ulong>();
@@ -650,7 +624,7 @@ public sealed class D3dMeshFile
         for (int i = 0; i < ovCount; i++) { Handle(); U32(); }
         Expect(ovsEnd, "mMaterialOverrides");
 
-        // mBones: a flat list of bone entries.
+        // mBones
         var boneSymbols = new List<ulong>();
         int boneEntryCount = ArrayHeader(out int boneEntriesEnd);
         for (int i = 0; i < boneEntryCount; i++)
@@ -696,8 +670,7 @@ public sealed class D3dMeshFile
         if ((meshFlags & 0x10) != 0)
             throw new InvalidDataException("CPU skinning data present (unsupported)");
 
-        // Vertex states: attribute layout, then index buffers, then vertex buffers.
-        // Bulk data follows the same order across all states.
+        // Vertex states: attributes, index buffers, vertex buffers. Bulk data is in the same order.
         var attrs = new List<GfxPlatformAttributeParams>();
         var vbufs = new List<GfxBufferInfo>();
         GfxBufferInfo? ibuf = null;
@@ -706,7 +679,7 @@ public sealed class D3dMeshFile
         GfxBufferInfo ReadBuffer()
         {
             U32();                            // resource usage
-            U32();                            // buffer format (index width comes from stride)
+            U32();                            // buffer format (stride gives index width)
             U32();                            // buffer usage
             int count = I32(), stride = I32();
             var info = new GfxBufferInfo(count, stride, dataOffset);
@@ -715,7 +688,7 @@ public sealed class D3dMeshFile
         }
 
         int stateCount = I32();
-        // A mesh with no vertex states carries no geometry at all (e.g. a placeholder part).
+        // A mesh with no vertex states has no geometry.
         if (stateCount > 0 && (lodVertexStateIndex < 0 || lodVertexStateIndex >= stateCount))
             throw new InvalidDataException($"unexpected vertex state layout (index {lodVertexStateIndex} of {stateCount})");
         for (int s = 0; s < stateCount; s++)
@@ -731,9 +704,7 @@ public sealed class D3dMeshFile
                     (GfxVertexAttribute)I32(), (GfxPlatformFormat)I32(), I32(), I32(), I32());
                 if (used) attrs.Add(attr);
             }
-            // Buffer 0 holds the default batches' indices followed by adjacency data;
-            // buffer 1 is a shadow-only copy that omits non-shadow-casting batches
-            // (e.g. eye wetness layers), so only buffer 0 matches the default batches.
+            // Buffer 0 matches the default batches. Buffer 1 is a shadow-only copy.
             for (int ib = 0; ib < ibufCount; ib++)
             {
                 var buffer = ReadBuffer();
@@ -781,13 +752,8 @@ public sealed class D3dMeshFile
     }
 
     /// <summary>
-    /// Parses the rest of a legacy mesh (The Wolf Among Us v13, Walking Dead Season Two v14,
-    /// Game of Thrones v17), starting just after the version. This is the engine's
-    /// older D3DMesh layout (TelltaleToolLib's LegacyD3DMesh): no material resources
-    /// (each triangle set carries per-slot indices into the mesh's own texture lists),
-    /// and MSV5 writes everything into the default section, so the index buffer and the
-    /// two vertex buffers (each described by a fixed table of typed components) follow
-    /// the object's fields inline.
+    /// Parses the rest of a legacy MSV5 mesh after the version. There are no material resources,
+    /// and the index buffer and two vertex buffers sit inline in the default section.
     /// </summary>
     private static D3dMeshFile ParseLegacy(byte[] file, MetaStreamHeader meta, int off, string name, int version)
     {
@@ -826,9 +792,8 @@ public sealed class D3dMeshFile
         var boundsMax = Vec3();
         Sphere();
 
-        // mTriangleSets: the draw batches. mTxIndex holds one index per texture slot
-        // (slot 0 = diffuse, 2 = normal map) into that slot's list in mTextures; the
-        // slot count varies by game (11 in The Wolf Among Us, 14 in Game of Thrones).
+        // mTriangleSets: the draw batches. mTxIndex has one index per texture slot (0 diffuse,
+        // 2 normal map) into that slot's list in mTextures. Slot count varies by game.
         var batches = new List<MeshBatch>();
         var batchSlots = new List<int[]>();
         int setCount = ArrayHeader(out int setsEnd);
@@ -849,8 +814,7 @@ public sealed class D3dMeshFile
             Expect(slotsEnd, "texture slot indices");
             SkipBlock();                      // triangle strips
             I32();                            // total index count
-            // Shading constants: bump heights, specular power, four colors, toon outline,
-            // glow and shadow, alpha/UV-generation modes, diffuse color.
+            // Shading constants, skipped.
             off += LegacyTriangleSetShadingSize;
             batches.Add(new MeshBatch(startIndex, numPrims, -1, minVert, maxVert, -1, bonePalette));
             batchSlots.Add(slots);
@@ -859,7 +823,7 @@ public sealed class D3dMeshFile
 
         SkipBlock();                          // vertex animations
 
-        // mBonePalettes: batches select a palette; vertex blend indices index into it.
+        // mBonePalettes: batches pick a palette; vertex blend indices index into it.
         var bonePalettes = new List<IReadOnlyList<ulong>>();
         {
             int outerCount = ArrayHeader(out int end);
@@ -882,10 +846,8 @@ public sealed class D3dMeshFile
         I32();                                // triangle strip state
         I32();                                // animated vertex count
 
-        // mTextures: one list per texture slot. A texture is its handle (symbol of the file
-        // name with ".d3dtx"), flags, name symbol, bounds and texel densities (one in The Wolf Among
-        // Us, two, max and average, in Game of Thrones). Only one count makes every list
-        // line up with the block's end.
+        // mTextures: one list per texture slot. Each entry ends with one or two texel densities
+        // depending on the game, so try both and keep the one that fits the block.
         int texturesStart = off;
         int texturesEnd = Block();
         List<List<ulong>>? ReadTextures(int densities)
@@ -919,9 +881,8 @@ public sealed class D3dMeshFile
         var slotTextures = ReadTextures(2) ?? ReadTextures(1)
             ?? throw new InvalidDataException("texture lists do not match their block");
 
-        // UV scales (diffuse, lightmap, shadow map, detail; Game of Thrones adds a fifth,
-        // the scaled-UV scale). Count them by finding where the two tool blocks and the
-        // tool-props flag line up: a float read as a block size is never a small size.
+        // UV scales: 4 or more depending on the game. Count them by finding where the two tool
+        // blocks and the tool-props flag line up.
         bool ToolTailAt(int at)
         {
             for (int b = 0; b < 2; b++)
@@ -944,8 +905,7 @@ public sealed class D3dMeshFile
         if (Bool())
             throw new InvalidDataException("mesh carries tool properties (unsupported)");
 
-        // TextureSymbols lists the diffuse slot first, so a batch's diffuse index is its
-        // slot-0 index; the remaining slots follow for completeness.
+        // The diffuse slot comes first, so a batch's diffuse index is its slot 0 index.
         var textureSymbols = slotTextures.SelectMany(l => l).ToList();
         int diffuseCount = slotTextures.Count > 0 ? slotTextures[0].Count : 0;
         for (int b = 0; b < batches.Count; b++)
@@ -956,7 +916,7 @@ public sealed class D3dMeshFile
             batches[b] = batches[b] with { DiffuseTextureIndex = diffuse };
         }
 
-        // Inline buffers: index buffer, then two vertex buffers, each header + data.
+        // Inline buffers: index buffer, then two vertex buffers, each a header and data.
         int bulkStart = off;
         int indexFormat = I32();
         int indexCount = I32();
@@ -988,8 +948,7 @@ public sealed class D3dMeshFile
             int vertexCount = I32();
             int vertexSize = I32();
             U32(); U32();                     // flags, usage
-            // The Wolf Among Us has one more header field before the component table
-            // (a block of 12-byte entries), so step over it when the table is not here yet.
+            // The Wolf Among Us has one more header field before the component table.
             if (!IsComponentTable(off))
                 U32();
             int componentsEnd = Block();
@@ -1036,7 +995,7 @@ public sealed class D3dMeshFile
     private const uint LegacyHasIndexBufferFlag = 0x1;
     private const uint LegacyTriangleStripsFlag = 0x10000;
     private const int LegacyIndexFormat16 = 101, LegacyIndexFormat32 = 102; // D3DFMT_INDEX16 / INDEX32
-    // Triangle set shading constants: 3 floats, 4 colors, 5 floats, 7 ints/floats, 1 color.
+    // 3 floats, 4 colors, 5 floats, 7 ints/floats, 1 color.
     private const int LegacyTriangleSetShadingSize = 3 * 4 + 4 * 16 + 5 * 4 + 7 * 4 + 16;
 
     private D3dMeshFile CopyTransformsFrom(D3dMeshFile other)
@@ -1049,14 +1008,7 @@ public sealed class D3dMeshFile
     // ---- Geometry decoding ----------------------------------------------
 
     /// <summary>
-    /// Decodes the packed vertex data into renderable arrays: float positions,
-    /// unit normals, and UV channel 0. UVs are dequantized with the mesh's texcoord
-    /// transform (stored as center+half-range of the authored UVs) and stay in
-    /// D3D convention (v=0 at the texture's top), no flip.
-    /// </summary>
-    /// <summary>
-    /// The vertices' texture coordinates of set <paramref name="set"/> (e.g. set 3 carries the
-    /// Definitive Series ink texture's layout), one per vertex as in
+    /// The vertices' texture coordinates of set <paramref name="set"/>, matching
     /// <see cref="GetGeometry"/>, or null when the mesh has no such set.
     /// </summary>
     public Vector2[]? GetTexCoords(int set)
@@ -1091,9 +1043,8 @@ public sealed class D3dMeshFile
     }
 
     /// <summary>
-    /// The vertices' colors of set <paramref name="set"/> (RGBA, 0-1), one per vertex as in
-    /// <see cref="GetGeometry"/>, or null when the mesh has no such set (or is a legacy mesh).
-    /// Tales from the Borderlands keeps an alpha-blended material's opacity in set 0's alpha.
+    /// The vertices' RGBA colors of set <paramref name="set"/>, matching <see cref="GetGeometry"/>,
+    /// or null when there's no such set or the mesh is legacy.
     /// </summary>
     public Vector4[]? GetVertexColors(int set)
     {
@@ -1129,8 +1080,7 @@ public sealed class D3dMeshFile
         return colors;
     }
 
-    // Legacy meshes: set 0 is the color UVs, set 1 the detail-map stream (ink lines),
-    // each with its own UV scale.
+    // Legacy meshes: set 0 is the color UVs, set 1 the detail map, each with its own scale.
     private Vector2[]? GetLegacyTexCoords(int set)
     {
         var semantic = set switch
@@ -1156,7 +1106,7 @@ public sealed class D3dMeshFile
         return uvs;
     }
 
-    // Versions 22-51: the same lookup through the older attribute list.
+    // Versions 22-51.
     private Vector2[]? GetMidTexCoords(int set)
     {
         var attr = Attributes.FirstOrDefault(a => a.Attribute == GfxVertexAttribute.TexCoord && a.AttributeIndex == set);
@@ -1181,6 +1131,10 @@ public sealed class D3dMeshFile
         return uvs;
     }
 
+    /// <summary>
+    /// Decodes the vertex data into positions, normals and UV set 0. UVs stay in D3D convention
+    /// with v=0 at the top.
+    /// </summary>
     public MeshGeometry GetGeometry()
     {
         if (IndexBuffer is null && VertexBuffers.Count == 0 && LegacyComponents.Count == 0)
@@ -1229,8 +1183,7 @@ public sealed class D3dMeshFile
                         blendWeights[i] = new Vector4(Sn16(at), Sn16(at + 2), Sn16(at + 4), Sn16(at + 6));
                         break;
                     case GfxVertexAttribute.BlendIndex:
-                        // Stored premultiplied by 3 (D3D9 shader-constant row addressing);
-                        // verified: every index in a full game is a multiple of 3.
+                        // Stored premultiplied by 3 for D3D9 constant-row addressing.
                         hasIndices = true;
                         blendIndices[i] = (
                             (byte)(_bufferData[at] / 3), (byte)(_bufferData[at + 1] / 3),
@@ -1252,8 +1205,7 @@ public sealed class D3dMeshFile
             }
         }
 
-        // Rigid parts (Rhys's robot eye) store only blend indices: each vertex follows
-        // the single bone its first index names.
+        // Rigid parts store only blend indices, so each vertex follows its first bone.
         if (hasIndices && !hasWeights)
         {
             Array.Fill(blendWeights, new Vector4(1, 0, 0, 0));
@@ -1285,16 +1237,10 @@ public sealed class D3dMeshFile
     }
 
     /// <summary>
-    /// v55 geometry: dequantized positions, unit normals/tangents, UV channel 0 and
-    /// skinning data. Blend indices address the LOD's bone list directly (exposed as
-    /// bone palette 0).
-    ///
-    /// Blend weights (UN10x3_UN2) store a vertex's four weights sorted largest-first,
-    /// each as a fraction of its maximum possible share: the second weight (at most
-    /// 1/2) gets 12 bits (the 2-bit field on top of the first 10-bit field), the
-    /// third (at most 1/3) and fourth (at most 1/4) get 10 bits each, and the first
-    /// is the remainder. Verified on real meshes: every vertex decodes to weights
-    /// that are non-negative and sorted, and skinning varies smoothly across edges.
+    /// v55 geometry. Blend indices point straight into the LOD's bone list (bone palette 0).
+    /// Blend weights are sorted largest first, each stored as a fraction of its max share:
+    /// the second (up to 1/2) uses 12 bits (the top 2 bits over the first 10), the third and
+    /// fourth (up to 1/3 and 1/4) 10 bits each, and the first is the remainder.
     /// </summary>
     private MeshGeometry GetDefinitiveGeometry()
     {
@@ -1339,7 +1285,7 @@ public sealed class D3dMeshFile
                                 BitConverter.ToSingle(_bufferData, at),
                                 BitConverter.ToSingle(_bufferData, at + 4),
                                 BitConverter.ToSingle(_bufferData, at + 8)),
-                            // Three 10-bit fractions of the bounds plus a 2-bit W step (props).
+                            // Three 10-bit fractions of the bounds plus a 2-bit W step.
                             GfxPlatformFormat.UN10x3_UN2 => Un10x3Position(
                                 BinaryPrimitives.ReadUInt32LittleEndian(_bufferData.AsSpan(at))),
                             _ => throw new InvalidDataException($"unsupported position format {attr.Format}"),
@@ -1384,7 +1330,7 @@ public sealed class D3dMeshFile
             }
         }
 
-        // Rigid parts store only blend indices: each vertex follows its first bone.
+        // Rigid parts store only blend indices, so each vertex follows its first bone.
         if (hasIndices && !hasWeights)
         {
             Array.Fill(blendWeights, new Vector4(1, 0, 0, 0));
@@ -1397,13 +1343,7 @@ public sealed class D3dMeshFile
             skinned ? blendWeights : null, skinned ? blendIndices : null, BonePalettes);
     }
 
-    /// <summary>
-    /// Legacy (MSV5) geometry: each component names its buffer, byte offset, element count
-    /// and element type. Positions are floats, normals/tangents/UVs signed-normalized
-    /// shorts, blend weights floats (three, the fourth implied) or unsigned-normalized
-    /// shorts (four), and blend indices bytes (premultiplied by 3) that index the batch's
-    /// bone palette.
-    /// </summary>
+    /// <summary>Legacy MSV5 geometry, read through each component's buffer, offset and type.</summary>
     private MeshGeometry GetLegacyGeometry()
     {
         int[] indices = ReadIndices();
@@ -1444,21 +1384,19 @@ public sealed class D3dMeshFile
                         tangents[i] = new Vector4(t == Vector3.Zero ? t : Vector3.Normalize(t), E(3) < 0 ? -1f : 1f);
                         break;
                     case LegacyVertexSemantic.TexCoord:
-                        // Stored UVs are normalized shorts; the mesh's diffuse UV scale maps
-                        // them back (The Wolf Among Us often stores U at half range, scale ~2).
+                        // UVs are normalized, so scale them back with the diffuse UV scale.
                         uvs[i] = new Vector2(E(0), E(1)) * diffuseUvScale;
                         break;
                     case LegacyVertexSemantic.BlendWeight:
                         hasWeights = true;
-                        // Three stored weights (The Wolf Among Us) imply the fourth.
+                        // With three stored weights, the fourth is implied.
                         var w = new Vector4(E(0), E(1), E(2), E(3));
                         if (component.Count == 3)
                             w.W = Math.Max(0f, 1f - w.X - w.Y - w.Z);
                         blendWeights[i] = w;
                         break;
                     case LegacyVertexSemantic.BlendIndex when type == LegacyVertexType.U8:
-                        // Premultiplied by 3, as in the later GoT-era meshes (verified: every
-                        // weighted index in both games is a multiple of 3 within its palette).
+                        // Premultiplied by 3, same as newer meshes.
                         hasIndices = true;
                         blendIndices[i] = ((byte)(E(0) / 3), (byte)(E(1) / 3), (byte)(E(2) / 3), (byte)(E(3) / 3));
                         break;
@@ -1466,8 +1404,7 @@ public sealed class D3dMeshFile
             }
         }
 
-        // Rigid parts (swords, sheaths, buckles) store only blend indices: each vertex
-        // follows the single bone its first index names.
+        // Rigid parts store only blend indices, so each vertex follows its first bone.
         if (hasIndices && !hasWeights)
         {
             Array.Fill(blendWeights, new Vector4(1, 0, 0, 0));
@@ -1513,7 +1450,7 @@ public sealed class D3dMeshFile
     private float Sn8(int at) => Math.Max(-1f, (sbyte)_bufferData[at] / 127f);
 }
 
-/// <summary>Decoded, renderable mesh data (LOD 0). Tangent W carries handedness.</summary>
+/// <summary>Decoded LOD 0 mesh data. Tangent W holds handedness.</summary>
 public sealed record MeshGeometry(
     Vector3[] Positions, Vector3[] Normals, Vector2[] TexCoords, Vector4[] Tangents,
     int[] Indices, IReadOnlyList<MeshBatch> Batches,
@@ -1524,10 +1461,8 @@ public sealed record MeshGeometry(
     public bool IsSkinned => BlendWeights is not null && BlendIndices is not null;
 
     /// <summary>
-    /// The bone palette each vertex's blend indices index into (-1 for none): the palette of
-    /// the batch whose triangles draw it. Vertex ranges of batches with different palettes
-    /// can overlap, so a range alone may name the wrong palette; vertices no triangle draws
-    /// fall back to a batch range covering them.
+    /// The bone palette each vertex uses (-1 for none), taken from the batch whose triangles
+    /// draw it. Batch vertex ranges can overlap, so ranges are only a fallback.
     /// </summary>
     public int[] VertexPaletteIndices()
     {
@@ -1557,10 +1492,7 @@ public sealed record MeshGeometry(
         return result;
     }
 
-    /// <summary>
-    /// A copy of this (unskinned) mesh with every vertex bound fully to one bone, so a
-    /// rigid part follows the skeleton like the parts skinned around it.
-    /// </summary>
+    /// <summary>A copy of this unskinned mesh with every vertex bound to one bone.</summary>
     public MeshGeometry BindRigid(ulong boneSymbol)
     {
         var weights = new Vector4[Positions.Length];
@@ -1575,11 +1507,8 @@ public sealed record MeshGeometry(
     }
 
     /// <summary>
-    /// Merges several meshes (e.g. a character's head, body, hair and hands) into one,
-    /// keeping each part's batches in order. Bone palettes are concatenated and batch
-    /// indices remapped. Skinning is kept when any part is skinned; vertices of
-    /// unskinned parts get no weights, so they stay at rest (bind them with
-    /// <see cref="BindRigid"/> first to have them follow a bone).
+    /// Merges several meshes into one. Unskinned parts stay at rest unless bound with
+    /// <see cref="BindRigid"/> first.
     /// </summary>
     public static MeshGeometry Combine(IReadOnlyList<MeshGeometry> parts)
     {

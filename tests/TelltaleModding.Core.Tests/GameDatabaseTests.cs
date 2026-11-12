@@ -49,8 +49,7 @@ public class GameDatabaseTests
     [SkippableFact]
     public void Ttarch2GamesAreTheModernTitles()
     {
-        // Everything from The Wolf Among Us (54) onward is ttarch2 except the two
-        // Bone 2.0 re-releases (65, 66), which are classic .ttarch.
+        // Games from 54 on use ttarch2, except the Bone re-releases (65, 66).
         var ttarch2 = GameDatabase.Games.Where(g => g.Kind == ArchiveKind.Ttarch2).Select(g => g.GameNum).ToHashSet();
         Assert.Contains(54, ttarch2);
         Assert.DoesNotContain(65, ttarch2);

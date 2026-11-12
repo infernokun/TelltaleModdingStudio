@@ -3,11 +3,7 @@ namespace TelltaleModding.Core.Audio;
 /// <summary>How a clip's samples are stored in the game file.</summary>
 public enum AudioCodec { Pcm, Mp3, Vorbis, Adpcm, Other }
 
-/// <summary>
-/// One playable sound: a voice line, a sound effect, or one subsound of a bank.
-/// <see cref="NativeFile"/> is a standalone file in the clip's own format (built
-/// without decoding); <see cref="DecodePcm16"/> does the actual decode.
-/// </summary>
+/// <summary>One playable sound, such as a voice line or one subsound of a bank.</summary>
 public sealed class AudioClip
 {
     private readonly Lazy<byte[]> _native;
@@ -19,7 +15,7 @@ public sealed class AudioClip
     public int Channels { get; }
     public int SampleRate { get; }
 
-    /// <summary>Length in sample frames (per channel) as recorded by the container; 0 when unknown.</summary>
+    /// <summary>Length in sample frames per channel, or 0 when unknown.</summary>
     public long SampleCount { get; }
 
     public TimeSpan Duration =>
@@ -28,7 +24,7 @@ public sealed class AudioClip
     /// <summary>Extension of <see cref="NativeFile"/>: ".mp3", ".ogg" or ".wav".</summary>
     public string NativeExtension { get; }
 
-    /// <summary>A standalone file in the native format, playable by ordinary players.</summary>
+    /// <summary>The clip as a standalone file in its own format, built without decoding.</summary>
     public byte[] NativeFile => _native.Value;
 
     internal AudioClip(string name, AudioCodec codec, int channels, int sampleRate, long sampleCount,
@@ -44,10 +40,7 @@ public sealed class AudioClip
         _decode = decode;
     }
 
-    /// <summary>
-    /// Decodes the whole clip to interleaved 16-bit samples (<see cref="Channels"/> per frame).
-    /// Throws <see cref="InvalidDataException"/> when the data cannot be decoded.
-    /// </summary>
+    /// <summary>Decodes the clip to interleaved 16-bit samples. Throws <see cref="InvalidDataException"/> on bad data.</summary>
     public short[] DecodePcm16()
     {
         try
@@ -64,7 +57,7 @@ public sealed class AudioClip
         }
     }
 
-    /// <summary>Decodes the clip and wraps it in a 16-bit PCM RIFF/WAVE file.</summary>
+    /// <summary>Decodes the clip into a 16-bit WAV file.</summary>
     public byte[] ToWav() => WavWriter.Write(DecodePcm16(), Channels, SampleRate);
 
     public override string ToString() =>

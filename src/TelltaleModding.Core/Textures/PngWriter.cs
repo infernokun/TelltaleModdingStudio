@@ -23,7 +23,7 @@ public static class PngWriter
         header[9] = 6;  // RGBA
         WriteChunk(png, "IHDR", header);
 
-        // Each row is prefixed with filter type 0 (none); zlib does the work.
+        // Each row starts with filter type 0 (none).
         using var raw = new MemoryStream();
         using (var z = new ZLibStream(raw, CompressionLevel.Optimal, leaveOpen: true))
         {

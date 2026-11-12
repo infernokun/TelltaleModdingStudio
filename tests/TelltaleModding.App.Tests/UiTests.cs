@@ -19,9 +19,8 @@ public static class TestAppBuilder
 }
 
 /// <summary>
-/// Renders the real window off-screen (no GL, so 3D viewports stay blank) and saves
-/// PNGs for layout review to <see cref="ShotsFolder"/>. Settings go to a temp file,
-/// never the user's library.
+/// Renders the real window off-screen and saves screenshots to <see cref="ShotsFolder"/>.
+/// 3D viewports stay blank since there is no GL.
 /// </summary>
 public class UiTests : IDisposable
 {
@@ -29,7 +28,7 @@ public class UiTests : IDisposable
 
     private readonly List<(MainWindow Window, ShellViewModel Shell)> _opened = new();
 
-    // Close each test's window so its views stop following the shell into later tests.
+    // Close each test's window so it doesn't affect later tests.
     public void Dispose()
     {
         foreach (var (window, shell) in _opened)
@@ -44,8 +43,6 @@ public class UiTests : IDisposable
     {
         var settingsFile = Path.Combine(Path.GetTempPath(), $"tms-ui-{Guid.NewGuid():N}.json");
         var shell = new ShellViewModel(new AppSettings { FilePath = settingsFile });
-        // DataContext is set after construction so the window's Opened hook (which
-        // restores the library) sees a fresh shell; it is not shown via Opened here.
         var window = new MainWindow { DataContext = shell, Width = 1440, Height = 900 };
         _opened.Add((window, shell));
         return (window, shell);
@@ -84,7 +81,7 @@ public class UiTests : IDisposable
             Path.Combine(samples, "sk62_clementine400_eyesMouth.d3dmesh"),
         }, null);
 
-        // Model assembly runs on a background thread; pump the UI until it lands.
+        // The model loads in the background, so pump the UI until it's done.
         var deadline = DateTime.UtcNow.AddSeconds(30);
         while (!shell.Characters.HasModel && shell.Characters.Error is null && DateTime.UtcNow < deadline)
         {

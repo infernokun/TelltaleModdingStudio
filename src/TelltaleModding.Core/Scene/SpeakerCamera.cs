@@ -3,25 +3,19 @@ using TelltaleModding.Core.Meshes;
 
 namespace TelltaleModding.Core.Scene;
 
-/// <summary>
-/// What the camera should hold at one moment of a line: the point to look at, the height and
-/// width of the region to fit (in the speaker's units), and the yaw (radians, 0 = the front of
-/// the rest pose) to look from.
-/// </summary>
+/// <summary>What the camera should hold at one moment of a line: a target, the region to fit and the yaw to look from.</summary>
 public readonly record struct SpeakerShot(Vector3 Target, float Height, float Width, float Yaw);
 
 /// <summary>
-/// A camera that follows a speaker through a line. It frames the face and shoulders, widens to
-/// take in the hands when they come up to gesture, and turns with the chest, so a character
-/// who crouches, leans or turns stays in view. The whole line is worked out up front and
-/// smoothed both ways in time, so the camera moves ahead of a gesture instead of chasing it.
+/// A camera that follows a speaker through a line, framing the face and shoulders and widening
+/// for gestures. The whole line is smoothed up front so the camera doesn't lag behind.
 /// </summary>
 public sealed class SpeakerCamera
 {
     private const float Step = 1f / 15;
-    private const float CenterWindow = 0.5f;   // seconds either side the target and yaw average over
-    private const float SizeHold = 0.6f;       // seconds either side a wide moment keeps the shot wide
-    private const float SizeWindow = 0.3f;     // then averaged over this, so the zoom eases
+    private const float CenterWindow = 0.5f;   // target and yaw averaging, seconds each side
+    private const float SizeHold = 0.6f;       // how long a wide moment keeps the shot wide
+    private const float SizeWindow = 0.3f;     // size averaging, so the zoom eases
 
     private readonly SpeakerShot[] _shots;
 
@@ -41,9 +35,8 @@ public sealed class SpeakerCamera
     }
 
     /// <summary>
-    /// Works out the camera for a line <paramref name="duration"/> seconds long, from the
-    /// speaker's bone world transforms at any moment (<paramref name="pose"/>). Null when the
-    /// skeleton has no head to follow.
+    /// Works out the camera for a line from the speaker's <paramref name="pose"/> over time.
+    /// Null when the skeleton has no head to follow.
     /// </summary>
     public static SpeakerCamera? Build(SkeletonFile skeleton, Func<float, Matrix4x4[]> pose, float duration)
     {
@@ -60,7 +53,7 @@ public sealed class SpeakerCamera
     private static SpeakerShot[] Smooth(SpeakerShot[] raw)
     {
         int n = raw.Length;
-        // Unwrap the yaw so averaging across ±π does not swing the camera the long way round.
+        // Unwrap the yaw so averaging across ±π doesn't swing the camera the long way around.
         var yaw = new float[n];
         for (int i = 0; i < n; i++)
         {
@@ -111,8 +104,7 @@ public sealed class SpeakerCamera
         return shots;
     }
 
-    // The bones the camera watches: the head (with the face hanging off it), the chest the
-    // camera turns with, and the arms that can widen the shot.
+    // The bones the camera watches: head and face, chest, and arms.
     private readonly record struct Rig(int Head, int Chest, int[] Face, int[] Arms, Matrix4x4 ChestRest, float Size)
     {
         public static Rig? Find(SkeletonFile skeleton)
@@ -125,8 +117,7 @@ public sealed class SpeakerCamera
             if (maxY - minY <= 0)
                 return null;
 
-            // The head: in the upper part of the body, the bone the most bones hang from
-            // directly (the face rig); in a skeleton without one, the highest bone.
+            // The head is the upper-body bone with the most direct children, else the highest bone.
             var children = new int[bones.Count];
             foreach (var bone in bones)
                 if (bone.ParentIndex >= 0 && bone.ParentIndex < bones.Count)
@@ -170,7 +161,7 @@ public sealed class SpeakerCamera
 
         public SpeakerShot Shot(Matrix4x4[] world)
         {
-            // The chest's facing, from how far it has turned from the rest pose (which faces +Z).
+            // The chest's facing relative to the rest pose, which faces +Z.
             Matrix4x4.Invert(ChestRest, out var restInverse);
             var forward = Vector3.TransformNormal(Vector3.TransformNormal(Vector3.UnitZ, restInverse), world[Chest]);
             float yaw = forward.X * forward.X + forward.Z * forward.Z > 1e-6f ? MathF.Atan2(forward.X, forward.Z) : 0;
@@ -190,7 +181,7 @@ public sealed class SpeakerCamera
             float left = -0.09f * Size, right = 0.09f * Size, top = 0.12f * Size;
             float bottom = Math.Min(chestY, -0.18f * Size) - 0.04f * Size;
 
-            // Hands brought up to the chest or face widen the shot to show the gesture.
+            // Hands raised to the chest or face widen the shot.
             foreach (int i in Arms)
             {
                 var p = world[i].Translation;
@@ -203,7 +194,7 @@ public sealed class SpeakerCamera
                 bottom = Math.Min(bottom, f.Y - 0.04f * Size);
             }
 
-            // Back from the flat frame to the world: the middle of the region.
+            // Back to world space at the middle of the region.
             float midX = (left + right) / 2, midY = (top + bottom) / 2;
             var target = faceCenter + new Vector3(midX * cos, midY, midX * sin);
             return new SpeakerShot(target, top - bottom, right - left, yaw);

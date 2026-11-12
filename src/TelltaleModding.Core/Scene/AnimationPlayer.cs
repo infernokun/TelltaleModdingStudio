@@ -4,13 +4,8 @@ using TelltaleModding.Core.Meshes;
 namespace TelltaleModding.Core.Scene;
 
 /// <summary>
-/// Poses a skeleton from one animation clip and skins a model with it. Handles the
-/// clip encodings: keyframed transform tracks, uncompressed skeleton poses (Michonne),
-/// compressed pose keys (GoT / Tales from the Borderlands era) and compressed pose keys 2
-/// (Definitive Series).
-/// The clip plays on its own over the rest pose: the engine's runtime IK, layering of
-/// several clips and root motion (the mover node) are not reproduced, so foot-planted or
-/// layered clips can differ from the game.
+/// Poses a skeleton from one animation clip and skins a model with it. The clip plays on
+/// its own over the rest pose, without the engine's IK, layering or root motion.
 /// </summary>
 public sealed class AnimationPlayer
 {
@@ -32,8 +27,7 @@ public sealed class AnimationPlayer
         _skeleton = skeleton;
         Geometry = geometry;
 
-        // How each bone maps a compressed-pose translation to its local offset (bone length
-        // and retarget rotation); the engine works these out once when a skeleton loads.
+        // Bone length and retarget rotation for mapping compressed-pose translations.
         foreach (var bone in skeleton.Bones)
             _translationFrames.TryAdd(bone.JointSymbol, CspkDecoder.TranslationFrame(bone));
     }
@@ -48,10 +42,8 @@ public sealed class AnimationPlayer
     public string ClipDescription { get; private set; } = "";
 
     /// <summary>
-    /// Loads a clip, replacing the previous one. <paramref name="name"/> is the clip's
-    /// file name: compressed pose v2 clips named "_add" layer onto the rest pose (the name
-    /// is the only marker read for them so far); compressed pose clips carry their own
-    /// additive flag.
+    /// Loads a clip, replacing the previous one. <paramref name="name"/> is the clip's file
+    /// name: compressed pose v2 clips ending in "_add" are treated as additive.
     /// </summary>
     public void Load(AnimationFile clip, string name)
     {
@@ -62,7 +54,7 @@ public sealed class AnimationPlayer
 
         bool cspkAdditive = clip.Channels.Any(c => c.TypeHash == KnownAnimationTypes.CompressedSkeletonPoseKeys
                                                    && (c.Flags & CspkDecoder.AdditiveFlag) != 0);
-        // An uncompressed skeleton pose holds the same values compressed pose keys decode to.
+        // An uncompressed skeleton pose holds the same values as compressed pose keys.
         _cspk = clip.SkeletonPose ?? (clip.PoseKeysPayload is { } blob ? CspkDecoder.TryDecode(blob, cspkAdditive) : null);
         _cspkBoneIndex = _cspk is null ? null : IndexBySymbol(_cspk.BoneSymbols);
 
@@ -94,7 +86,7 @@ public sealed class AnimationPlayer
         return index;
     }
 
-    // Built on first use: a player that only samples bones (layered under another) never skins.
+    // Built on first use, since a player that only samples bones never skins.
     private MeshSkinner Skinner => _skinner ??= new MeshSkinner(Geometry, _skeleton);
 
     /// <summary>Skins the model at <paramref name="time"/> seconds into the outputs.</summary>
@@ -149,11 +141,8 @@ public sealed class AnimationPlayer
     }
 
     /// <summary>
-    /// A bone's local transform from a compressed-pose-era value, the way the engine applies
-    /// one: a normal value replaces the bone's rotation and (bone-length space) translation; an
-    /// additive one layers onto the rest pose (translation added in the rest frame, rotation
-    /// composed after the rest rotation). The translation then maps to a local offset through
-    /// the bone's length and retarget rotation.
+    /// A bone's local transform from a compressed-pose-era value. Normal values replace the
+    /// rest transform; additive ones layer onto it.
     /// </summary>
     private (Vector3 Pos, Quaternion Rot) EngineLocal(SkeletonBone bone, Vector3 translation, Quaternion rotation, bool additive)
     {

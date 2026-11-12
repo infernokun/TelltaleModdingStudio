@@ -4,12 +4,12 @@ using System.Text.RegularExpressions;
 namespace TelltaleModding.Core.Archives;
 
 /// <summary>One file recorded inside an archive's table of contents.</summary>
-/// <param name="Name">The stored file name (may include a relative path).</param>
+/// <param name="Name">The stored file name, which may include a relative path.</param>
 /// <param name="Offset">Byte offset reported by ttarchext.</param>
 /// <param name="Size">Uncompressed size in bytes.</param>
 public sealed record ArchiveFileEntry(string Name, long Offset, long Size)
 {
-    /// <summary>File extension including the dot, lowercased (empty if none).</summary>
+    /// <summary>Lowercased file extension with the dot, or empty.</summary>
     public string Extension => Path.GetExtension(Name).ToLowerInvariant();
 
     /// <summary>Coarse category derived from the extension.</summary>
@@ -17,10 +17,8 @@ public sealed record ArchiveFileEntry(string Name, long Offset, long Size)
 }
 
 /// <summary>
-/// The parsed result of a ttarchext listing (<c>-l</c>). Each file line ttarchext
-/// prints has the shape <c>"  {offset:x8} {size,-10} {name}"</c>; everything else
-/// (status lines beginning with <c>- </c>, verbose <c>offset/size/name</c> dumps) is
-/// ignored.
+/// A parsed ttarchext listing (<c>-l</c>). File lines look like
+/// <c>"  {offset:x8} {size,-10} {name}"</c> and all other lines are ignored.
 /// </summary>
 public sealed class ArchiveListing
 {

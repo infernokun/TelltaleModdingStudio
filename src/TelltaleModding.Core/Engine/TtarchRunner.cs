@@ -3,26 +3,21 @@ using TelltaleModding.Core.Archives;
 
 namespace TelltaleModding.Core.Engine;
 
-/// <summary>
-/// Async, cancellable wrapper around the ttarchext executable. Streams stdout and
-/// stderr line-by-line through an optional <see cref="IProgress{T}"/> and returns the
-/// full captured output. This replaces the legacy synchronous, UI-blocking,
-/// stderr-dropping, unquoted-argument invocation.
-/// </summary>
+/// <summary>Runs ttarchext asynchronously and reports its output line by line.</summary>
 public sealed class TtarchRunner
 {
     private readonly string _enginePath;
 
-    /// <summary>Creates a runner, locating the engine automatically if no path is given.</summary>
+    /// <summary>Creates a runner. Finds the engine itself if no path is given.</summary>
     public TtarchRunner(string? enginePath = null)
     {
         _enginePath = enginePath ?? EngineLocator.Locate();
     }
 
-    /// <summary>Full path to the ttarchext executable this runner drives.</summary>
+    /// <summary>Full path to the ttarchext executable.</summary>
     public string EnginePath => _enginePath;
 
-    /// <summary>Lists an archive's contents without extracting, returning parsed entries.</summary>
+    /// <summary>Lists an archive's contents without extracting.</summary>
     public async Task<ArchiveListing> ListAsync(
         int gameNum, string archivePath,
         ExtractOptions? options = null,
@@ -30,7 +25,7 @@ public sealed class TtarchRunner
         CancellationToken cancellationToken = default)
     {
         var opts = (options ?? new ExtractOptions()) with { ListOnly = true };
-        // ttarchext still wants an output-folder argument even for listing; "." is fine.
+        // ttarchext wants an output folder even when listing.
         var args = TtarchArguments.Extract(gameNum, archivePath, ".", opts);
         var result = await RunAsync(args, progress, cancellationToken).ConfigureAwait(false);
         return ArchiveListing.Parse(result.Output);
@@ -59,7 +54,7 @@ public sealed class TtarchRunner
         return RunAsync(args, progress, cancellationToken);
     }
 
-    /// <summary>Runs the engine with an explicit argument vector.</summary>
+    /// <summary>Runs the engine with the given arguments.</summary>
     public async Task<TtarchResult> RunAsync(
         IReadOnlyList<string> args,
         IProgress<string>? progress = null,
@@ -131,7 +126,7 @@ public sealed class TtarchRunner
         }
         catch
         {
-            // Best effort: the process may have exited between the check and the kill.
+            // It may have exited between the check and the kill.
         }
     }
 }

@@ -4,16 +4,12 @@ using TelltaleModding.Core.Meta;
 
 namespace TelltaleModding.Core.Scene;
 
-/// <summary>
-/// A serialized PropertySet (a <c>.prop</c> file or an agent's set inside a <c>.scene</c>)
-/// with values looked up by key symbol.
-/// </summary>
+/// <summary>A serialized PropertySet with values looked up by key symbol.</summary>
 /// <remarks>
-/// Layout (MSV5/MSV6): <c>u32 version (1|2), u32 flags</c>, then for version 2 one block
+/// Layout: <c>u32 version (1|2), u32 flags</c>, then for version 2 one block
 /// <c>[u32 size, u32 parentCount, Symbol parents…, u32 typeCount, { Symbol type, u32 count,
-/// { Symbol key, value }… }…]</c>; version 1 splits the parents and the typed values into two
-/// blocks. Values are serialized by type, so instead of walking every type the reader finds a
-/// key's symbol and decodes the value that follows it as the caller's expected type.
+/// { Symbol key, value }… }…]</c>; version 1 splits parents and values into two blocks.
+/// Rather than walk every type, the reader finds a key's symbol and decodes the value after it.
 /// </remarks>
 public sealed class ScenePropertySet
 {
@@ -28,13 +24,13 @@ public sealed class ScenePropertySet
         Parents = parents;
     }
 
-    /// <summary>Symbols of the parent property sets (<c>.prop</c> file names), in stored order.</summary>
+    /// <summary>Symbols of the parent property sets, in stored order.</summary>
     public IReadOnlyList<ulong> Parents { get; }
 
     /// <summary>Size of the serialized values, in bytes.</summary>
     public int Length => _end - _valuesStart;
 
-    /// <summary>An empty set (no parents, no values).</summary>
+    /// <summary>An empty set.</summary>
     public static ScenePropertySet Empty { get; } = new(Array.Empty<byte>(), 0, 0, Array.Empty<ulong>());
 
     /// <summary>Parses a <c>.prop</c> file's bytes (with or without a meta stream header). Null if it isn't a PropertySet.</summary>
@@ -127,7 +123,7 @@ public sealed class ScenePropertySet
         return at < 0 ? null : NormalizedOrNull(ReadQuaternion(_data, at));
     }
 
-    /// <summary>A <c>Symbol</c> or <c>Handle&lt;T&gt;</c> value (the file-name symbol); null when absent or empty.</summary>
+    /// <summary>A <c>Symbol</c> or <c>Handle&lt;T&gt;</c> value; null when absent or empty.</summary>
     public ulong? GetSymbol(ulong key)
     {
         int at = Find(key, 8);
@@ -138,9 +134,8 @@ public sealed class ScenePropertySet
     }
 
     /// <summary>
-    /// A <c>DCArray</c> of symbols or handles: <c>u32 count</c> followed by the elements, with or
-    /// without a leading block size (which also gives the element stride; older games write
-    /// each handle as name and type symbols).
+    /// A <c>DCArray</c> of symbols or handles: <c>u32 count</c> then the elements, with or without
+    /// a leading block size that gives the stride (older games write 16-byte handles).
     /// </summary>
     public IReadOnlyList<ulong>? GetSymbolList(ulong key)
     {
@@ -173,8 +168,8 @@ public sealed class ScenePropertySet
     }
 
     /// <summary>
-    /// A <c>LocationInfo</c> value: the agent and node it is attached to and its initial local
-    /// transform (<c>String, Symbol, Transform { Quaternion, Vector3 }</c>, members blocked).
+    /// A <c>LocationInfo</c> value: <c>String agent, Symbol node, Transform { Quaternion, Vector3 }</c>,
+    /// members blocked.
     /// </summary>
     public SceneLocation? GetLocationInfo(ulong key)
     {
@@ -197,10 +192,7 @@ public sealed class ScenePropertySet
         return new SceneLocation(agent!, node, position, rotation);
     }
 
-    /// <summary>
-    /// Finds where a key's value starts: the first occurrence of the key's symbol followed
-    /// by at least <paramref name="valueSize"/> bytes. -1 when absent.
-    /// </summary>
+    /// <summary>Where a key's value starts, with at least <paramref name="valueSize"/> bytes after it; -1 when absent.</summary>
     private int Find(ulong key, int valueSize = 0)
     {
         if (key == 0)
@@ -276,7 +268,7 @@ public sealed class ScenePropertySet
     internal static ulong U64(byte[] d, int at) => BinaryPrimitives.ReadUInt64LittleEndian(d.AsSpan(at));
 }
 
-/// <summary>Where an agent starts: the agent (and node) it is attached to and its transform relative to that.</summary>
+/// <summary>Where an agent starts, relative to what it is attached to.</summary>
 /// <param name="AttachedAgent">Parent agent name; empty when not attached.</param>
-/// <param name="AttachedNode">Symbol of the parent's skeleton node it rides on; 0 for the agent itself.</param>
+/// <param name="AttachedNode">Symbol of the parent's skeleton node it is attached to; 0 for the origin.</param>
 public readonly record struct SceneLocation(string AttachedAgent, ulong AttachedNode, Vector3 Position, Quaternion Rotation);

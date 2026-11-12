@@ -4,8 +4,7 @@ namespace TelltaleModding.Core.Tests;
 
 public class ArchiveListingTests
 {
-    // Representative ttarchext -l output: status lines, a verbose dump, and file lines
-    // in the "  {offset:x8} {size,-10} {name}" format.
+    // Sample ttarchext -l output with status lines, a verbose dump and file lines.
     private static readonly string[] SampleOutput =
     {
         "",

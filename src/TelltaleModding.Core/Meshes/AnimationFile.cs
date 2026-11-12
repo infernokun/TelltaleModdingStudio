@@ -10,7 +10,7 @@ public readonly record struct TransformKey(float Time, Quaternion Rotation, Vect
 /// <summary>An uncompressed per-bone transform track (KeyframedValue&lt;Transform&gt;).</summary>
 public sealed record TransformTrack(ulong BoneSymbol, uint Flags, IReadOnlyList<TransformKey> Keys)
 {
-    /// <summary>Samples the track at a time with linear/slerp interpolation.</summary>
+    /// <summary>Samples the track at a time.</summary>
     public (Quaternion Rotation, Vector3 Translation) Sample(float time)
     {
         if (Keys.Count == 0)
@@ -31,13 +31,13 @@ public sealed record TransformTrack(ulong BoneSymbol, uint Flags, IReadOnlyList<
     }
 }
 
-/// <summary>One animated channel: what kind of value it drives and which target/bone.</summary>
+/// <summary>One animated channel: its value type and target.</summary>
 public readonly record struct AnimationChannel(ulong TypeHash, ulong TargetSymbol, uint Flags)
 {
     public string? TypeName => KnownAnimationTypes.Resolve(TypeHash);
 }
 
-/// <summary>Known animation value-interface types of the GoT/TFTB era.</summary>
+/// <summary>Known animation value types.</summary>
 public static class KnownAnimationTypes
 {
     public static readonly ulong CompressedSkeletonPoseKeys = TelltaleCrc64.HashSymbol("CompressedSkeletonPoseKeys");
@@ -45,10 +45,7 @@ public static class KnownAnimationTypes
     public static readonly ulong KeyframedTransform = TelltaleCrc64.HashSymbol("KeyframedValue<Transform>");
     public static readonly ulong SkeletonPoseValue = TelltaleCrc64.HashSymbol("SkeletonPoseValue");
 
-    /// <summary>
-    /// Wire size of a KeyframedValue&lt;T&gt;'s min/max values: positive = raw bytes
-    /// (intrinsic types), -1 = block-prefixed (Transform, String).
-    /// </summary>
+    /// <summary>Byte size of a KeyframedValue&lt;T&gt;'s min/max values, or -1 when block-prefixed.</summary>
     private static readonly Dictionary<ulong, int> KfvValueSizes = new (string Name, int Size)[]
     {
         ("KeyframedValue<Transform>", -1), ("KeyframedValue<String>", -1), ("KeyframedValue<PhonemeKey>", -1),
@@ -59,7 +56,7 @@ public static class KnownAnimationTypes
         ("KeyframedValue<Vector2>", 8),
     }.ToDictionary(t => TelltaleCrc64.HashSymbol(t.Name), t => t.Size);
 
-    /// <summary>True for any KeyframedValue&lt;T&gt; type we know how to walk.</summary>
+    /// <summary>True for any KeyframedValue&lt;T&gt; type we can skip over.</summary>
     public static bool IsKeyframedValue(ulong hash) => KfvValueSizes.ContainsKey(hash);
 
     /// <summary>Raw min/max value size for a KfV type, or -1 when block-prefixed.</summary>
@@ -77,14 +74,8 @@ public static class KnownAnimationTypes
 }
 
 /// <summary>
-/// A parsed Telltale .anm animation container (version 4/5, GoT / TFTB era).
-/// Parses the channel table and per-channel target symbols; channel payloads are
-/// kept raw (the compressed pose bit-stream is not decoded here).
-///
-/// Layout from TelltaleToolLib's Animation serializer, validated against a full
-/// game's animations. Skeletal animations carry one CompressedSkeletonPoseKeys
-/// channel whose payload embeds the rig's bone symbols; <see cref="FindBoneSymbols"/>
-/// recovers them for skeleton matching.
+/// A parsed Telltale .anm animation (version 4 or 5). Reads the channel table and targets;
+/// compressed pose payloads are kept raw.
 /// </summary>
 public sealed class AnimationFile
 {
@@ -97,41 +88,27 @@ public sealed class AnimationFile
     /// <summary>Raw payload of the CompressedSkeletonPoseKeys channel, if present.</summary>
     public byte[]? PoseKeysPayload { get; private init; }
 
-    /// <summary>
-    /// Raw payload of the CompressedSkeletonPoseKeys2 channel (The Walking Dead: The Telltale
-    /// Definitive Series and later), if present. Decode with <see cref="Cspk2Decoder"/>.
-    /// </summary>
+    /// <summary>Raw payload of the CompressedSkeletonPoseKeys2 channel, if present. See <see cref="Cspk2Decoder"/>.</summary>
     public byte[]? PoseKeys2Payload { get; private init; }
 
-    /// <summary>Decoded uncompressed transform tracks (KeyframedValue&lt;Transform&gt; channels).</summary>
+    /// <summary>Uncompressed transform tracks.</summary>
     public IReadOnlyList<TransformTrack> TransformTracks { get; private init; } = Array.Empty<TransformTrack>();
 
-    /// <summary>
-    /// The uncompressed skeleton pose channel (SkeletonPoseValue: nearly every clip of The
-    /// Walking Dead: Michonne, a few of Game of Thrones), in the form compressed pose keys
-    /// decode to: per-bone local rotations and bone-length space translations at each sample.
-    /// </summary>
+    /// <summary>The uncompressed SkeletonPoseValue channel, in the same form compressed pose keys decode to.</summary>
     public CspkClip? SkeletonPose { get; private init; }
 
     /// <summary>False when an unknown channel type stopped body parsing early.</summary>
     public bool BodiesFullyParsed { get; private init; }
 
-    /// <summary>True if this animation drives a skeleton (has a pose-keys channel).</summary>
+    /// <summary>True if this animation drives a skeleton.</summary>
     public bool IsSkeletal => PoseKeysPayload is not null || PoseKeys2Payload is not null || SkeletonPose is not null;
 
-    /// <summary>
-    /// True when some bone's rotation or translation changes over the clip; false for a clip
-    /// that holds one pose throughout. Facial phoneme poses are held poses by design, but so
-    /// are many of The Wolf Among Us' episode 2-5 re-exports of episode 1 gesture clips
-    /// (bigby_headGesture_nodYes and others): their pose keys keep only the original's first
-    /// frame, so the motion survives only in the overridden episode 1 copy.
-    /// </summary>
+    /// <summary>True when some bone moves over the clip, false when it holds one pose.</summary>
     public bool HasMotion => _hasMotion ??= ComputeHasMotion();
 
     private bool? _hasMotion;
 
-    // Below these a change is quantization noise: a held pose decodes to drift of a few
-    // hundredths of a degree.
+    // Anything smaller is quantization noise.
     private const float MotionAngleDegrees = 0.25f;
     private const float MotionTranslation = 1e-3f;
 
@@ -197,7 +174,7 @@ public sealed class AnimationFile
             return false;
         if (meta!.Classes.Count == 0 || meta.Classes[0].TypeName is not ("Animation" or null))
         {
-            // Class 0 of .anm files hashes "Animation"; unknown name = fail soft below.
+            // Unknown class name: let the parse below decide.
         }
 
         try
@@ -280,9 +257,7 @@ public sealed class AnimationFile
             }
         }
 
-        // Channel bodies, sequential in type-table order. KeyframedValue<T> bodies are
-        // self-describing (block-prefixed header/min/max/sample-array), so unknown T
-        // skips cleanly; genuinely unknown types stop parsing (container info survives).
+        // Channel bodies in type-table order. Unknown types stop parsing.
         byte[]? poseBlob = null, pose2Blob = null;
         CspkClip? skeletonPose = null;
         var tracks = new List<TransformTrack>();
@@ -317,8 +292,7 @@ public sealed class AnimationFile
                 }
                 else if (KnownAnimationTypes.IsKeyframedValue(hash) && pose2Blob is not null)
                 {
-                    // Files with CompressedSkeletonPoseKeys2 are a newer container whose
-                    // KeyframedValue bodies are laid out differently; not read yet.
+                    // KeyframedValue bodies use a different layout in these files. Not read yet.
                     fullyParsed = false;
                 }
                 else if (KnownAnimationTypes.IsKeyframedValue(hash))
@@ -329,7 +303,7 @@ public sealed class AnimationFile
                     ulong boneSymbol = BinaryPrimitives.ReadUInt64LittleEndian(file.AsSpan(off + 4));
                     uint chFlags = BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(off + 12));
                     off = headerEnd;
-                    // min/max values: intrinsic types are raw; Transform/String are blocked.
+                    // Min/max values.
                     int valueSize = KnownAnimationTypes.KeyframedValueSize(hash);
                     for (int m = 0; m < 2; m++)
                     {
@@ -366,12 +340,12 @@ public sealed class AnimationFile
                     }
                     else
                     {
-                        off = arrayEnd;               // other KfV<T>: skip whole sample array
+                        off = arrayEnd;               // skip other types
                     }
                 }
                 else
                 {
-                    fullyParsed = false;              // unknown body layout; stop safely
+                    fullyParsed = false;              // unknown layout
                 }
             }
         }
@@ -392,7 +366,7 @@ public sealed class AnimationFile
         };
     }
 
-    // A SkeletonPoseValue body, each part in a block that starts with its size:
+    // A SkeletonPoseValue body, each part in a size-prefixed block:
     //   [16: u64 symbol, u32 flags (0x10000 = additive)]
     //   [bones: u32 count, count x (u64 bone symbol, u32 flags)]
     //   [samples: u32 count, count x (f32 time, f32 1 / time to the next sample,
@@ -464,12 +438,8 @@ public sealed class AnimationFile
     }
 
     /// <summary>
-    /// Cheaply decides whether an .anm on disk drives any of the given joints,
-    /// without reading or parsing the whole file: the container header, type
-    /// table, and (when present) the leading pose-keys bone table all sit near
-    /// the start, and the channel-target symbol trailer is at a computable
-    /// offset. Two small reads replace a full parse. Returns the match and the
-    /// animation length, or null when the file needs a full <see cref="TryLoad"/>.
+    /// Quickly checks whether an .anm on disk drives any of the given joints, using two small
+    /// reads instead of a full parse. Returns null when the file needs <see cref="TryLoad"/>.
     /// </summary>
     public static (bool Matches, float Length)? ProbeSkeletonMatch(string path, IReadOnlySet<ulong> joints)
     {
@@ -505,8 +475,7 @@ public sealed class AnimationFile
             ulong firstType = BinaryPrimitives.ReadUInt64LittleEndian(head.AsSpan(off));
             off += typeCount * 12;
 
-            // Pose keys v2: [u32 size][blob]; slot count at blob+76, symbol table at
-            // blob + 0x60 + the u64 at blob+80. Usually within the first read too.
+            // Pose keys v2: slot count at blob+76, symbol table at blob + 0x60 + the u64 at blob+80.
             if (firstType == KnownAnimationTypes.CompressedSkeletonPoseKeys2 && off + 4 + 88 <= head.Length)
             {
                 int blob = off + 4;
@@ -522,8 +491,7 @@ public sealed class AnimationFile
                 }
             }
 
-            // Pose-keys channels lead the body; their bone table is right here (blob + 0x80,
-            // slot count at blob + 96).
+            // Pose keys v1: slot count at blob+96, bone table at blob+0x80.
             if (firstType == KnownAnimationTypes.CompressedSkeletonPoseKeys
                 && off + 4 <= head.Length)
             {
@@ -539,7 +507,7 @@ public sealed class AnimationFile
                             if (sym != 0 && joints.Contains(sym))
                                 return (true, length);
                         }
-                        // fall through: keyframed channels may still target the rig
+                        // Keyframed channels may still target the rig.
                     }
                     else
                     {
@@ -573,10 +541,7 @@ public sealed class AnimationFile
         }
     }
 
-    /// <summary>
-    /// Recovers bone symbols from the pose-keys payload by scanning for 8-byte values
-    /// present in <paramref name="candidates"/> (e.g. a skeleton's joint set).
-    /// </summary>
+    /// <summary>Finds which of <paramref name="candidates"/> appear in the pose payload.</summary>
     public IReadOnlySet<ulong> FindBoneSymbols(IReadOnlySet<ulong> candidates)
     {
         var found = new HashSet<ulong>();

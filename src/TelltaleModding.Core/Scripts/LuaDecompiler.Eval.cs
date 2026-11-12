@@ -21,7 +21,7 @@ internal sealed partial class FunctionDecompiler
         }
         _assignBuffer.Clear();
         var list = CollapseMulti(values);
-        // Trailing nils loaded into registers are the adjustment of a shorter value list.
+        // Trailing loaded nils just pad out a shorter value list.
         while (list.Count > 1 && ReferenceEquals(list[^1], ConstExpr.LoadedNil)) list.RemoveAt(list.Count - 1);
         _out.Add(new AssignStmt(targets, list));
     }
@@ -44,7 +44,7 @@ internal sealed partial class FunctionDecompiler
         _out.Add(new AssignStmt(new List<LuaExpr> { target }, new List<LuaExpr> { value }));
     }
 
-    /// <summary>Joins consecutive parts of one multi-result call/vararg back into the call.</summary>
+    /// <summary>Joins consecutive parts of one multi-result call or vararg back into one expression.</summary>
     private static List<LuaExpr> CollapseMulti(List<LuaExpr?> values)
     {
         var list = new List<LuaExpr>();
@@ -111,7 +111,7 @@ internal sealed partial class FunctionDecompiler
         }
         var l = _locals.At(reg, pc);
         if (l is not null) return new LocalExpr(l.Name);
-        // Registers are nil on entry; the compiler drops a leading LOADNIL.
+        // Registers start as nil, and the compiler drops a leading LOADNIL.
         if (!WrittenBefore(reg, pc)) return ConstExpr.Nil;
         throw new DecompileException($"register r{reg} is read before it is set");
     }
@@ -196,7 +196,7 @@ internal sealed partial class FunctionDecompiler
         return new CallExpr(fn, args);
     }
 
-    /// <summary>Stores <paramref name="count"/> results of one call/vararg into consecutive registers.</summary>
+    /// <summary>Stores <paramref name="count"/> results of one call or vararg into consecutive registers.</summary>
     private void WriteMulti(int first, int count, LuaExpr source, int pc)
     {
         var targets = new List<LuaExpr>();
@@ -211,9 +211,8 @@ internal sealed partial class FunctionDecompiler
     }
 
     /// <summary>
-    /// Without debug info every register is printed as one function-wide local, so a closure
-    /// made inside a loop that captures anything but a parameter or loop variable would share
-    /// a variable that was fresh per iteration in the original.
+    /// Without debug info each register becomes one function-wide local, so a closure in a loop
+    /// that captures a per-iteration local would wrongly share it.
     /// </summary>
     private bool CapturesLoopLocal(LuaFunction proto, int pc)
     {
@@ -264,7 +263,7 @@ internal sealed partial class FunctionDecompiler
         return names;
     }
 
-    /// <summary>SETLIST into a table that is a variable (not a constructor): one assignment per item.</summary>
+    /// <summary>SETLIST into a table variable rather than a constructor, as one assignment per item.</summary>
     private int SetListAsAssignments(int pc)
     {
         var i = _code[pc];

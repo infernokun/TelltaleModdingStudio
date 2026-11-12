@@ -227,7 +227,7 @@ public class FaceRigTests
         var animation = root.GetProperty("animations")[0];
         Assert.Equal("face pose", animation.GetProperty("name").GetString());
         Assert.Equal(model.Skeleton.Bones.Count * 2, animation.GetProperty("channels").GetArrayLength());
-        // One key per channel (read out first: a failure message must not touch the disposed document).
+        // One key per channel.
         var keyCounts = animation.GetProperty("samplers").EnumerateArray()
             .Select(s => root.GetProperty("accessors")[s.GetProperty("input").GetInt32()].GetProperty("count").GetInt32())
             .ToList();

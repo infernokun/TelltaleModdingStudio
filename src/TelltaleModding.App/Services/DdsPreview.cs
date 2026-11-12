@@ -8,10 +8,7 @@ namespace TelltaleModding.App.Services;
 /// <summary>Turns a decoded <see cref="DdsImage"/> into an Avalonia bitmap for display.</summary>
 public static class DdsPreview
 {
-    /// <summary>
-    /// Attempts to load a DDS file into a bitmap. Returns null (with a reason) for
-    /// formats the decoder does not support.
-    /// </summary>
+    /// <summary>Loads a DDS file into a bitmap, or returns an error.</summary>
     public static (Bitmap? Bitmap, string? Error) TryLoad(string path)
     {
         byte[] bytes;

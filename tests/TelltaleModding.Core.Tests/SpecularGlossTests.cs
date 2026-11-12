@@ -7,9 +7,7 @@ using TelltaleModding.Core.Textures;
 namespace TelltaleModding.Core.Tests;
 
 /// <summary>
-/// The Definitive Series' earlier-season specular maps keep their gloss in alpha. Read as color
-/// intensity alone, Clementine 203's dull clothes (gloss 0.09) got a sharp highlight that looked
-/// like plastic.
+/// Earlier Definitive Series seasons keep specular gloss in the map's alpha.
 /// </summary>
 public class SpecularGlossTests
 {
@@ -38,7 +36,7 @@ public class SpecularGlossTests
         using var catalog = await Open(DefinitiveSeries);
         var clothes = Decode(catalog, "sk56_clementine200_body_spec.d3dtx");
         Assert.Equal(SpecularMapLayout.ColorGloss, ModelAssembler.ClassifySpecularMap(clothes));
-        // A flat, dull map: intensity about 0.21 and gloss about 0.09.
+        // A flat, dull map with gloss around 0.09.
         double gloss = 0;
         int n = 0;
         for (int i = 3; i < clothes.Rgba.Length; i += 4 * 17, n++)

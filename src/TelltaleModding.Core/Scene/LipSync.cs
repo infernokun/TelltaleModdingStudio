@@ -6,11 +6,7 @@ using TelltaleModding.Core.Meta;
 
 namespace TelltaleModding.Core.Scene;
 
-/// <summary>
-/// One mouth shape in a voice line's lip-sync track: the phoneme (a symbol of its name,
-/// e.g. <c>AA</c>) eases in from <see cref="Time"/>, holds, eases out, at up to
-/// <see cref="Contribution"/> strength.
-/// </summary>
+/// <summary>One mouth shape in a voice line's lip-sync track: it eases in at <see cref="Time"/>, holds, then eases out.</summary>
 public readonly record struct PhonemeKey(float Time, ulong Phoneme, float FadeIn, float Hold, float FadeOut, float Contribution)
 {
     /// <summary>The key's strength at <paramref name="t"/> seconds into the line.</summary>
@@ -33,8 +29,7 @@ public readonly record struct PhonemeKey(float Time, ulong Phoneme, float FadeIn
 }
 
 /// <summary>
-/// Reads the phoneme track of a voice line's lip-sync clip (<c>&lt;line id&gt;.anm</c>,
-/// a <c>KeyframedValue&lt;PhonemeKey&gt;</c> channel). Each sample is a time, an
+/// Reads the phoneme track of a voice line's lip-sync clip. Each sample is a time, an
 /// interpolation flag, a tangent mode and a 28-byte key block (size, phoneme symbol,
 /// fade in, hold, fade out, contribution).
 /// </summary>
@@ -73,30 +68,21 @@ public static class PhonemeTrack
 }
 
 /// <summary>
-/// A character's mouth shapes: one single-frame pose clip per phoneme
-/// (<c>rhys_phoneme_AA.anm</c>, or a mood variant such as <c>rhys_phoneme_AA_smugA.anm</c>)
-/// and optional facial expressions (<c>rhys_phonemes_smugA.anm</c>). Some characters only
-/// have mood sets (Louis, Paige), and in The Walking Dead: The Telltale Definitive Series
-/// one name can hold sets for two face rigs (Lilly's neutral set is Season 1's, her moods
-/// Season 4's), so a set is only of use if its clips drive the model's skeleton.
+/// A character's mouth shapes: one single-frame pose clip per phoneme, plus optional mood
+/// variants. One name can hold sets for two face rigs, so a set only counts if its clips
+/// drive the model's skeleton.
 /// </summary>
 public static partial class PhonemePoses
 {
-    /// <summary>The phoneme names the games use (AH and SS from Season 3 of The Walking Dead on).</summary>
+    /// <summary>The phoneme names the games use.</summary>
     public static readonly IReadOnlyList<string> Phonemes =
         new[] { "default", "AA", "AH", "EE", "FV", "I", "LL", "MM", "NN", "O", "SH", "SS", "TH", "U" };
 
-    /// <summary>
-    /// The prefixes that have phoneme clips among <paramref name="fileNames"/>
-    /// (<c>rhys</c> for <c>rhys_phoneme_AA.anm</c> or <c>rhys_phoneme_AA_smugA.anm</c>).
-    /// </summary>
+    /// <summary>The prefixes that have phoneme clips among <paramref name="fileNames"/>.</summary>
     public static IReadOnlySet<string> Prefixes(IEnumerable<string> fileNames) =>
         new HashSet<string>(Sets(fileNames).Keys, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Each prefix's sets of mouth poses among <paramref name="fileNames"/>: null for its
-    /// neutral set (<c>rhys_phoneme_AA.anm</c>), otherwise the mood (<c>smugA</c>).
-    /// </summary>
+    /// <summary>Each prefix's mouth pose sets among <paramref name="fileNames"/>, by mood (null for neutral).</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string?>> Sets(IEnumerable<string> fileNames)
     {
         var sets = new Dictionary<string, List<string?>>(StringComparer.OrdinalIgnoreCase);
@@ -114,13 +100,12 @@ public static partial class PhonemePoses
         return sets.ToDictionary(s => s.Key, s => (IReadOnlyList<string?>)s.Value, StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>The clip that tells a set's face rig: its open mouth (<c>rhys_phoneme_AA_smugA.anm</c>).</summary>
+    /// <summary>The clip used to tell a set's face rig: its open mouth.</summary>
     public static string ProbeClip(string prefix, string? mood) => ClipName(prefix, "AA", mood);
 
     /// <summary>
-    /// The set to lip-sync with: the first of <paramref name="prefixes"/> (best first) with a
-    /// set that drives the skeleton, and of its sets the one that drives the most bones,
-    /// preferring the neutral set, then a "normal" mood. Null when none fits.
+    /// The set to lip-sync with: the first prefix with a set that drives the skeleton, and its
+    /// set that drives the most bones, preferring calm moods. Null when none fits.
     /// </summary>
     /// <param name="bonesDriven">How many of the skeleton's bones a pose clip drives (0 when it is missing).</param>
     public static (string Prefix, string? Mood)? ChooseSet(IEnumerable<string> prefixes,
@@ -144,9 +129,8 @@ public static partial class PhonemePoses
     }
 
     /// <summary>
-    /// The pose clip file name for each phoneme of <paramref name="prefix"/> in the mood
-    /// <paramref name="mood"/>, falling back per phoneme to the set <paramref name="baseMood"/>
-    /// (null for the neutral set).
+    /// The pose clip file name for each phoneme in <paramref name="mood"/>, falling back per
+    /// phoneme to <paramref name="baseMood"/> (null for neutral).
     /// </summary>
     public static Dictionary<ulong, string> ClipNames(string prefix, string? mood, Func<string, bool> exists, string? baseMood = null)
     {
@@ -162,8 +146,7 @@ public static partial class PhonemePoses
         return clips;
     }
 
-    // Moods from calm to strained, for characters without a neutral set: Bonnie's sets are
-    // fear, happy, pain and surprise, and a fearful mouth gapes on every line.
+    // Moods from calm to strained, so characters without a neutral set don't gape on every line.
     private static readonly string[] CalmMoods = { "normal", "neutral", "think", "happy", "smug", "sad", "worr", "stern" };
     private static readonly string[] StrainedMoods = { "fear", "pain", "surprise", "shock", "angry", "shout", "crazy", "dying" };
 
@@ -185,11 +168,8 @@ public static partial class PhonemePoses
 }
 
 /// <summary>
-/// Animates a talking character: an optional body clip loops underneath, an optional
-/// expression clip sets the face, an optional chore performance plays the line's body
-/// language from the game over that, and the line's phoneme keys blend the mouth between
-/// the character's phoneme poses (the <c>default</c> pose is the closed mouth they
-/// blend from).
+/// Animates a talking character: optional idle, expression and chore performance, with the
+/// line's phoneme keys blending the mouth from the closed <c>default</c> pose.
 /// </summary>
 public sealed class LipSyncPlayer
 {
@@ -205,7 +185,7 @@ public sealed class LipSyncPlayer
     private readonly float _performanceStart;
     private IReadOnlyList<PhonemeKey> _keys = Array.Empty<PhonemeKey>();
 
-    /// <param name="poses">Phoneme symbol → its single-frame pose clip.</param>
+    /// <param name="poses">Single-frame pose clips by phoneme symbol.</param>
     /// <param name="expression">A facial expression clip, sampled at its first frame.</param>
     /// <param name="body">A body clip (idle) that loops under the face.</param>
     /// <param name="performance">The line's chore performance, layered over the idle and expression.</param>
@@ -241,10 +221,8 @@ public sealed class LipSyncPlayer
     public SkeletonFile Skeleton => _skeleton;
 
     /// <summary>
-    /// How far the performance has moved the character <paramref name="time"/> seconds into the
-    /// line, which <see cref="Pose"/> leaves out to keep them in frame: the change from the root
-    /// bone's rest transform to where the chore's clips put it, in the model's space
-    /// (row-vector convention: a point posed here is at <c>p · RootMotion</c> in the game).
+    /// How far the performance has moved the character at <paramref name="time"/>, which
+    /// <see cref="Pose"/> leaves out. Row-vector convention: a posed point is at <c>p · RootMotion</c>.
     /// </summary>
     public Matrix4x4 RootMotion(float time)
     {
@@ -273,7 +251,7 @@ public sealed class LipSyncPlayer
     /// <summary>World transforms of every bone at <paramref name="time"/> seconds into the line.</summary>
     public Matrix4x4[] Pose(float time)
     {
-        // Phoneme weights at this instant; whatever the keys leave over goes to the closed mouth.
+        // Phoneme weights now; whatever is left goes to the closed mouth.
         var weights = new Dictionary<ulong, float>();
         float total = 0;
         foreach (var key in _keys)
@@ -304,7 +282,6 @@ public sealed class LipSyncPlayer
             if (_poses.TryGetValue(DefaultPhoneme, out var closed) && closed.TryGetValue(bone.JointSymbol, out var rest))
                 local = rest;
 
-            // Blend toward each active mouth shape in turn, weighted by its share.
             float applied = 0;
             foreach (var (phoneme, w) in weights)
             {

@@ -21,8 +21,7 @@
     <InternalsVisibleTo Include="TelltaleModding.Core.Tests" />
   </ItemGroup>
 
-  <!-- The Linux Oodle loader, when it has been built (make -C engine/oodle). It stays a
-       separate file next to the app, also in a single-file publish. -->
+  <!-- Linux Oodle loader, if it has been built. Stays a separate file even in a single-file publish. -->
   <ItemGroup Condition="Exists('..\..\engine\oodle\libtelltale_oodle.so')">
     <None Include="..\..\engine\oodle\libtelltale_oodle.so" Link="libtelltale_oodle.so"
           CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />

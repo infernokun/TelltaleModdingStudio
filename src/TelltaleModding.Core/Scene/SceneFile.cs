@@ -17,7 +17,7 @@ public sealed class SceneAgent
     /// <summary>Name of the agent this one is attached to, or null at the scene root.</summary>
     public string? ParentName { get; init; }
 
-    /// <summary>Symbol of the parent's skeleton node this agent rides on (0 for the parent's origin).</summary>
+    /// <summary>Symbol of the parent's skeleton node this agent is attached to (0 for the origin).</summary>
     public ulong ParentNode { get; init; }
 
     /// <summary>Start position relative to the parent.</summary>
@@ -26,7 +26,7 @@ public sealed class SceneAgent
     /// <summary>Start rotation relative to the parent.</summary>
     public Quaternion LocalRotation { get; init; } = Quaternion.Identity;
 
-    /// <summary>"Scene: Start Visibility" (true when the scene does not say).</summary>
+    /// <summary>Whether the agent starts visible (true when the scene does not say).</summary>
     public bool StartVisible { get; init; } = true;
 
     /// <summary>The parent agent, when it exists in the same scene.</summary>
@@ -38,18 +38,13 @@ public sealed class SceneAgent
     public override string ToString() => Name;
 }
 
-/// <summary>
-/// A parsed <c>.scene</c>: the agents of a location (environment meshes, props, characters,
-/// cameras, lights, walk boxes…) with their start transforms and property sets.
-/// </summary>
+/// <summary>A parsed <c>.scene</c>: the agents of a location with their start transforms and property sets.</summary>
 /// <remarks>
-/// Default section (MSV5 and MSV6 alike):
+/// Default section:
 /// <c>bool active, block(String name), block(DCArray&lt;Handle&lt;Scene&gt;&gt; referenced scenes),
-/// block(u32 count, { block(String agent name), block(PropertySet) }…)</c>, then lighting and
-/// audio data this reader ignores. An agent's transform lives in its property set: as
-/// <c>"Scene: Location Info"</c> (LocationInfo: attached agent, node, Transform) in the
-/// Definitive Series, or as separate <c>"Scene: Start Position"</c> / <c>"Scene: Start Quaterion"</c>
-/// (sic) / <c>"Scene: Attach Agent"</c> / <c>"Scene: Attach Node"</c> keys in older games.
+/// block(u32 count, { block(String agent name), block(PropertySet) }…)</c>, then data this
+/// reader ignores. Transforms are in "Scene: Location Info" in the Definitive Series, or in
+/// separate Start Position / Start Quaterion (sic) / Attach keys in older games.
 /// </remarks>
 public sealed class SceneFile
 {
@@ -66,7 +61,7 @@ public sealed class SceneFile
 
     private Dictionary<string, SceneAgent>? _byName;
 
-    /// <summary>The scene's own name (e.g. <c>adv_bellTower.scene</c>).</summary>
+    /// <summary>The scene's own name.</summary>
     public string Name { get; private init; } = "";
 
     public MetaStreamFormat Format { get; private init; }
@@ -86,10 +81,8 @@ public sealed class SceneFile
     }
 
     /// <summary>
-    /// World transform of an agent: its local transform composed down the parent chain
-    /// (row-vector convention). <paramref name="nodeOffset"/> can supply the transform of
-    /// the parent's node an agent rides on (relative to the parent), e.g. a skeleton bone
-    /// for a prop held in a hand; by default agents ride on their parent's origin.
+    /// World transform of an agent, composed down the parent chain. <paramref name="nodeOffset"/>
+    /// can supply the parent node an agent is attached to, such as a hand bone.
     /// </summary>
     public static Matrix4x4 WorldTransform(SceneAgent agent, Func<SceneAgent, Matrix4x4?>? nodeOffset = null)
     {

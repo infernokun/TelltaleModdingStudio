@@ -43,8 +43,7 @@ public class D3dtxTextureTests
         Assert.True(DdsImage.TryDecode(dds, out var image, out var error), error);
         Assert.Equal(4, image!.Width);
 
-        // The single BC1 block encodes one uniform color (dark gray, ~RGB 12,13,12);
-        // every decoded pixel must match the first, and the payload must be untouched.
+        // One block of a single dark gray, copied over unchanged.
         for (int i = 4; i < image.Rgba.Length; i += 4)
         {
             Assert.Equal(image.Rgba[0], image.Rgba[i]);
@@ -74,11 +73,11 @@ public class D3dtxTextureTests
     public void Dds_mip_chain_is_largest_first()
     {
         var tex = Load(SampleData.Sample("BanditPsychoMask_Nrm.d3dtx"));
-        // d3dtx stores smallest mip first; conversion must re-order.
+        // d3dtx stores the smallest mip first.
         Assert.Equal(tex.MipCount - 1, tex.Regions[0].MipIndex);
 
         var dds = tex.ToDds();
-        // Mip 0 of a 256×256 BC3 texture is 64×64 blocks × 16 bytes = 65536 bytes.
+        // Mip 0 of a 256x256 BC3 texture is 65536 bytes.
         var mip0 = tex.Regions.Single(r => r.MipIndex == 0);
         Assert.Equal(65536, mip0.DataSize);
         var expected = File.ReadAllBytes(SampleData.Sample("BanditPsychoMask_Nrm.d3dtx"))[^mip0.DataSize..];
@@ -108,7 +107,7 @@ public class D3dtxTextureTests
     }
 
     [SkippableTheory]
-    // The Wolf Among Us: version 4, region headers without a face index.
+    // The Wolf Among Us: version 4.
     [InlineData("sk_sharedParts_eyeBrown.d3dtx", 256, 7, T3SurfaceFormat.BC1)]
     [InlineData("sk54_bigby_head.d3dtx", 512, 8, T3SurfaceFormat.BC1)]
     // Game of Thrones: version 5.
@@ -131,8 +130,7 @@ public class D3dtxTextureTests
     [SkippableFact]
     public void Msv5_era_face_texture_decodes_to_skin_tones()
     {
-        // A misplaced mip or misread header would decode to noise; Bigby's face texture
-        // averages to a warm skin color (red > green > blue).
+        // Bigby's face should average to a warm skin color, not noise.
         var tex = Load(SampleData.Sample("sk54_bigby_head.d3dtx"));
         Assert.True(DdsImage.TryDecode(tex.ToDds(), out var image, out var error), error);
         double r = 0, g = 0, b = 0;

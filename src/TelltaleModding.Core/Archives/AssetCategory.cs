@@ -1,16 +1,13 @@
 namespace TelltaleModding.Core.Archives;
 
-/// <summary>
-/// Coarse asset grouping used to filter archive contents in the UI. Derived purely
-/// from the file extension of an entry inside a Telltale archive.
-/// </summary>
+/// <summary>Rough asset group by file extension, used to filter archive contents in the UI.</summary>
 public enum AssetCategory
 {
     Other,
     Model,      // .d3dmesh
     Skeleton,   // .skl
     Animation,  // .anm
-    Performance,// .chore / .dlog  (scene performances, incl. facial animation)
+    Performance,// .chore / .dlog
     Texture,    // .d3dtx / .dds / .font
     Audio,      // .aud / .ogg / .bank / .vox / .wav
     Script,     // .lua / .lenc

@@ -3,10 +3,10 @@ using TelltaleModding.Core.Scene;
 
 namespace TelltaleModding.App.ViewModels;
 
-/// <summary>One agent of a chore shown in the Assets preview: its name, a count of what it does, and its rows.</summary>
+/// <summary>One agent's track in the Assets chore preview.</summary>
 public sealed record ChoreTrackViewModel(string Agent, string Summary, IReadOnlyList<ChoreRowViewModel> Rows);
 
-/// <summary>One resource of a chore: when it plays, what it is, and its spans as fractions of the chore.</summary>
+/// <summary>One resource of a chore. Spans are fractions of the chore length.</summary>
 public sealed record ChoreRowViewModel(string Time, string Kind, string Name, string Detail,
     IReadOnlyList<(double Start, double End)> Spans, bool IsVoice, bool IsGesture)
 {

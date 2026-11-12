@@ -2,7 +2,7 @@ namespace TelltaleModding.Core.Archives;
 
 /// <summary>One file stored inside a game archive.</summary>
 /// <param name="ArchivePath">Full path of the archive that holds the file.</param>
-/// <param name="Name">The stored file name, e.g. <c>sk62_clementine400_head.d3dmesh</c>.</param>
+/// <param name="Name">The stored file name.</param>
 /// <param name="Size">Uncompressed size in bytes.</param>
 public sealed record ArchiveEntryRef(string ArchivePath, string Name, long Size);
 

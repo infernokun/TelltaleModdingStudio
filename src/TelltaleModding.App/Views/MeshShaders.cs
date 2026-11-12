@@ -1,18 +1,14 @@
 namespace TelltaleModding.App.Views;
 
 /// <summary>
-/// The <see cref="MeshViewport"/>'s shaders (GLSL 330 core / 300 es bodies; the version
-/// header is prepended at compile time). The scene pass shades in linear light and writes
-/// the tone-mapped color, the view-space normal and the color of the surface's outline;
-/// the post pass draws ink outlines from the depth and normal targets in that color.
+/// The <see cref="MeshViewport"/>'s shaders. The version header is added at compile time
+/// so the same bodies work for GLSL 330 core and 300 es.
 /// </summary>
 internal static class MeshShaders
 {
     /// <summary>
-    /// Skinning in the vertex shader: each vertex blends up to four bones' skinning
-    /// matrices (inverse bind × posed world, one row per texel of <c>uBones</c>) by its
-    /// weights, divided by the weight sum, as the CPU skinner does. Off (<c>uSkinned</c> 0)
-    /// the rest pose draws unchanged.
+    /// GPU skinning: blends up to four bone matrices per vertex, normalized by the weight
+    /// sum to match the CPU skinner.
     /// </summary>
     public const string Skinning = """
         in vec4 aBones;     // skeleton bone indices, -1 = none
@@ -106,7 +102,7 @@ internal static class MeshShaders
         uniform sampler2D uInkTex;
         uniform sampler2D uEmissive;
         uniform vec3 uEmissiveColor;   // linear; black = no emissive map
-        uniform vec3 uSelfLit;         // linear light the surface gives off in its own color
+        uniform vec3 uSelfLit;         // self-lit strength, in the surface's own color
         uniform float uHasTex;
         uniform int uNmapKind;      // -1 none, 0 X in blue / Y in alpha, 1 X in red / Y in green, 2 RGB
         uniform int uSpecLayout;    // 0 none, 1 color = intensity, 2 blue = gloss, alpha = intensity, red = metal, 3 color = intensity, alpha = gloss
@@ -135,17 +131,17 @@ internal static class MeshShaders
         uniform vec4 uRim;            // rim strength, rim threshold, specular threshold (0 = smooth), specular strength
         uniform vec4 uInk;            // graphic-black alpha, threshold, softness, ink line strength
         uniform vec3 uInkColor;
-        uniform float uInkAmbient;    // 1 = graphic black tests all light (a scene's rig), 0 = the key light alone (studio)
-        uniform float uInkKeyWrap;    // wrap of that key light (0 = black from the terminator on)
+        uniform float uInkAmbient;    // 1 = graphic black tests all light, 0 = key light only (studio)
+        uniform float uInkKeyWrap;    // wrap of that key light
         uniform vec3 uInkFade;        // graphic black fade start, fade end (distance from the eye), line art strength
         uniform vec3 uGrade;          // saturation, contrast
-        uniform vec3 uLineColor;      // the outline color: the material's own, otherwise the look's
+        uniform vec3 uLineColor;      // outline color
 
         layout(location = 0) out vec4 outColor;
         layout(location = 1) out vec4 outNormal;
         layout(location = 2) out vec4 outLine;
 
-        // The toon ramp: the level of the band the light falls in, edges blended by the softness.
+        // Toon ramp.
         float band(float x)
         {
             if (uBandCount == 0)
@@ -160,8 +156,7 @@ internal static class MeshShaders
             return mix(v, x, uBandShape.y);
         }
 
-        // Identity up to the shoulder, then a soft roll-off to white: lit textures keep their
-        // painted color and only highlights compress.
+        // Leaves colors alone up to the knee, then rolls off highlights.
         vec3 toneMap(vec3 c)
         {
             const float knee = 0.75;
@@ -169,16 +164,14 @@ internal static class MeshShaders
             return min(c, vec3(knee)) + (1.0 - knee) * (1.0 - exp(-over / (1.0 - knee)));
         }
 
-        // A sharp threshold at 0.5 with an edge about a pixel wide (the games' sharp-detail filter).
+        // Sharp threshold at 0.5 with a roughly one pixel edge.
         float sharpInk(float v)
         {
             float w = clamp(fwidth(v) * 1.5, 0.01, 0.5);
             return clamp((v - (0.5 - w)) / (2.0 * w), 0.0, 1.0);
         }
 
-        // The Definitive Series' ink: inked where the filtered texture passes 0.5. The game
-        // narrows its sharp-detail edge to a hundredth of a pixel and leaves the stair steps to
-        // its anti-aliasing; here the edge is one pixel wide, which keeps the same line width.
+        // Definitive Series ink: inked where the texture passes 0.5, with a one pixel edge.
         float inkCoverage(float v)
         {
             return clamp((v - 0.5) / max(fwidth(v), 1e-4) + 0.5, 0.0, 1.0);
@@ -225,9 +218,7 @@ internal static class MeshShaders
             }
             else if (uSpecLayout == 3)
             {
-                // Roughness 1 - gloss, as the game reads these maps. A rough surface's highlight
-                // is broad and dim: the lobe's sharpness and peak follow the roughness (a Blinn
-                // lobe matched to GGX: power 2 / a^2 - 2, peak 1 / (4 pi a^2), a = roughness^2).
+                // Roughness is 1 - gloss. Blinn lobe roughly matched to GGX.
                 vec4 sm = texture(uSpec, vUv);
                 float rough = 1.0 - sm.a;
                 float a2 = max(rough * rough * rough * rough, 1e-4);
@@ -238,7 +229,7 @@ internal static class MeshShaders
             float wrap = uLightModel.x;
             vec3 diffuse = vec3(0.0);
             vec3 spec = vec3(0.0);
-            vec3 keyLight = vec3(0.0);    // the key light on the smooth surface, for graphic black under the studio rig
+            vec3 keyLight = vec3(0.0);    // key light only, for studio graphic black
             for (int i = 0; i < 8; i++)
             {
                 if (i >= uLightCount)
@@ -270,12 +261,12 @@ internal static class MeshShaders
                 bool key = uLightCone[i].z > 0.999;
                 if (uLightModel.y < 0.5 || key)
                 {
-                    // A rim light keeps to the silhouette: the look's wrap would spread it over the whole side.
+                    // No wrap on rim lights so they stay on the edge.
                     float w = uLightCone[i].w > 0.5 ? 0.0 : wrap;
                     diffuse += c * band(clamp((ndl + w) / (1.0 + w), 0.0, 1.0) * att);
                 }
                 if (key)
-                    keyLight += c * max((dot(geo, L) + uInkKeyWrap) / (1.0 + uInkKeyWrap), 0.0) * att;   // shadow edges follow the shape, not the bumps
+                    keyLight += c * max((dot(geo, L) + uInkKeyWrap) / (1.0 + uInkKeyWrap), 0.0) * att;   // uses the geometry normal, not the normal map
                 vec3 H = normalize(L + V);
                 float s = pow(max(dot(n, H), 0.0), power) * max(ndl, 0.0) * att;
                 if (uRim.z > 0.0)
@@ -286,14 +277,14 @@ internal static class MeshShaders
             vec3 baked = vec3(0.0);
             if (lightmapped)
             {
-                // Baked lighting replaces ambient (and the lights it already holds).
+                // Baked lighting replaces ambient.
                 baked = texture(uLightmap, vUv2).rgb * uLightmapScale;
                 ambient = baked;
             }
 
             if (uInkKind == 2)
             {
-                // Line art: ink where the value falls below 0.5.
+                // Line art: ink below 0.5.
                 vec4 lt = texture(uInkTex, vUv3);
                 float paper = sharpInk(mix(lt.r, lt.a, uInkInAlpha));
                 albedo *= 1.0 - (1.0 - paper) * uInkFade.z;
@@ -306,33 +297,28 @@ internal static class MeshShaders
 
             if (uInkKind == 1)
             {
-                // Ink texture: white strokes, drawn regardless of light (after the light, before
-                // graphic black, as the game does).
+                // Ink texture, applied after lighting and before graphic black like the game.
                 vec4 it = texture(uInkTex, vUv3);
                 float a = inkCoverage(mix(it.r, it.a, uInkInAlpha));
                 color = mix(color, uInkColor, a * uInk.w);
             }
             if (uInk.x > 0.0)
             {
-                // Graphic black: black where the lit color's luminance falls below the
-                // threshold, measured before the ink. Under a scene's rig it is the game's test,
-                // all light including ambient (baked light always counts). The studio rig's
-                // wrapped fill and rim lights leave nothing in shadow, so there the key light
-                // alone, unwrapped, stands in for a scene's shadowed key: black falls past the
-                // key's terminator, a little sooner on dark materials, as in the game.
+                // Graphic black: black where lit luminance is under the threshold. The studio
+                // rig leaves nothing in shadow, so there only the key light is tested.
                 float lum = lightmapped || uInkAmbient > 0.5
                     ? dot(direct + albedo * (lightmapped ? baked : ambient), vec3(0.3, 0.59, 0.11))
                     : dot(albedo * keyLight + spec * specColor, vec3(0.3, 0.59, 0.11));
                 float soft = max(uInk.z, 0.001);
                 float t = clamp((lum - (uInk.y - 0.5 * soft)) / soft, 0.0, 1.0);
-                // Faded in with distance from the eye (the scene's Graphic Black Near / Far).
+                // Fade in with distance from the eye.
                 float fade = uInkFade.y > uInkFade.x ? clamp((length(uEye - vWorld) - uInkFade.x) / (uInkFade.y - uInkFade.x), 0.0, 1.0) : 1.0;
                 color = mix(color, uInkColor, fade * uInk.x * (1.0 - t));
             }
-            // Emission glows whatever the light, so graphic black does not cover it.
+            // Emission goes on top of graphic black.
             if (dot(uEmissiveColor, uEmissiveColor) > 0.0)
                 color += pow(texture(uEmissive, vUv).rgb, vec3(2.2)) * uEmissiveColor;
-            // A self-lit surface (a hologram) shows its own color at full strength.
+            // Self-lit surfaces show their own color at full strength.
             color += albedo * uSelfLit;
 
             color = pow(toneMap(color * uExposure), vec3(1.0 / 2.2));
@@ -346,10 +332,7 @@ internal static class MeshShaders
         }
         """;
 
-    /// <summary>
-    /// The inverted hull: the mesh pushed out along its normals in clip space, drawn back
-    /// faces only in the outline color (the games' SceneToonOutline2 vertex shader).
-    /// </summary>
+    /// <summary>Inverted hull outline: the mesh pushed out along its normals, back faces only.</summary>
     public const string HullVertex = Skinning + """
         in vec3 aPos;
         in vec3 aNormal;
@@ -358,7 +341,7 @@ internal static class MeshShaders
         uniform vec4 uHull;    // width, z min, z max, aspect
         void main()
         {
-            const float T = 0.606693;   // tan(31.25°), fixed in the games' shader
+            const float T = 0.606693;   // fixed in the games' shader
             vec3 pos = aPos;
             vec3 nrm = aNormal;
             vec3 unused = vec3(0.0);
@@ -387,7 +370,7 @@ internal static class MeshShaders
         }
         """;
 
-    /// <summary>Flat-colored lines and points (the skeleton overlay).</summary>
+    /// <summary>Flat-colored lines and points for the skeleton overlay.</summary>
     public const string LineVertex = """
         in vec3 aPos;
         uniform mat4 uMvp;
@@ -431,7 +414,7 @@ internal static class MeshShaders
         uniform vec2 uFalloff;        // distance where lines start thinning (0 = never), thinnest scale
         out vec4 outColor;
 
-        // 1 / view distance (linear in screen space on any plane); 0 for the background.
+        // 1 / view distance, 0 for the background.
         float invDepth(vec2 uv)
         {
             float d = texture(uDepth, uv).r;
@@ -457,15 +440,14 @@ internal static class MeshShaders
                 float edge = 0.0;
                 for (int k = 0; k < 4; k++)
                 {
-                    // Silhouettes: the pixel stands in front of what its neighbours' average
-                    // (on a plane, inverse depth is linear, so slopes cancel out).
+                    // Silhouettes: pixel is in front of its neighbors' average.
                     for (int s = 1; s <= 2; s++)
                     {
                         vec2 o = dirs[k] * r * (0.5 * float(s)) * uTexel;
                         float lap = (ic - 0.5 * (invDepth(vUv + o) + invDepth(vUv - o))) / ic;
                         edge = max(edge, smoothstep(uOutline.y * 0.5, uOutline.y, lap));
                     }
-                    // Creases: the surface turns sharply between the two sides.
+                    // Creases: sharp change in normal.
                     vec2 oc = dirs[k] * max(1.0, r * uOutline.w) * uTexel;
                     vec4 np = texture(uNormal, vUv + oc);
                     vec4 nm = texture(uNormal, vUv - oc);
@@ -475,7 +457,7 @@ internal static class MeshShaders
                         edge = max(edge, smoothstep(uOutline.z, uOutline.z + 0.2, bend) * 0.9);
                     }
                 }
-                // Drawn on the nearer surface, in its color.
+                // Drawn in the nearer surface's outline color.
                 c.rgb = mix(c.rgb, texture(uLine, vUv).rgb, edge * uOutlineOpacity);
             }
             outColor = vec4(c.rgb, 1.0);

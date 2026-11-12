@@ -38,8 +38,7 @@ public partial class CharactersView : UserControl
             }
         };
 
-        // The GL viewport is not reliably hit-testable, so its transparent host
-        // panel forwards pointer input (handlers no-op when the viewport handled it).
+        // The GL viewport isn't reliably hit-testable, so its host panel forwards pointer input.
         SkeletonToggle.IsCheckedChanged += (_, _) => Viewport.ShowSkeleton = SkeletonToggle.IsChecked == true;
         ViewportHost.PointerPressed += (_, e) => Viewport.HandlePointerPressed(e);
         ViewportHost.PointerMoved += (_, e) => Viewport.HandlePointerMoved(e);

@@ -4,27 +4,16 @@ using TelltaleModding.Core.Meta;
 namespace TelltaleModding.Core.Catalog;
 
 /// <summary>
-/// The parts of a character agent's <c>.prop</c> (PropertySet) the catalog needs: its
-/// skeleton, its mesh list, and which meshes start visible.
+/// The parts of a character's <c>.prop</c> the catalog needs: its skeleton, its mesh list,
+/// and which meshes start visible.
 /// </summary>
 /// <remarks>
-/// Layout (MSV5/MSV6 PropertySet, see TelltaleToolLib's <c>PropertySet::MetaOperation_SerializeAsync</c>):
+/// Layout from TelltaleToolLib's <c>PropertySet::MetaOperation_SerializeAsync</c>:
 /// <c>u32 version, u32 flags, [block u32 size, u32 parentCount, Symbol parents…,
-/// u32 typeCount, { Symbol type, u32 count, { Symbol key, value }… }…]</c>. Values are
-/// serialized by their type, so a full walk needs every type's layout. Instead this
-/// reader finds the handful of keys it needs by their symbol:
-/// <list type="bullet">
-/// <item><c>"Skeleton File"</c> → <c>Handle&lt;Skeleton&gt;</c> (8-byte file-name symbol).</item>
-/// <item><c>"D3D Mesh List"</c> → <c>DCArray&lt;Handle&lt;D3DMesh&gt;&gt;</c>: u32 count + symbols.
-/// Lists every mesh the agent can show, alternates included.</item>
-/// <item><c>"D3D Mesh"</c> → a single legacy <c>Handle&lt;D3DMesh&gt;</c> (0 when unused).</item>
-/// <item><c>"Mesh &lt;mesh name&gt; - Visible"</c> → <c>bool</c> (serialized as ASCII '0'/'1').
-/// The engine's per-mesh visibility keys; the values in the top-level set are the default
-/// outfit. Nested PropertySets hold style toggles (e.g. Clementine's "headHatless" turns
-/// <c>hairCap</c> off and <c>hairSidePony</c> on) and are ignored.</item>
-/// </list>
-/// Verified against Clementine 400 (TTDS): top level = head, eyesMouth, hairCap, bodyUpperB,
-/// bodyLowerB, hands on; hairBandage, hairSidePony, bodyUpperBBackpack, handsNoFinger off.
+/// u32 typeCount, { Symbol type, u32 count, { Symbol key, value }… }…]</c>.
+/// Values are serialized by type, so rather than walk them all this scans for the few keys
+/// it needs by symbol. Bools are stored as ASCII '0'/'1'. Only the top-level
+/// "Mesh X - Visible" keys are the default outfit; nested sets hold style toggles and are ignored.
 /// </remarks>
 public sealed class CharacterProp
 {
@@ -35,7 +24,7 @@ public sealed class CharacterProp
     /// <summary>Type symbol of <c>bool</c> values in a PropertySet.</summary>
     public static readonly ulong BoolType = TelltaleCrc64.HashSymbol("bool");
 
-    /// <summary>Symbol of the skeleton's file name (e.g. <c>sk62_clementine400.skl</c>), if set.</summary>
+    /// <summary>Symbol of the skeleton's file name, if set.</summary>
     public ulong? SkeletonSymbol { get; private init; }
 
     /// <summary>Symbols of the mesh file names in "D3D Mesh List", in stored order.</summary>
@@ -44,7 +33,7 @@ public sealed class CharacterProp
     /// <summary>Symbol of the single "D3D Mesh", if set and non-empty.</summary>
     public ulong? MeshSymbol { get; private init; }
 
-    /// <summary>Symbols of the parent property sets (e.g. <c>player.prop</c>).</summary>
+    /// <summary>Symbols of the parent property sets.</summary>
     public IReadOnlyList<ulong> ParentSymbols { get; private init; } = Array.Empty<ulong>();
 
     /// <summary>Every top-level <c>bool</c> property, by key symbol.</summary>
@@ -53,17 +42,14 @@ public sealed class CharacterProp
     /// <summary>True when the prop names a skeleton and at least one mesh.</summary>
     public bool DescribesCharacter => SkeletonSymbol is not null && (MeshListSymbols.Count > 0 || MeshSymbol is not null);
 
-    /// <summary>
-    /// Default visibility of a mesh (name with or without <c>.d3dmesh</c>), or null when the
-    /// prop has no visibility key for it; the engine then shows it.
-    /// </summary>
+    /// <summary>Default visibility of a mesh, or null when the prop has no key for it and the engine shows it.</summary>
     public bool? IsMeshVisible(string meshName)
     {
         var stem = meshName.EndsWith(".d3dmesh", StringComparison.OrdinalIgnoreCase) ? meshName[..^8] : meshName;
         return TopLevelBools.TryGetValue(VisibilityKey(stem), out var visible) ? visible : null;
     }
 
-    /// <summary>The engine's visibility key symbol for a mesh: <c>"Mesh {name} - Visible"</c>.</summary>
+    /// <summary>The engine's visibility key symbol for a mesh.</summary>
     public static ulong VisibilityKey(string meshStem) => TelltaleCrc64.HashSymbol($"Mesh {meshStem} - Visible");
 
     /// <summary>Reads the character-relevant keys from a <c>.prop</c> file's bytes. Null if it isn't a PropertySet.</summary>
@@ -78,7 +64,7 @@ public sealed class CharacterProp
         if (end - start < 16)
             return null;
 
-        // Top-level PropertySet header: version, flags, then a block whose size counts itself.
+        // Header: version, flags, then a block whose size counts itself.
         uint version = U32(data, start);
         if (version is not (1 or 2))
             return null;
@@ -136,7 +122,7 @@ public sealed class CharacterProp
     {
         if (p + 4 > end) return null;
         uint first = U32(data, p);
-        // Variant with a block size first: size == 4 (itself) + 4 (count) + 8 × count.
+        // Some files put a block size first, which counts itself, the count and the symbols.
         if (p + 8 <= end)
         {
             uint second = U32(data, p + 4);
@@ -159,10 +145,7 @@ public sealed class CharacterProp
         }
     }
 
-    /// <summary>
-    /// Finds every <c>bool</c> run (<c>Symbol bool, u32 count, {Symbol key, '0'|'1'}…</c>) and
-    /// keeps those not enclosed by a nested PropertySet block.
-    /// </summary>
+    /// <summary>Finds every run of <c>bool</c> values and keeps those not inside a nested PropertySet.</summary>
     private static IReadOnlyDictionary<ulong, bool> ReadTopLevelBools(byte[] data, int start, int topEnd)
     {
         var runs = new List<(int Start, int End, List<(ulong Key, bool Value)> Pairs)>();
@@ -190,8 +173,7 @@ public sealed class CharacterProp
         }
 
         var topLevel = runs.Where(r => !IsInsideNestedSet(data, start, topEnd, r.Start, r.End)).ToList();
-        // If nesting detection rejected everything, trust the largest run (the agent's own
-        // visibility list is normally the longest).
+        // If everything looked nested, trust the largest run. The agent's own list is usually the longest.
         if (topLevel.Count == 0 && runs.Count > 0)
             topLevel.Add(runs.MaxBy(r => r.Pairs.Count));
 
@@ -202,11 +184,7 @@ public sealed class CharacterProp
         return result;
     }
 
-    /// <summary>
-    /// True when some plausible nested PropertySet header (version 1/2, flags, block size,
-    /// parent count, type count) before <paramref name="runStart"/> has a block that
-    /// encloses the run.
-    /// </summary>
+    /// <summary>True when a plausible nested PropertySet header before <paramref name="runStart"/> encloses the run.</summary>
     private static bool IsInsideNestedSet(byte[] data, int start, int topEnd, int runStart, int runEnd)
     {
         for (int p = start + 4; p + 20 <= runStart; p++)

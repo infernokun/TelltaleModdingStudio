@@ -4,17 +4,15 @@ using System.Numerics;
 namespace TelltaleModding.Core.Meshes;
 
 /// <summary>
-/// A decoded CompressedSkeletonPoseKeys clip (Game of Thrones / Tales from the Borderlands era):
-/// every slot's local rotation and translation at each of the clip's samples. Rotations are the
-/// bone's local rotation. Translations are in the engine's bone-length space: see
-/// <see cref="CspkDecoder.ToLocalTranslation"/> for turning one into a local offset.
+/// A decoded CompressedSkeletonPoseKeys clip: each slot's local rotation and translation at every
+/// sample. Translations are in bone-length space (see <see cref="CspkDecoder.ToLocalTranslation"/>).
 /// </summary>
 public sealed class CspkClip
 {
-    /// <summary>Bone symbol per slot (CRC64 of the joint name); 0 marks a padding slot.</summary>
+    /// <summary>Bone symbol per slot, 0 for a padding slot.</summary>
     public required IReadOnlyList<ulong> BoneSymbols { get; init; }
 
-    /// <summary>Number of samples (absolute keys and delta samples together).</summary>
+    /// <summary>Number of samples, absolute and delta together.</summary>
     public required int SampleCount { get; init; }
 
     /// <summary>Time of each sample in seconds, ascending.</summary>
@@ -26,13 +24,10 @@ public sealed class CspkClip
     /// <summary>[slot][sample] translations in bone-length space (see <see cref="CspkDecoder.ToLocalTranslation"/>).</summary>
     public required Vector3[][] Translations { get; init; }
 
-    /// <summary>
-    /// True when the clip is additive (the channel's additive flag): values layer onto the pose
-    /// underneath (translation added, rotation composed after it) instead of replacing it.
-    /// </summary>
+    /// <summary>True when the clip layers onto the pose underneath instead of replacing it.</summary>
     public required bool IsAdditive { get; init; }
 
-    /// <summary>Rotation at a time: normalized blend of the two neighbouring samples, the short way round.</summary>
+    /// <summary>Rotation at a time, blended the short way between the nearest samples.</summary>
     public Quaternion SampleRotation(int slot, float time)
     {
         var (lo, hi, t) = Span(time);
@@ -43,7 +38,7 @@ public sealed class CspkClip
         return Quaternion.Normalize(Quaternion.Lerp(a, b, t));
     }
 
-    /// <summary>Translation at a time: linear blend of the two neighbouring samples.</summary>
+    /// <summary>Translation at a time, blended between the nearest samples.</summary>
     public Vector3 SampleTranslation(int slot, float time)
     {
         var (lo, hi, t) = Span(time);
@@ -69,30 +64,23 @@ public sealed class CspkClip
 }
 
 /// <summary>
-/// Decoder for Telltale's CompressedSkeletonPoseKeys, following the game engine's own decoder
-/// (read from Tales from the Borderlands' executable).
+/// Decoder for Telltale's CompressedSkeletonPoseKeys, matching the engine's decoder.
 ///
-/// Blob layout (N = slot count, a multiple of four; S = samples; V = absolute keys; B = blocks):
-///   0..96    float windows: translation delta min (0-2) / range (4-6), rotation delta min (8-10) /
-///            range (12-14), absolute translation min (16-18) / range (20-22)
+/// Blob layout (N slots, a multiple of four; S samples; V absolute keys; B blocks):
+///   0..96    floats: min/range for translation delta (0-2/4-6), rotation delta (8-10/12-14)
+///            and absolute translation (16-18/20-22)
 ///   96..112  i32 N, S, V, B
-///   112..128 unused
-///   0x80     slot symbols (u64 each, 0 = padding)
-///   then     V absolute keys of 4·N words, S−V delta samples of 2·N words,
+///   0x80     slot symbols (u64, 0 = padding)
+///   then     V absolute keys of 4N words, S-V delta samples of 2N words,
 ///            S f32 sample times, B u32 block counts
 ///
-/// Slots go in groups of four (slot 4g+i is lane i of group g). In an absolute key a group is
-/// 16 words: [translation lo ×4][translation hi ×4][rotation lo ×4][rotation hi ×4]; each lo/hi
-/// pair packs 20/22/22-bit x/y/z (low bits in lo). Translations scale into the absolute window;
-/// rotation x/y/z span −1..+1 with w = √(1 − x² − y² − z²). In a delta sample a group is 8 words:
-/// [translation delta ×4][rotation delta ×4], each word 10/11/11-bit x/y/z scaled into the delta
-/// windows. Translation deltas add to the previous translation; rotation deltas (w rebuilt the
-/// same way) compose after the previous rotation.
+/// Slots go in groups of four. An absolute key group is 16 words: translation lo, translation hi,
+/// rotation lo, rotation hi (four each), each lo/hi pair packing 20/22/22-bit x/y/z. Rotation
+/// x/y/z span -1..1 and w is rebuilt. A delta group is 8 words: four translation, four rotation,
+/// each 10/11/11-bit. Deltas add to the previous translation and compose after the previous rotation.
 ///
-/// Timeline: block count k says how many delta samples come before absolute key k (the last block
-/// counts the deltas after the final key). Walking the samples in order, a sample is the next
-/// absolute key when no deltas are left in the current block, otherwise the next delta sample.
-/// A clip that starts with deltas (additive clips do) starts from zero translation and identity.
+/// Block count k is how many delta samples come before absolute key k; the last block counts
+/// the deltas after the final key.
 /// </summary>
 public static class CspkDecoder
 {
@@ -103,8 +91,8 @@ public static class CspkDecoder
     private const float AbsScaleYz = 1f / ((1 << 22) - 1);
 
     /// <summary>
-    /// Decodes a CompressedSkeletonPoseKeys payload, or returns null when it is malformed.
-    /// <paramref name="additive"/> comes from the channel's flags (<see cref="AdditiveFlag"/>).
+    /// Decodes a CompressedSkeletonPoseKeys payload, or returns null when it's malformed.
+    /// <paramref name="additive"/> comes from the channel's <see cref="AdditiveFlag"/>.
     /// </summary>
     public static CspkClip? TryDecode(ReadOnlySpan<byte> blob, bool additive = false)
     {
@@ -229,11 +217,9 @@ public static class CspkDecoder
     }
 
     /// <summary>
-    /// How the engine maps a bone's stored translation to its local offset: the bone's length
-    /// (|rest offset|, 1 for a zero-length bone) and a correction rotation. Clips are authored on
-    /// a reference rig; the correction turns the rest direction as the clip sees it (the rest
-    /// direction divided per axis by <see cref="SkeletonBone.AnimTranslationScale"/>) onto this
-    /// skeleton's rest direction. It is identity when the scale is uniform.
+    /// How the engine maps a bone's stored translation to its local offset: the bone's length and
+    /// a correction rotation. The correction turns the rest direction divided by
+    /// <see cref="SkeletonBone.AnimTranslationScale"/> onto this skeleton's rest direction.
     /// </summary>
     public static (Quaternion Correction, float Length) TranslationFrame(SkeletonBone bone)
     {
@@ -254,18 +240,18 @@ public static class CspkDecoder
         return length > 1e-6f ? (correction, length) : (Quaternion.Identity, 1f);
     }
 
-    /// <summary>Turns a stored (bone-length space) translation into the bone's local offset.</summary>
+    /// <summary>Turns a stored translation into the bone's local offset.</summary>
     public static Vector3 ToLocalTranslation(Vector3 stored, (Quaternion Correction, float Length) frame) =>
         Vector3.Transform(stored * frame.Length, frame.Correction);
 
-    /// <summary>The bone's rest offset in bone-length space (inverse of <see cref="ToLocalTranslation"/>).</summary>
+    /// <summary>The inverse of <see cref="ToLocalTranslation"/>.</summary>
     public static Vector3 FromLocalTranslation(Vector3 local, (Quaternion Correction, float Length) frame) =>
         Vector3.Transform(local, Quaternion.Conjugate(frame.Correction)) / frame.Length;
 
     private static uint Word(ReadOnlySpan<byte> record, int index) =>
         BinaryPrimitives.ReadUInt32LittleEndian(record[(index * 4)..]);
 
-    /// <summary>Combines an absolute lo/hi word pair into 20/22/22-bit x/y/z (low bits in lo).</summary>
+    /// <summary>Combines a lo/hi word pair into 20/22/22-bit x/y/z, low bits in lo.</summary>
     private static (uint X, uint Y, uint Z) Combine(uint lo, uint hi) =>
         (((hi & 0x3FF) << 10) | (lo & 0x3FF),
          (((hi >> 10) & 0x7FF) << 11) | ((lo >> 10) & 0x7FF),
