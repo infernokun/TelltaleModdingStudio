@@ -16,11 +16,6 @@ public static class Converters
     public static readonly IValueConverter OpeningLabel =
         new FuncValueConverter<bool, string>(busy => busy ? "Opening…" : "Open");
 
-    public static readonly IValueConverter ScanLabel =
-        new FuncValueConverter<bool, string>(scanning => scanning
-            ? "Looking for Telltale games in your Steam libraries…"
-            : "Nothing new found. Use “Add game folder…” for games installed elsewhere.");
-
     /// <summary>What the empty character viewer says.</summary>
     public static readonly IValueConverter EmptyViewer =
         new FuncValueConverter<bool, string>(hasSource => hasSource

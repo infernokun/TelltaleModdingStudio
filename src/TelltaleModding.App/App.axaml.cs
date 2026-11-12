@@ -16,12 +16,25 @@ public partial class App : Application
         {
             var shell = new ShellViewModel();
             var window = new MainWindow { DataContext = shell };
-            // Only the real app looks for updates on start (test windows never reach here).
-            // It runs in the background and stays silent unless there is something new.
+            // Quiet background update check. Test windows never get here.
             window.Opened += (_, _) => _ = shell.Updates.CheckOnStartAsync();
+            LoadUserBoneNames();
             desktop.MainWindow = window;
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    // Bone names the user added themselves. A bad file just leaves those bones unnamed.
+    private static void LoadUserBoneNames()
+    {
+        try
+        {
+            Core.Export.BoneNames.LoadFile(Core.Export.BoneNames.UserFilePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Services.CrashLog.Write("reading user bone names", ex);
+        }
     }
 }

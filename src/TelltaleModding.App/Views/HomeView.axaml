@@ -111,7 +111,7 @@
                     <ProgressBar IsIndeterminate="{Binding IsScanning}" Width="80" IsVisible="{Binding IsScanning}" VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBlock Classes="muted" IsVisible="{Binding !Detected.Count}"
-                           Text="{Binding IsScanning, Converter={x:Static vm:Converters.ScanLabel}}" />
+                           Text="{Binding ScanStatus}" />
                 <ItemsControl ItemsSource="{Binding Detected}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>

@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Data/games.json" />
+    <!-- Bone names collected by RandomTBush (RTB-3DSMax-Scripts, TelltaleHashDBs). -->
+    <EmbeddedResource Include="Data/BoneNames.txt" />
   </ItemGroup>
 
   <ItemGroup>

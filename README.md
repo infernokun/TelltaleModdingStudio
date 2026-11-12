@@ -108,6 +108,7 @@ Everything builds and runs on Windows and Linux. Two native pieces:
 - The resource description cipher is ported from [ttarchext](https://aluigi.altervista.org/papers.htm#ttarchext) by Luigi Auriemma.
 - [ttarchext](https://aluigi.altervista.org/papers.htm#ttarchext) by Luigi Auriemma also builds patch archives and reads classic `.ttarch` archives.
 - File layouts (meshes, animations, property sets) follow [TelltaleToolLib](https://github.com/LucasSaragosa/TelltaleToolLib).
+- Bone names on export come from the bone name list in [RandomTBush's Telltale model importer](https://github.com/RandomTBush/RTB-3DSMax-Scripts/tree/main/Scripts/TelltaleHashDBs). Thanks to [Lilothestitch16](https://github.com/Lilothestitch16) for assistance.
 - Built with [Avalonia](https://avaloniaui.net/), [AvaloniaEdit](https://github.com/AvaloniaUI/AvaloniaEdit) with TextMateSharp, [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet), [NAudio](https://github.com/naudio/NAudio), [NLayer](https://github.com/naudio/NLayer) and [NVorbis](https://github.com/NVorbis/NVorbis).
 - Oodle-compressed archives are read through the Oodle library each game ships (RAD Game Tools / Epic Games).
 

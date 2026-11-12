@@ -16,6 +16,9 @@ public sealed partial class UserPreferences : ObservableObject
     /// <summary>The workspace a game opens in: Characters, Scenes, Dialogue, Scripts or Assets.</summary>
     [ObservableProperty] private string _startWorkspace = "Characters";
 
+    /// <summary>Look for installed Telltale games in Steam's list when the app starts.</summary>
+    [ObservableProperty] private bool _lookForGamesOnStart;
+
     /// <summary>Look for a newer release on GitHub when the app starts.</summary>
     [ObservableProperty] private bool _checkForUpdatesOnStart = true;
 

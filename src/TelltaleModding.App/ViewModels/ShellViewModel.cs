@@ -187,7 +187,9 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasGames));
         await Task.WhenAll(Games.Select(DescribeAsync));
 
-        _ = ScanForGamesAsync();
+        // Quick check of Steam's list on start, only if the library is empty or the user asked.
+        if (Games.Count == 0 || Preferences.LookForGamesOnStart)
+            _ = LookForGamesAsync(thorough: false);
         if (Preferences.ReopenLastGame && _settings.LastGameFolder is { } last &&
             Games.FirstOrDefault(g => g.Folder.Equals(last, StringComparison.OrdinalIgnoreCase)) is { } card)
         {
@@ -214,13 +216,21 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
         card.Status = install is null ? error ?? "Not a supported Telltale game" : $"{install.ArchivePaths.Count} archives";
     }
 
+    /// <summary>Shown while the "Found on this PC" list is empty.</summary>
+    [ObservableProperty]
+    private string _scanStatus = "Use “Scan this PC” to look for Telltale games in your Steam libraries.";
+
+    /// <summary>Looks in every game folder of every Steam library.</summary>
     [RelayCommand]
-    private async Task ScanForGamesAsync()
+    private Task ScanForGamesAsync() => LookForGamesAsync(thorough: true);
+
+    private async Task LookForGamesAsync(bool thorough)
     {
         IsScanning = true;
+        ScanStatus = "Looking for Telltale games in your Steam libraries…";
         try
         {
-            var folders = await Task.Run(SteamLibraryScanner.FindTelltaleInstalls);
+            var folders = await Task.Run(() => thorough ? SteamLibraryScanner.FindTelltaleInstalls() : SteamLibraryScanner.FindInstalled());
             Detected.Clear();
             foreach (var folder in folders)
             {
@@ -235,6 +245,9 @@ public sealed partial class ShellViewModel : ViewModelBase, IDisposable
         finally
         {
             IsScanning = false;
+            ScanStatus = thorough
+                ? "Nothing new found. Use “Add game folder…” for games installed elsewhere."
+                : "Nothing new in Steam's list. Try “Scan this PC” to look inside each game folder.";
         }
     }
 
