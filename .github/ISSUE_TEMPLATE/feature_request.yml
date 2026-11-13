@@ -1,0 +1,32 @@
+name: Feature request
+description: Something you would like the app to do.
+labels: ["feature request"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Home
+        - Characters
+        - Scenes
+        - Dialogue
+        - Scripts
+        - Assets
+        - Mod
+        - Settings
+        - Something new
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What you would like...
+      description: What the app should do....
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What it is for...
+      description: What you'd use it for....
